@@ -77,6 +77,7 @@ pub struct RealtimeUpdate {
     pub best_session_lap: LapInfo,
 }
 
+#[allow(clippy::field_reassign_with_default)]
 fn read_realtime_update(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
     let mut me = RealtimeUpdate::default();
     me.event_index = read_i16(buf)?;
@@ -101,7 +102,7 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError
     me.rain_level = read_u8(buf)?;
     me.wetness = read_u8(buf)?;
     me.best_session_lap = read_lap_info(buf)?;
-    return Ok(Response::RealtimeUpdate(me));
+    Ok(Response::RealtimeUpdate(me))
 }
 
 #[derive(Debug, Default)]
@@ -117,18 +118,22 @@ pub struct LapInfo {
 }
 
 fn read_lap_info(buf: &mut &[u8]) -> Result<LapInfo, IncompleteTypeError> {
-    let mut me = LapInfo::default();
-    me.laptime_ms = read_i32(buf)?;
-    me.car_index = read_i16(buf)?;
-    me.driver_index = read_i16(buf)?;
-    for _ in 0..read_u8(buf)? {
-        me.splits.push(read_i32(buf)?);
-    }
-    me.is_invaliud = read_u8(buf)? > 0;
-    me.is_valid_for_best = read_u8(buf)? > 0;
-    me.is_outlap = read_u8(buf)? > 0;
-    me.is_inlap = read_u8(buf)? > 0;
-    return Ok(me);
+    Ok(LapInfo {
+        laptime_ms: read_i32(buf)?,
+        car_index: read_i16(buf)?,
+        driver_index: read_i16(buf)?,
+        splits: {
+            let mut splits = Vec::new();
+            for _ in 0..read_u8(buf)? {
+                splits.push(read_i32(buf)?);
+            }
+            splits
+        },
+        is_invaliud: read_u8(buf)? > 0,
+        is_valid_for_best: read_u8(buf)? > 0,
+        is_outlap: read_u8(buf)? > 0,
+        is_inlap: read_u8(buf)? > 0,
+    })
 }
 
 #[derive(Debug)]
@@ -183,12 +188,16 @@ pub struct EntryList {
 }
 
 fn read_entry_list(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    let mut me = EntryList::default();
-    me.connection_id = read_i32(buf)?;
-    for _ in 0..read_i16(buf)? {
-        me.car_entries.push(read_i16(buf)?);
-    }
-    return Ok(Response::EntryList(me));
+    Ok(Response::EntryList(EntryList {
+        connection_id: read_i32(buf)?,
+        car_entries: {
+            let mut entries = Vec::new();
+            for _ in 0..read_i16(buf)? {
+                entries.push(read_i16(buf)?);
+            }
+            entries
+        },
+    }))
 }
 
 #[derive(Debug, Default)]
@@ -202,23 +211,31 @@ pub struct TrackData {
 }
 
 fn read_track_data(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    let mut me = TrackData::default();
-    me.connection_id = read_i32(buf)?;
-    me.track_name = read_string(buf)?;
-    me.track_id = read_i32(buf)?;
-    me.track_meter = read_i32(buf)?;
-    for _ in 0..read_u8(buf)? {
-        let set_name = read_string(buf)?;
-        let mut cameras = Vec::new();
-        for _ in 0..read_u8(buf)? {
-            cameras.push(read_string(buf)?);
-        }
-        me.camera_sets.insert(set_name, cameras);
-    }
-    for _ in 0..read_u8(buf)? {
-        me.hud_pages.push(read_string(buf)?);
-    }
-    return Ok(Response::TrackData(me));
+    Ok(Response::TrackData(TrackData {
+        connection_id: read_i32(buf)?,
+        track_name: read_string(buf)?,
+        track_id: read_i32(buf)?,
+        track_meter: read_i32(buf)?,
+        camera_sets: {
+            let mut camera_sets = HashMap::new();
+            for _ in 0..read_u8(buf)? {
+                let set_name = read_string(buf)?;
+                let mut cameras = Vec::new();
+                for _ in 0..read_u8(buf)? {
+                    cameras.push(read_string(buf)?);
+                }
+                camera_sets.insert(set_name, cameras);
+            }
+            camera_sets
+        },
+        hud_pages: {
+            let mut hud_pages = Vec::new();
+            for _ in 0..read_u8(buf)? {
+                hud_pages.push(read_string(buf)?);
+            }
+            hud_pages
+        },
+    }))
 }
 
 #[derive(Debug, Default)]
@@ -234,18 +251,22 @@ pub struct EntryListCar {
 }
 
 fn read_entry_list_car(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    let mut me = EntryListCar::default();
-    me.car_index = read_i16(buf)?;
-    me.car_model_type = read_u8(buf)?;
-    me.team_name = read_string(buf)?;
-    me.race_number = read_i32(buf)?;
-    me.cup_category = read_u8(buf)?;
-    me.current_driver_index = read_u8(buf)?;
-    me.car_nationality = read_i16(buf)?;
-    for _ in 0..read_u8(buf)? {
-        me.drivers.push(read_driver_info(buf)?);
-    }
-    return Ok(Response::EntryListCar(me));
+    Ok(Response::EntryListCar(EntryListCar {
+        car_index: read_i16(buf)?,
+        car_model_type: read_u8(buf)?,
+        team_name: read_string(buf)?,
+        race_number: read_i32(buf)?,
+        cup_category: read_u8(buf)?,
+        current_driver_index: read_u8(buf)?,
+        car_nationality: read_i16(buf)?,
+        drivers: {
+            let mut drivers = Vec::new();
+            for _ in 0..read_u8(buf)? {
+                drivers.push(read_driver_info(buf)?);
+            }
+            drivers
+        },
+    }))
 }
 
 #[derive(Debug)]
@@ -283,12 +304,12 @@ fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Response, IncompleteTypeEr
 }
 
 fn read_u8(buf: &mut &[u8]) -> Result<u8, IncompleteTypeError> {
-    if buf.len() < 1 {
+    if buf.is_empty() {
         return Err(IncompleteTypeError {});
     }
     let (value, rest) = buf.split_at(1);
     *buf = rest;
-    return Ok(value[0]);
+    Ok(value[0])
 }
 
 fn read_i16(buf: &mut &[u8]) -> Result<i16, IncompleteTypeError> {
@@ -297,7 +318,7 @@ fn read_i16(buf: &mut &[u8]) -> Result<i16, IncompleteTypeError> {
     }
     let (value, rest) = buf.split_at(2);
     *buf = rest;
-    return Ok(i16::from_le_bytes(value.try_into().unwrap()));
+    Ok(i16::from_le_bytes(value.try_into().unwrap()))
 }
 
 fn read_i32(buf: &mut &[u8]) -> Result<i32, IncompleteTypeError> {
@@ -306,7 +327,7 @@ fn read_i32(buf: &mut &[u8]) -> Result<i32, IncompleteTypeError> {
     }
     let (value, rest) = buf.split_at(4);
     *buf = rest;
-    return Ok(i32::from_le_bytes(value.try_into().unwrap()));
+    Ok(i32::from_le_bytes(value.try_into().unwrap()))
 }
 
 fn read_string(buf: &mut &[u8]) -> Result<String, IncompleteTypeError> {
@@ -316,7 +337,7 @@ fn read_string(buf: &mut &[u8]) -> Result<String, IncompleteTypeError> {
     }
     let (value, rest) = buf.split_at(length);
     *buf = rest;
-    return String::from_utf8(value.to_vec()).map_err(|_| IncompleteTypeError {});
+    String::from_utf8(value.to_vec()).map_err(|_| IncompleteTypeError {})
 }
 
 fn read_f32(buf: &mut &[u8]) -> Result<f32, IncompleteTypeError> {
@@ -325,7 +346,7 @@ fn read_f32(buf: &mut &[u8]) -> Result<f32, IncompleteTypeError> {
     }
     let (value, rest) = buf.split_at(4);
     *buf = rest;
-    return Ok(f32::from_le_bytes(value.try_into().unwrap()));
+    Ok(f32::from_le_bytes(value.try_into().unwrap()))
 }
 
 pub fn register_request(password: &str, update_interval: i32, command_password: &str) -> Vec<u8> {
@@ -336,38 +357,43 @@ pub fn register_request(password: &str, update_interval: i32, command_password: 
     push_string(&mut buf, password);
     buf.extend(update_interval.to_le_bytes());
     push_string(&mut buf, command_password);
-    return buf;
+    buf
 }
 
+#[allow(dead_code)]
 pub fn unregister_request(connection_id: i32) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(9);
     buf.extend(connection_id.to_le_bytes());
-    return buf;
+    buf
 }
 
+#[allow(dead_code)]
 pub fn entry_list_request(connection_id: i32) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(10);
     buf.extend(connection_id.to_le_bytes());
-    return buf;
+    buf
 }
 
+#[allow(dead_code)]
 pub fn track_data_request(connection_id: i32) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(11);
     buf.extend(connection_id.to_le_bytes());
-    return buf;
+    buf
 }
 
+#[allow(dead_code)]
 pub fn hud_page_request(connection_id: i32, page: String) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(49);
     buf.extend(connection_id.to_le_bytes());
     push_string(&mut buf, &page);
-    return buf;
+    buf
 }
 
+#[allow(dead_code)]
 pub fn focus_request(
     connection_id: i32,
     car_index: Option<i16>,
@@ -389,10 +415,10 @@ pub fn focus_request(
     } else {
         buf.push(0);
     }
-
-    return buf;
+    buf
 }
 
+#[allow(dead_code)]
 pub fn instant_replay_request(
     connection_id: i32,
     session_start_time: f32,
@@ -409,7 +435,7 @@ pub fn instant_replay_request(
     buf.extend(initial_focused_car.to_le_bytes());
     push_string(&mut buf, &initial_camera_set);
     push_string(&mut buf, &initial_camera);
-    return buf;
+    buf
 }
 
 fn push_string(buf: &mut Vec<u8>, s: &str) {

@@ -26,8 +26,8 @@ fn main() {
                     Err(_) => println!("failed to parse the response"),
                 };
             }
-            Err(_) => {
-                println!("failed to receive data");
+            Err(e) => {
+                println!("failed to receive data: {}", e);
                 break;
             }
         }
