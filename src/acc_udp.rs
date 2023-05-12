@@ -8,6 +8,8 @@ use std::{
     time::Duration,
 };
 
+use tracing::{debug, info};
+
 use crate::{
     messages::{self, read_response, IncompleteTypeError, Message},
     model::Model,
@@ -21,6 +23,7 @@ pub enum ConnectionError {
     TimedOut,
     SocketUnavailable,
     ConnectionRefused { message: String },
+    Other(String),
 }
 
 impl Display for ConnectionError {
@@ -33,6 +36,9 @@ impl Display for ConnectionError {
             ConnectionError::SocketUnavailable => write!(f, "Game connection is not available"),
             ConnectionError::ConnectionRefused { message } => {
                 write!(f, "Game refused the connection. Reason: {}", message)
+            }
+            ConnectionError::Other(message) => {
+                write!(f, "Connection encountered an error: {}", message)
             }
         }
     }
@@ -89,24 +95,32 @@ impl AccConnection {
         self.send(&messages::register_request("", 1000, ""))?;
 
         loop {
-            println!("Read messages until it would block");
+            debug!("Read messages until it would block");
 
             let messages = self.read_availabe_messages()?;
             self.process_messages(messages)?;
 
-            println!("All messages received!");
-            println!("Processing now");
+            debug!("All messages received!");
+            debug!("Processing now");
             thread::sleep(Duration::from_millis(100));
         }
     }
 
     fn process_messages(&mut self, messages: Vec<Message>) -> Result<(), ConnectionError> {
-        let mut model = self.model.write().expect("RwLock should not be poisoned");
+        let mut model = self
+            .model
+            .write()
+            .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?;
 
         for message in messages {
             match message {
-                messages::Message::Unknown(_) => todo!(),
-                messages::Message::RegistrationResult(result) => {
+                Message::Unknown(t) => {
+                    return Err(ConnectionError::Other(format!(
+                        "Unknown message type: {}",
+                        t
+                    )));
+                }
+                Message::RegistrationResult(result) => {
                     if !result.success {
                         return Err(ConnectionError::ConnectionRefused {
                             message: result.message,
@@ -119,16 +133,16 @@ impl AccConnection {
                     self.send(&messages::entry_list_request(self.connection_id))?;
                     self.send(&messages::track_data_request(self.connection_id))?;
                 }
-                messages::Message::RealtimeUpdate(_) => println!("RealtimeUpdate"),
-                messages::Message::RealtimeCarUpdate(_) => println!("RealtimeCarUpdate"),
-                messages::Message::EntryList(_) => println!("EntryList"),
-                messages::Message::TrackData(track_data) => {
+                Message::RealtimeUpdate(_) => info!("RealtimeUpdate"),
+                Message::RealtimeCarUpdate(_) => info!("RealtimeCarUpdate"),
+                Message::EntryList(_) => info!("EntryList"),
+                Message::TrackData(track_data) => {
                     model.track_name = track_data.track_name;
                     model.track_length = track_data.track_meter;
                     // TODO: Save track data to internal model.
                 }
-                messages::Message::EntryListCar(_) => println!("EntryListCar"),
-                messages::Message::BroadcastingEvent(_) => println!("BroadcastingEvent"),
+                Message::EntryListCar(_) => info!("EntryListCar"),
+                Message::BroadcastingEvent(_) => info!("BroadcastingEvent"),
             }
         }
         //addition processing
