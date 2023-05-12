@@ -1,18 +1,20 @@
-use std::{collections::HashMap, error::Error, fmt::Display};
+use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
 #[derive(Debug)]
-pub struct IncompleteTypeError {}
+pub struct IncompleteTypeError {
+    pub backtrace: Backtrace,
+}
 
 impl Display for IncompleteTypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Not enough data to parse this type")
+        write!(f, "Not enough data to parse this type.\n{}", self.backtrace)
     }
 }
 
 impl Error for IncompleteTypeError {}
 
 #[derive(Debug)]
-pub enum Response {
+pub enum Message {
     Unknown(u8),
     RegistrationResult(RegistrationResult),
     RealtimeUpdate(RealtimeUpdate),
@@ -23,7 +25,7 @@ pub enum Response {
     BroadcastingEvent(BroadcastingEvent),
 }
 
-pub fn read_response(mut buf: &[u8]) -> Result<Response, IncompleteTypeError> {
+pub fn read_response(mut buf: &[u8]) -> Result<Message, IncompleteTypeError> {
     Ok(match read_u8(&mut buf)? {
         1 => read_registration_result(&mut buf)?,
         2 => read_realtime_update(&mut buf)?,
@@ -32,7 +34,7 @@ pub fn read_response(mut buf: &[u8]) -> Result<Response, IncompleteTypeError> {
         5 => read_track_data(&mut buf)?,
         6 => read_entry_list_car(&mut buf)?,
         7 => read_broadcasting_event(&mut buf)?,
-        x => Response::Unknown(x),
+        x => Message::Unknown(x),
     })
 }
 
@@ -44,8 +46,8 @@ pub struct RegistrationResult {
     pub message: String,
 }
 
-fn read_registration_result(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    Ok(Response::RegistrationResult(RegistrationResult {
+fn read_registration_result(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    Ok(Message::RegistrationResult(RegistrationResult {
         connection_id: read_i32(buf)?,
         success: read_u8(buf)? > 0,
         read_only: read_u8(buf)? == 0,
@@ -78,7 +80,7 @@ pub struct RealtimeUpdate {
 }
 
 #[allow(clippy::field_reassign_with_default)]
-fn read_realtime_update(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
+fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
     let mut me = RealtimeUpdate::default();
     me.event_index = read_i16(buf)?;
     me.session_index = read_i16(buf)?;
@@ -102,7 +104,7 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError
     me.rain_level = read_u8(buf)?;
     me.wetness = read_u8(buf)?;
     me.best_session_lap = read_lap_info(buf)?;
-    Ok(Response::RealtimeUpdate(me))
+    Ok(Message::RealtimeUpdate(me))
 }
 
 #[derive(Debug, Default)]
@@ -158,8 +160,8 @@ pub struct RealtimeCarUpdate {
     pub current_lap: LapInfo,
 }
 
-fn read_realtime_car_update(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    Ok(Response::RealtimeCarUpdate(RealtimeCarUpdate {
+fn read_realtime_car_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    Ok(Message::RealtimeCarUpdate(RealtimeCarUpdate {
         car_index: read_i16(buf)?,
         driver_index: read_i16(buf)?,
         driver_cound: read_u8(buf)?,
@@ -187,8 +189,8 @@ pub struct EntryList {
     pub car_entries: Vec<i16>,
 }
 
-fn read_entry_list(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    Ok(Response::EntryList(EntryList {
+fn read_entry_list(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    Ok(Message::EntryList(EntryList {
         connection_id: read_i32(buf)?,
         car_entries: {
             let mut entries = Vec::new();
@@ -210,8 +212,8 @@ pub struct TrackData {
     pub hud_pages: Vec<String>,
 }
 
-fn read_track_data(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    Ok(Response::TrackData(TrackData {
+fn read_track_data(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    Ok(Message::TrackData(TrackData {
         connection_id: read_i32(buf)?,
         track_name: read_string(buf)?,
         track_id: read_i32(buf)?,
@@ -250,8 +252,8 @@ pub struct EntryListCar {
     pub drivers: Vec<DriverInfo>,
 }
 
-fn read_entry_list_car(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    Ok(Response::EntryListCar(EntryListCar {
+fn read_entry_list_car(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    Ok(Message::EntryListCar(EntryListCar {
         car_index: read_i16(buf)?,
         car_model_type: read_u8(buf)?,
         team_name: read_string(buf)?,
@@ -290,13 +292,15 @@ fn read_driver_info(buf: &mut &[u8]) -> Result<DriverInfo, IncompleteTypeError> 
 
 #[derive(Debug, Default)]
 pub struct BroadcastingEvent {
+    pub event_type: u8,
     pub message: String,
     pub time: i32,
     pub car_index: i32,
 }
 
-fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Response, IncompleteTypeError> {
-    Ok(Response::BroadcastingEvent(BroadcastingEvent {
+fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    Ok(Message::BroadcastingEvent(BroadcastingEvent {
+        event_type: read_u8(buf)?,
         message: read_string(buf)?,
         time: read_i32(buf)?,
         car_index: read_i32(buf)?,
@@ -305,7 +309,9 @@ fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Response, IncompleteTypeEr
 
 fn read_u8(buf: &mut &[u8]) -> Result<u8, IncompleteTypeError> {
     if buf.is_empty() {
-        return Err(IncompleteTypeError {});
+        return Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        });
     }
     let (value, rest) = buf.split_at(1);
     *buf = rest;
@@ -314,7 +320,9 @@ fn read_u8(buf: &mut &[u8]) -> Result<u8, IncompleteTypeError> {
 
 fn read_i16(buf: &mut &[u8]) -> Result<i16, IncompleteTypeError> {
     if buf.len() < 4 {
-        return Err(IncompleteTypeError {});
+        return Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        });
     }
     let (value, rest) = buf.split_at(2);
     *buf = rest;
@@ -323,7 +331,9 @@ fn read_i16(buf: &mut &[u8]) -> Result<i16, IncompleteTypeError> {
 
 fn read_i32(buf: &mut &[u8]) -> Result<i32, IncompleteTypeError> {
     if buf.len() < 4 {
-        return Err(IncompleteTypeError {});
+        return Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        });
     }
     let (value, rest) = buf.split_at(4);
     *buf = rest;
@@ -333,16 +343,22 @@ fn read_i32(buf: &mut &[u8]) -> Result<i32, IncompleteTypeError> {
 fn read_string(buf: &mut &[u8]) -> Result<String, IncompleteTypeError> {
     let length = read_i16(buf)? as usize;
     if buf.len() < length {
-        return Err(IncompleteTypeError {});
+        return Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        });
     }
     let (value, rest) = buf.split_at(length);
     *buf = rest;
-    String::from_utf8(value.to_vec()).map_err(|_| IncompleteTypeError {})
+    String::from_utf8(value.to_vec()).map_err(|_| IncompleteTypeError {
+        backtrace: Backtrace::force_capture(),
+    })
 }
 
 fn read_f32(buf: &mut &[u8]) -> Result<f32, IncompleteTypeError> {
     if buf.len() < 4 {
-        return Err(IncompleteTypeError {});
+        return Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        });
     }
     let (value, rest) = buf.split_at(4);
     *buf = rest;

@@ -1,35 +1,19 @@
-use std::net::UdpSocket;
+use crate::acc_udp::AccAdapter;
 
+mod acc_udp;
 mod messages;
+mod model;
 
 fn main() {
-    let socket = UdpSocket::bind("0.0.0.0:0").expect("Cannot bind udp socket");
-    socket
-        .connect("127.0.0.1:9000")
-        .expect("Cannot connect socket");
+    println!("Connecting to game");
+    let acc_adapter = AccAdapter::new().expect("Cannot connect to game");
 
-    println!("Sending register request");
-    socket
-        .send(&messages::register_request("", 1000, ""))
-        .expect("Cannot send");
-
-    loop {
-        println!("waiting for packet");
-        let mut buf = [0u8; 2048];
-        match socket.recv(&mut buf) {
-            Ok(size) => {
-                println!("{size} bytes read");
-                match messages::read_response(&buf) {
-                    Ok(response) => match response {
-                        r => println!("{r:?}"),
-                    },
-                    Err(_) => println!("failed to parse the response"),
-                };
-            }
-            Err(e) => {
-                println!("failed to receive data: {}", e);
-                break;
-            }
-        }
+    if let Err(e) = acc_adapter
+        .join_handle
+        .join()
+        .expect("Couldnt join connection thread")
+    {
+        println!("Connection failed because: {}", e);
     }
+    println!("Connection done");
 }
