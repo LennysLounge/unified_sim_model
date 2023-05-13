@@ -1,9 +1,8 @@
 use crate::{
     log_todo,
-    model::{self, Entry, Model, Time},
+    model::{self, Driver, Entry, Model, Time},
 };
 use std::{
-    collections::HashMap,
     error::Error,
     fmt::Display,
     io::ErrorKind,
@@ -13,11 +12,11 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use self::data::{
-    EntryListCar, IncompleteTypeError, Message, RealtimeUpdate, RegistrationResult, SessionPhase,
-    SessionType,
+    CarLocation, EntryListCar, IncompleteTypeError, Message, RealtimeCarUpdate, RealtimeUpdate,
+    RegistrationResult, SessionPhase, SessionType,
 };
 
 pub mod data;
@@ -127,7 +126,9 @@ impl AccConnection {
                 Message::RealtimeUpdate(update) => self
                     .inner_model
                     .process_realtime_update(update, &mut model)?,
-                Message::RealtimeCarUpdate(_) => info!("RealtimeCarUpdate"),
+                Message::RealtimeCarUpdate(update) => self
+                    .inner_model
+                    .process_realtime_car_update(update, &mut model)?,
                 Message::EntryList(_) => info!("EntryList"),
                 Message::TrackData(track_data) => {
                     model.track_name = track_data.track_name;
@@ -195,17 +196,7 @@ impl InnerModel {
         if self.current_session_index != update.session_index || model.sessions.is_empty() {
             info!("New session detected");
             // A new session has started.
-            let session = model::Session {
-                id: model.sessions.len() as i32,
-                session_type: convert_session_type(update.session_type),
-                session_time: Time::from(update.session_end_time + update.session_time),
-                time_remaining: Time::from(update.session_end_time),
-                phase: convert_session_phase(update.session_phase.clone()),
-                time_of_day: Time::from(update.time_of_day * 1000.0),
-                ambient_temp: update.ambient_temp as f32,
-                track_temp: update.track_temp as f32,
-                ..Default::default()
-            };
+            let session = map_session(&update, model.sessions.len() as i32);
             model.current_session = model.sessions.len();
             model.sessions.push(session);
             self.current_session_index = update.session_index;
@@ -215,7 +206,7 @@ impl InnerModel {
         let current_session = &mut model.sessions[current_session_index];
         current_session.time_remaining = Time::from(update.session_end_time);
 
-        let current_phase = convert_session_phase(update.session_phase);
+        let current_phase = map_session_phase(&update.session_phase);
         if current_phase != current_session.phase {
             info!(
                 "Session phase changed from {:?} to {:?}",
@@ -226,6 +217,33 @@ impl InnerModel {
         current_session.time_of_day = Time::from(update.time_of_day * 1000.0);
         current_session.ambient_temp = update.ambient_temp as f32;
         current_session.track_temp = update.track_temp as f32;
+        Ok(())
+    }
+
+    fn process_realtime_car_update(
+        &self,
+        update: RealtimeCarUpdate,
+        model: &mut RwLockWriteGuard<Model>,
+    ) -> Result<()> {
+        info!("RealtimeCarUpdate");
+        let current_session_index = model.current_session;
+        let current_session = &mut model.sessions[current_session_index];
+
+        if let Some(entry) = current_session.entries.get_mut(&(update.car_id as i32)) {
+            entry.orientation = [update.pitch, update.yaw, update.roll];
+            entry.position = update.position as i32;
+            entry.spline_pos = update.spline_position;
+            entry.current_lap.time = update.current_lap.laptime_ms.into();
+            entry.current_lap.invalid = update.current_lap.is_invaliud;
+            entry.performance_delta = update.delta.into();
+            entry.in_pits = update.car_location == CarLocation::Pitlane;
+            entry.gear = update.gear as i32;
+            entry.speed = update.kmh as f32;
+        } else {
+            warn!("Realtime update for unknown car id:{}", update.car_id);
+            log_todo((), "Send a new entry list request to receive new cars");
+        }
+
         Ok(())
     }
 
@@ -245,10 +263,23 @@ impl InnerModel {
         info!("New entry has connected: #{}", entry_list_car.race_number);
         let entry = Entry {
             id: entry_list_car.car_id as i32,
-            drivers: log_todo(HashMap::new(), "Create drivers for entry"),
-            current_driver: entry_list_car.current_driver_index as i32,
+            drivers: {
+                let mut drivers = Vec::new();
+                for (i, driver_info) in entry_list_car.drivers.iter().enumerate() {
+                    drivers.push(Driver {
+                        id: i as usize,
+                        first_name: driver_info.first_name.clone(),
+                        last_name: driver_info.last_name.clone(),
+                        short_name: driver_info.short_name.clone(),
+                        nationality: driver_info.nationality.clone(),
+                        driving_time: Time::from(0),
+                    });
+                }
+                drivers
+            },
+            current_driver: entry_list_car.current_driver_index as usize,
             team_name: entry_list_car.team_name,
-            car: log_todo(model::CarModel::None, "Convert car model to enum"),
+            car: entry_list_car.car_model_type,
             car_number: entry_list_car.race_number,
             nationality: entry_list_car.car_nationality,
             ..Default::default()
@@ -320,7 +351,21 @@ impl AccSocket {
     }
 }
 
-fn convert_session_phase(value: data::SessionPhase) -> model::SessionPhase {
+fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
+    model::Session {
+        id,
+        session_type: map_session_type(&update.session_type),
+        session_time: Time::from(update.session_end_time + update.session_time),
+        time_remaining: Time::from(update.session_end_time),
+        phase: map_session_phase(&update.session_phase),
+        time_of_day: Time::from(update.time_of_day * 1000.0),
+        ambient_temp: update.ambient_temp as f32,
+        track_temp: update.track_temp as f32,
+        ..Default::default()
+    }
+}
+
+fn map_session_phase(value: &data::SessionPhase) -> model::SessionPhase {
     match value {
         SessionPhase::None => model::SessionPhase::None,
         SessionPhase::Starting => model::SessionPhase::PreSession,
@@ -334,7 +379,7 @@ fn convert_session_phase(value: data::SessionPhase) -> model::SessionPhase {
     }
 }
 
-fn convert_session_type(value: SessionType) -> model::SessionType {
+fn map_session_type(value: &SessionType) -> model::SessionType {
     match value {
         SessionType::Practice => model::SessionType::Practice,
         SessionType::Qualifying => model::SessionType::Qualifying,

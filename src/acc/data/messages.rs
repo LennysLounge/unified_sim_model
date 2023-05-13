@@ -1,6 +1,8 @@
 use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
-use crate::model::Nationality;
+use crate::model::{Car, Nationality};
+
+use super::cars::cars;
 
 #[derive(Debug)]
 pub struct IncompleteTypeError {
@@ -211,7 +213,7 @@ pub struct RealtimeCarUpdate {
     pub yaw: f32,
     pub pitch: f32,
     pub roll: f32,
-    pub car_location: u8,
+    pub car_location: CarLocation,
     pub kmh: i16,
     pub position: i16,
     pub cup_position: i16,
@@ -233,7 +235,7 @@ fn read_realtime_car_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeEr
         yaw: read_f32(buf)?,
         pitch: read_f32(buf)?,
         roll: read_f32(buf)?,
-        car_location: read_u8(buf)?,
+        car_location: read_car_location(buf)?,
         kmh: read_i16(buf)?,
         position: read_i16(buf)?,
         cup_position: read_i16(buf)?,
@@ -245,6 +247,26 @@ fn read_realtime_car_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeEr
         last_lap: read_lap_info(buf)?,
         current_lap: read_lap_info(buf)?,
     }))
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum CarLocation {
+    #[default]
+    None,
+    Track,
+    Pitlane,
+    Pitentry,
+    Pitexit,
+}
+
+fn read_car_location(buf: &mut &[u8]) -> Result<CarLocation, IncompleteTypeError> {
+    match read_u8(buf)? {
+        1 => Ok(CarLocation::Track),
+        2 => Ok(CarLocation::Pitlane),
+        3 => Ok(CarLocation::Pitentry),
+        4 => Ok(CarLocation::Pitexit),
+        _ => Ok(CarLocation::None),
+    }
 }
 
 #[derive(Debug, Default)]
@@ -307,7 +329,7 @@ fn read_track_data(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
 #[derive(Debug, Default)]
 pub struct EntryListCar {
     pub car_id: i16,
-    pub car_model_type: u8,
+    pub car_model_type: Car,
     pub team_name: String,
     pub race_number: i32,
     pub cup_category: u8,
@@ -319,7 +341,7 @@ pub struct EntryListCar {
 fn read_entry_list_car(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
     Ok(Message::EntryListCar(EntryListCar {
         car_id: read_i16(buf)?,
-        car_model_type: read_u8(buf)?,
+        car_model_type: read_car(buf)?,
         team_name: read_string(buf)?,
         race_number: read_i32(buf)?,
         cup_category: read_u8(buf)?,
@@ -333,6 +355,58 @@ fn read_entry_list_car(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> 
             drivers
         },
     }))
+}
+
+fn read_car(buf: &mut &[u8]) -> Result<Car, IncompleteTypeError> {
+    match read_u8(buf)? {
+        0 => Ok(cars::PORSCHE_991_GT3_R),
+        1 => Ok(cars::MERCEDES_AMG_GT3_2015),
+        2 => Ok(cars::FERRARI_488_GT3),
+        3 => Ok(cars::AUDI_R8_LMS),
+        4 => Ok(cars::LAMBORGHINI_HURACAN_GT3),
+        5 => Ok(cars::MCLAREN_650S_GT3),
+        6 => Ok(cars::NISSAN_GT_R_NISMO_GT3_2018),
+        7 => Ok(cars::BMW_M6_GT3),
+        8 => Ok(cars::BENTLEY_CONTINENTAL_GT3_2018),
+        9 => Ok(cars::PORSCHE_991_II_GT3_CUP),
+        10 => Ok(cars::NISSAN_GT_R_NISMO_GT3_2015),
+        11 => Ok(cars::BENTLEY_CONTINENTAL_GT3_2015),
+        12 => Ok(cars::AMR_V12_VANTAGE_GT3),
+        13 => Ok(cars::REITER_ENGINEERING_R_EX_GT3),
+        14 => Ok(cars::EMIL_FREY_JAGUAR_G3),
+        15 => Ok(cars::LEXUS_RC_F_GT3),
+        16 => Ok(cars::LAMBORGHINI_HURACAN_GT3_EVO),
+        17 => Ok(cars::HONDA_NSX_GT3),
+        18 => Ok(cars::LAMBORGHINI_HURACAN_ST),
+        19 => Ok(cars::AUDI_R8_LMS_EVO),
+        20 => Ok(cars::AMR_V8_VANTAGE),
+        21 => Ok(cars::HONDA_NSX_GT3_EVO),
+        22 => Ok(cars::MCLAREN_720S_GT3),
+        23 => Ok(cars::PORSCHE_911_II_GT3_R),
+        24 => Ok(cars::FERRARI_488_GT3_EVO),
+        25 => Ok(cars::MERCEDES_AMG_GT3_2020),
+        26 => Ok(cars::FERRARI_488_CHALLENGE_EVO),
+        27 => Ok(cars::BMW_M2_CS_RACING),
+        28 => Ok(cars::PORSCHE_),
+        29 => Ok(cars::LAMBORGHINI_HURACAN_ST_EVO2),
+        30 => Ok(cars::BMW_M4_GT3),
+        31 => Ok(cars::AUDI_R8_LMS_EVO2),
+        32 => Ok(cars::FERRARI_296_GT3),
+        33 => Ok(cars::LAMBORGHINI_HURACAN_EVO2),
+        34 => Ok(cars::PORSCHE_992_GT3_R),
+        50 => Ok(cars::ALPINE_A110_GT4),
+        51 => Ok(cars::ASTON_MARTIN_VANTAGE_GT4),
+        52 => Ok(cars::AUDI_R8_LMS_GT4),
+        53 => Ok(cars::BMW_M4_GT4),
+        55 => Ok(cars::CHEVROLET_CAMARO_GT4),
+        56 => Ok(cars::GINETTA_G55_GT4),
+        57 => Ok(cars::KTM_X_BOW_GT4),
+        58 => Ok(cars::MASERATI_MC_GT4),
+        59 => Ok(cars::MCLAREN_570S_GT4),
+        60 => Ok(cars::MERCEDES_AMG_GT4),
+        61 => Ok(cars::PORSCHE_718_CAYMAN_GT4_CLUBSPORT),
+        _ => Ok(cars::ERROR),
+    }
 }
 
 #[derive(Debug)]

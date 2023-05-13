@@ -78,18 +78,12 @@ pub struct Session {
 }
 
 #[derive(Debug, Default)]
-pub enum CarModel {
-    #[default]
-    None,
-}
-
-#[derive(Debug, Default)]
 pub struct Entry {
     pub id: i32,
-    pub drivers: HashMap<i32, Driver>,
-    pub current_driver: i32,
+    pub drivers: Vec<Driver>,
+    pub current_driver: usize,
     pub team_name: String,
-    pub car: CarModel,
+    pub car: Car,
     pub car_number: i32,
     pub nationality: Nationality,
     pub world_pos: [f32; 3],
@@ -110,7 +104,7 @@ pub struct Entry {
 
 #[derive(Debug, Default)]
 pub struct Driver {
-    pub id: i32,
+    pub id: usize,
     pub first_name: String,
     pub last_name: String,
     pub short_name: String,
