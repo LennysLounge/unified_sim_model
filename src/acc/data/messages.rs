@@ -1,5 +1,9 @@
 use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
+use crate::model::Nationality;
+
+use super::{SessionPhase, SessionType};
+
 #[derive(Debug)]
 pub struct IncompleteTypeError {
     pub backtrace: Backtrace,
@@ -12,6 +16,47 @@ impl Display for IncompleteTypeError {
 }
 
 impl Error for IncompleteTypeError {}
+
+impl TryFrom<u8> for SessionPhase {
+    type Error = IncompleteTypeError;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(SessionPhase::None),
+            1 => Ok(SessionPhase::Starting),
+            2 => Ok(SessionPhase::PreFormation),
+            3 => Ok(SessionPhase::FormationLap),
+            4 => Ok(SessionPhase::PreSession),
+            5 => Ok(SessionPhase::Session),
+            6 => Ok(SessionPhase::SessionOver),
+            7 => Ok(SessionPhase::PostSession),
+            8 => Ok(SessionPhase::ResultUi),
+            _ => Err(IncompleteTypeError {
+                backtrace: Backtrace::force_capture(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<u8> for SessionType {
+    type Error = IncompleteTypeError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(SessionType::Practice),
+            4 => Ok(SessionType::Qualifying),
+            9 => Ok(SessionType::Superpole),
+            10 => Ok(SessionType::Race),
+            11 => Ok(SessionType::Hotlap),
+            12 => Ok(SessionType::Hotstint),
+            13 => Ok(SessionType::HotlapSuperpole),
+            14 => Ok(SessionType::Replay),
+            255 => Ok(SessionType::None),
+            _ => Err(IncompleteTypeError {
+                backtrace: Backtrace::force_capture(),
+            }),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Message {
@@ -59,11 +104,11 @@ fn read_registration_result(buf: &mut &[u8]) -> Result<Message, IncompleteTypeEr
 pub struct RealtimeUpdate {
     pub event_index: i16,
     pub session_index: i16,
-    pub session_type: u8,
-    pub session_phase: u8,
+    pub session_type: SessionType,
+    pub session_phase: SessionPhase,
     pub session_time: f32,
     pub session_end_time: f32,
-    pub focused_car_index: i32,
+    pub focused_car_id: i32,
     pub active_camera_set: String,
     pub active_camera: String,
     pub current_hud_page: String,
@@ -84,11 +129,11 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError>
     let mut me = RealtimeUpdate::default();
     me.event_index = read_i16(buf)?;
     me.session_index = read_i16(buf)?;
-    me.session_type = read_u8(buf)?;
-    me.session_phase = read_u8(buf)?;
+    me.session_type = SessionType::try_from(read_u8(buf)?)?;
+    me.session_phase = SessionPhase::try_from(read_u8(buf)?)?;
     me.session_time = read_f32(buf)?;
     me.session_end_time = read_f32(buf)?;
-    me.focused_car_index = read_i32(buf)?;
+    me.focused_car_id = read_i32(buf)?;
     me.active_camera_set = read_string(buf)?;
     me.active_camera = read_string(buf)?;
     me.current_hud_page = read_string(buf)?;
@@ -110,8 +155,8 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError>
 #[derive(Debug, Default)]
 pub struct LapInfo {
     pub laptime_ms: i32,
-    pub car_index: i16,
-    pub driver_index: i16,
+    pub car_id: i16,
+    pub driver_id: i16,
     pub splits: Vec<i32>,
     pub is_invaliud: bool,
     pub is_valid_for_best: bool,
@@ -122,8 +167,8 @@ pub struct LapInfo {
 fn read_lap_info(buf: &mut &[u8]) -> Result<LapInfo, IncompleteTypeError> {
     Ok(LapInfo {
         laptime_ms: read_i32(buf)?,
-        car_index: read_i16(buf)?,
-        driver_index: read_i16(buf)?,
+        car_id: read_i16(buf)?,
+        driver_id: read_i16(buf)?,
         splits: {
             let mut splits = Vec::new();
             for _ in 0..read_u8(buf)? {
@@ -140,8 +185,8 @@ fn read_lap_info(buf: &mut &[u8]) -> Result<LapInfo, IncompleteTypeError> {
 
 #[derive(Debug)]
 pub struct RealtimeCarUpdate {
-    pub car_index: i16,
-    pub driver_index: i16,
+    pub car_id: i16,
+    pub driver_id: i16,
     pub driver_cound: u8,
     pub gear: u8,
     pub yaw: f32,
@@ -162,8 +207,8 @@ pub struct RealtimeCarUpdate {
 
 fn read_realtime_car_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
     Ok(Message::RealtimeCarUpdate(RealtimeCarUpdate {
-        car_index: read_i16(buf)?,
-        driver_index: read_i16(buf)?,
+        car_id: read_i16(buf)?,
+        driver_id: read_i16(buf)?,
         driver_cound: read_u8(buf)?,
         gear: read_u8(buf)?,
         yaw: read_f32(buf)?,
@@ -242,25 +287,25 @@ fn read_track_data(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
 
 #[derive(Debug, Default)]
 pub struct EntryListCar {
-    pub car_index: i16,
+    pub car_id: i16,
     pub car_model_type: u8,
     pub team_name: String,
     pub race_number: i32,
     pub cup_category: u8,
     pub current_driver_index: u8,
-    pub car_nationality: i16,
+    pub car_nationality: Nationality,
     pub drivers: Vec<DriverInfo>,
 }
 
 fn read_entry_list_car(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
     Ok(Message::EntryListCar(EntryListCar {
-        car_index: read_i16(buf)?,
+        car_id: read_i16(buf)?,
         car_model_type: read_u8(buf)?,
         team_name: read_string(buf)?,
         race_number: read_i32(buf)?,
         cup_category: read_u8(buf)?,
         current_driver_index: read_u8(buf)?,
-        car_nationality: read_i16(buf)?,
+        car_nationality: parse_nationality(read_i16(buf)?),
         drivers: {
             let mut drivers = Vec::new();
             for _ in 0..read_u8(buf)? {
@@ -277,7 +322,7 @@ pub struct DriverInfo {
     pub last_name: String,
     pub short_name: String,
     pub category: u8,
-    pub nationality: i16,
+    pub nationality: Nationality,
 }
 
 fn read_driver_info(buf: &mut &[u8]) -> Result<DriverInfo, IncompleteTypeError> {
@@ -286,7 +331,7 @@ fn read_driver_info(buf: &mut &[u8]) -> Result<DriverInfo, IncompleteTypeError> 
         last_name: read_string(buf)?,
         short_name: read_string(buf)?,
         category: read_u8(buf)?,
-        nationality: read_i16(buf)?,
+        nationality: parse_nationality(read_i16(buf)?),
     })
 }
 
@@ -295,7 +340,7 @@ pub struct BroadcastingEvent {
     pub event_type: u8,
     pub message: String,
     pub time: i32,
-    pub car_index: i32,
+    pub car_id: i32,
 }
 
 fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
@@ -303,7 +348,7 @@ fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Message, IncompleteTypeErr
         event_type: read_u8(buf)?,
         message: read_string(buf)?,
         time: read_i32(buf)?,
-        car_index: read_i32(buf)?,
+        car_id: read_i32(buf)?,
     }))
 }
 
@@ -365,6 +410,91 @@ fn read_f32(buf: &mut &[u8]) -> Result<f32, IncompleteTypeError> {
     Ok(f32::from_le_bytes(value.try_into().unwrap()))
 }
 
+fn parse_nationality(value: i16) -> Nationality {
+    println!("Converting nationality: {}", value);
+    match value {
+        0 => Nationality::NONE,
+        1 => Nationality::ITALY,
+        2 => Nationality::GERMANY,
+        3 => Nationality::FRANCE,
+        4 => Nationality::SPAIN,
+        5 => Nationality::UNITEDKINGDOM,
+        6 => Nationality::HUNGARY,
+        7 => Nationality::BELGIUM,
+        8 => Nationality::SWITZERLAND,
+        9 => Nationality::AUSTRIA,
+        10 => Nationality::RUSSIA,
+        11 => Nationality::THAILAND,
+        12 => Nationality::NETHERLANDS,
+        13 => Nationality::POLAND,
+        14 => Nationality::ARGENTINA,
+        15 => Nationality::MONACO,
+        16 => Nationality::IRELAND,
+        17 => Nationality::BRAZIL,
+        18 => Nationality::SOUTHAFRICA,
+        19 => Nationality::PUERTORICO,
+        20 => Nationality::SLOVAKIA,
+        21 => Nationality::OMAN,
+        22 => Nationality::GREECE,
+        23 => Nationality::SAUDIARABIA,
+        24 => Nationality::NORWAY,
+        25 => Nationality::TURKEY,
+        26 => Nationality::SOUTHKOREA,
+        27 => Nationality::LEBANON,
+        28 => Nationality::ARMENIA,
+        29 => Nationality::MEXICO,
+        30 => Nationality::SWEDEN,
+        31 => Nationality::FINLAND,
+        32 => Nationality::DENMARK,
+        33 => Nationality::CROATIA,
+        34 => Nationality::CANADA,
+        35 => Nationality::CHINA,
+        36 => Nationality::PORTUGAL,
+        37 => Nationality::SINGAPORE,
+        38 => Nationality::INDONESIA,
+        39 => Nationality::UNITEDSTATESOFAMERICA,
+        40 => Nationality::NEWZEALAND,
+        41 => Nationality::AUSTRALIA,
+        42 => Nationality::SANMARINO,
+        43 => Nationality::UNITEDARABEMIRATES,
+        44 => Nationality::LUXEMBOURG,
+        45 => Nationality::KUWAIT,
+        46 => Nationality::HONGKONG,
+        47 => Nationality::COLOMBIA,
+        48 => Nationality::JAPAN,
+        49 => Nationality::ANDORRA,
+        50 => Nationality::AZERBAIJAN,
+        51 => Nationality::BULGARIA,
+        52 => Nationality::CUBA,
+        53 => Nationality::CZECHIA,
+        54 => Nationality::ESTONIA,
+        55 => Nationality::GEORGIA,
+        56 => Nationality::INDIA,
+        57 => Nationality::ISRAEL,
+        58 => Nationality::JAMAICA,
+        59 => Nationality::LATVIA,
+        60 => Nationality::LITHUANIA,
+        61 => Nationality::MACAU,
+        62 => Nationality::MALAYSIA,
+        63 => Nationality::NEPAL,
+        64 => Nationality::NEWCALEDONIA,
+        65 => Nationality::NIGERIA,
+        66 => Nationality::NORTHERNIRELAND,
+        67 => Nationality::PAPUANEWGUINEA,
+        68 => Nationality::PHILIPPINES,
+        69 => Nationality::QATAR,
+        70 => Nationality::ROMANIA,
+        71 => Nationality::SCOTLAND,
+        72 => Nationality::SERBIA,
+        73 => Nationality::SLOVENIA,
+        74 => Nationality::TAIWAN,
+        75 => Nationality::UKRAINE,
+        76 => Nationality::VENEZUELA,
+        77 => Nationality::WALES,
+        _ => Nationality::NONE,
+    }
+}
+
 pub fn register_request(password: &str, update_interval: i32, command_password: &str) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(1);
@@ -412,15 +542,15 @@ pub fn hud_page_request(connection_id: i32, page: String) -> Vec<u8> {
 #[allow(dead_code)]
 pub fn focus_request(
     connection_id: i32,
-    car_index: Option<i16>,
+    car_id: Option<i16>,
     camera: Option<(String, String)>,
 ) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(50);
     buf.extend(connection_id.to_le_bytes());
-    if let Some(car_index) = car_index {
+    if let Some(car_id) = car_id {
         buf.push(1);
-        buf.extend(car_index.to_le_bytes());
+        buf.extend(car_id.to_le_bytes());
     } else {
         buf.push(0);
     }

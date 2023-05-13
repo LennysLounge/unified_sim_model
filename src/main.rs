@@ -1,10 +1,5 @@
-use tracing::{debug, error, info, trace, warn, Level};
-
-use crate::acc_udp::AccAdapter;
-
-mod acc_udp;
-mod messages;
-mod model;
+use tracing::{info, Level};
+use unified_sim_model::acc::AccAdapter;
 
 fn main() {
     let subscriber = tracing_subscriber::fmt()
