@@ -18,6 +18,16 @@ pub struct Model {
     pub track_length: i32,
 }
 
+impl Model {
+    pub fn current_session(&self) -> Option<&Session> {
+        self.sessions.get(self.current_session)
+    }
+
+    pub fn current_session_mut(&mut self) -> Option<&mut Session> {
+        self.sessions.get_mut(self.current_session)
+    }
+}
+
 /// The type of the session.
 #[derive(Debug, Default)]
 #[allow(dead_code)]

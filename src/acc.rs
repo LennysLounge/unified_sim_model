@@ -142,10 +142,7 @@ impl AccConnection {
         }
 
         debug!("Additional processing now");
-        if !model.sessions.is_empty() {
-            let current_session_index = model.current_session;
-            let session = &model.sessions[current_session_index];
-
+        if let Some(session) = model.current_session() {
             info!(
                 "Session time: {}, Session time remaining: {}",
                 session.session_time, session.time_remaining
@@ -202,8 +199,10 @@ impl InnerModel {
             self.current_session_index = update.session_index;
         }
 
-        let current_session_index = model.current_session;
-        let current_session = &mut model.sessions[current_session_index];
+        let current_session = model
+            .current_session_mut()
+            .expect("There should be a session available");
+
         current_session.time_remaining = Time::from(update.session_end_time);
 
         let current_phase = map_session_phase(&update.session_phase);
@@ -226,8 +225,9 @@ impl InnerModel {
         model: &mut RwLockWriteGuard<Model>,
     ) -> Result<()> {
         info!("RealtimeCarUpdate");
-        let current_session_index = model.current_session;
-        let current_session = &mut model.sessions[current_session_index];
+        let current_session = model
+            .current_session_mut()
+            .expect("There should have been a session update before a realtime update");
 
         if let Some(entry) = current_session.entries.get_mut(&(update.car_id as i32)) {
             entry.orientation = [update.pitch, update.yaw, update.roll];
@@ -253,13 +253,19 @@ impl InnerModel {
         model: &mut RwLockWriteGuard<Model>,
     ) -> Result<()> {
         debug!("EntryListCar");
-        let current_session_index = model.current_session;
-        if model.sessions[current_session_index]
+
+        let session = match model.current_session_mut() {
+            None => return Ok(()),
+            Some(s) => s,
+        };
+
+        if session
             .entries
             .contains_key(&(entry_list_car.car_id as i32))
         {
             return Ok(());
         }
+
         info!("New entry has connected: #{}", entry_list_car.race_number);
         let entry = Entry {
             id: entry_list_car.car_id as i32,
@@ -285,10 +291,7 @@ impl InnerModel {
             ..Default::default()
         };
 
-        model.sessions[current_session_index]
-            .entries
-            .insert(entry.id, entry);
-
+        session.entries.insert(entry.id, entry);
         Ok(())
     }
 }
