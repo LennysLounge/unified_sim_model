@@ -1,6 +1,6 @@
 use crate::{
     log_todo,
-    model::{self, Entry, Model, SessionPhase, SessionType, Time},
+    model::{self, Entry, Model, Time},
 };
 use std::{
     collections::HashMap,
@@ -15,7 +15,10 @@ use std::{
 };
 use tracing::{debug, info};
 
-use self::data::{EntryListCar, IncompleteTypeError, Message, RealtimeUpdate, RegistrationResult};
+use self::data::{
+    EntryListCar, IncompleteTypeError, Message, RealtimeUpdate, RegistrationResult, SessionPhase,
+    SessionType,
+};
 
 pub mod data;
 
@@ -194,10 +197,10 @@ impl InnerModel {
             // A new session has started.
             let session = model::Session {
                 id: model.sessions.len() as i32,
-                session_type: SessionType::from(update.session_type),
+                session_type: convert_session_type(update.session_type),
                 session_time: Time::from(update.session_end_time + update.session_time),
                 time_remaining: Time::from(update.session_end_time),
-                phase: SessionPhase::from(update.session_phase.clone()),
+                phase: convert_session_phase(update.session_phase.clone()),
                 time_of_day: Time::from(update.time_of_day * 1000.0),
                 ambient_temp: update.ambient_temp as f32,
                 track_temp: update.track_temp as f32,
@@ -212,7 +215,7 @@ impl InnerModel {
         let current_session = &mut model.sessions[current_session_index];
         current_session.time_remaining = Time::from(update.session_end_time);
 
-        let current_phase = SessionPhase::from(update.session_phase);
+        let current_phase = convert_session_phase(update.session_phase);
         if current_phase != current_session.phase {
             info!(
                 "Session phase changed from {:?} to {:?}",
@@ -314,5 +317,33 @@ impl AccSocket {
             messages.push(data::read_response(&buf).map_err(ConnectionError::CannotParse)?);
         }
         Ok(messages)
+    }
+}
+
+fn convert_session_phase(value: data::SessionPhase) -> model::SessionPhase {
+    match value {
+        SessionPhase::None => model::SessionPhase::None,
+        SessionPhase::Starting => model::SessionPhase::PreSession,
+        SessionPhase::PreFormation => model::SessionPhase::PreSession,
+        SessionPhase::FormationLap => model::SessionPhase::PostSession,
+        SessionPhase::PreSession => model::SessionPhase::PreSession,
+        SessionPhase::Session => model::SessionPhase::Session,
+        SessionPhase::SessionOver => model::SessionPhase::PostSession,
+        SessionPhase::PostSession => model::SessionPhase::PostSession,
+        SessionPhase::ResultUi => model::SessionPhase::Finished,
+    }
+}
+
+fn convert_session_type(value: SessionType) -> model::SessionType {
+    match value {
+        SessionType::Practice => model::SessionType::Practice,
+        SessionType::Qualifying => model::SessionType::Qualifying,
+        SessionType::Superpole => model::SessionType::Qualifying,
+        SessionType::Race => model::SessionType::Race,
+        SessionType::Hotlap => model::SessionType::Practice,
+        SessionType::Hotstint => model::SessionType::Practice,
+        SessionType::HotlapSuperpole => model::SessionType::Practice,
+        SessionType::Replay => model::SessionType::None,
+        SessionType::None => model::SessionType::None,
     }
 }

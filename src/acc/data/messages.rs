@@ -2,8 +2,6 @@ use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display
 
 use crate::model::Nationality;
 
-use super::{SessionPhase, SessionType};
-
 #[derive(Debug)]
 pub struct IncompleteTypeError {
     pub backtrace: Backtrace,
@@ -16,47 +14,6 @@ impl Display for IncompleteTypeError {
 }
 
 impl Error for IncompleteTypeError {}
-
-impl TryFrom<u8> for SessionPhase {
-    type Error = IncompleteTypeError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(SessionPhase::None),
-            1 => Ok(SessionPhase::Starting),
-            2 => Ok(SessionPhase::PreFormation),
-            3 => Ok(SessionPhase::FormationLap),
-            4 => Ok(SessionPhase::PreSession),
-            5 => Ok(SessionPhase::Session),
-            6 => Ok(SessionPhase::SessionOver),
-            7 => Ok(SessionPhase::PostSession),
-            8 => Ok(SessionPhase::ResultUi),
-            _ => Err(IncompleteTypeError {
-                backtrace: Backtrace::force_capture(),
-            }),
-        }
-    }
-}
-
-impl TryFrom<u8> for SessionType {
-    type Error = IncompleteTypeError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(SessionType::Practice),
-            4 => Ok(SessionType::Qualifying),
-            9 => Ok(SessionType::Superpole),
-            10 => Ok(SessionType::Race),
-            11 => Ok(SessionType::Hotlap),
-            12 => Ok(SessionType::Hotstint),
-            13 => Ok(SessionType::HotlapSuperpole),
-            14 => Ok(SessionType::Replay),
-            255 => Ok(SessionType::None),
-            _ => Err(IncompleteTypeError {
-                backtrace: Backtrace::force_capture(),
-            }),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub enum Message {
@@ -129,8 +86,8 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError>
     let mut me = RealtimeUpdate::default();
     me.event_index = read_i16(buf)?;
     me.session_index = read_i16(buf)?;
-    me.session_type = SessionType::try_from(read_u8(buf)?)?;
-    me.session_phase = SessionPhase::try_from(read_u8(buf)?)?;
+    me.session_type = read_session_type(buf)?;
+    me.session_phase = read_session_phase(buf)?;
     me.session_time = read_f32(buf)?;
     me.session_end_time = read_f32(buf)?;
     me.focused_car_id = read_i32(buf)?;
@@ -150,6 +107,68 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError>
     me.wetness = read_u8(buf)?;
     me.best_session_lap = read_lap_info(buf)?;
     Ok(Message::RealtimeUpdate(me))
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum SessionPhase {
+    #[default]
+    None,
+    Starting,
+    PreFormation,
+    FormationLap,
+    PreSession,
+    Session,
+    SessionOver,
+    PostSession,
+    ResultUi,
+}
+
+fn read_session_phase(mut buf: &[u8]) -> Result<SessionPhase, IncompleteTypeError> {
+    match read_u8(&mut buf)? {
+        0 => Ok(SessionPhase::None),
+        1 => Ok(SessionPhase::Starting),
+        2 => Ok(SessionPhase::PreFormation),
+        3 => Ok(SessionPhase::FormationLap),
+        4 => Ok(SessionPhase::PreSession),
+        5 => Ok(SessionPhase::Session),
+        6 => Ok(SessionPhase::SessionOver),
+        7 => Ok(SessionPhase::PostSession),
+        8 => Ok(SessionPhase::ResultUi),
+        _ => Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        }),
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum SessionType {
+    Practice,
+    Qualifying,
+    Superpole,
+    Race,
+    Hotlap,
+    Hotstint,
+    HotlapSuperpole,
+    Replay,
+    #[default]
+    None,
+}
+
+fn read_session_type(mut buf: &[u8]) -> Result<SessionType, IncompleteTypeError> {
+    match read_u8(&mut buf)? {
+        0 => Ok(SessionType::Practice),
+        4 => Ok(SessionType::Qualifying),
+        9 => Ok(SessionType::Superpole),
+        10 => Ok(SessionType::Race),
+        11 => Ok(SessionType::Hotlap),
+        12 => Ok(SessionType::Hotstint),
+        13 => Ok(SessionType::HotlapSuperpole),
+        14 => Ok(SessionType::Replay),
+        255 => Ok(SessionType::None),
+        _ => Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        }),
+    }
 }
 
 #[derive(Debug, Default)]
