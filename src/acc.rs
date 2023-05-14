@@ -82,7 +82,7 @@ impl AccAdapter {
 struct AccConnection {
     socket: AccSocket,
     model: Arc<RwLock<Model>>,
-    processors: Vec<Box<dyn AccProcessor>>,
+    base_processor: BaseProcessor,
 }
 
 impl AccConnection {
@@ -105,7 +105,7 @@ impl AccConnection {
                 read_only: false,
             },
             model: model,
-            processors: vec![Box::new(BaseProcessor::default())],
+            base_processor: BaseProcessor::default(),
         }
     }
 
@@ -127,28 +127,8 @@ impl AccConnection {
                 .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?,
         };
 
-        for processor in self.processors.iter_mut() {
-            use Message::*;
-            match message {
-                Unknown(t) => {
-                    return Err(ConnectionError::Other(format!(
-                        "Unknown message type: {}",
-                        t
-                    )));
-                }
-                RegistrationResult(ref result) => {
-                    processor.registration_result(&result, &mut context)?
-                }
-                RealtimeUpdate(ref update) => processor.realtime_update(&update, &mut context)?,
-                RealtimeCarUpdate(ref update) => {
-                    processor.realtime_car_update(&update, &mut context)?
-                }
-                EntryList(ref list) => processor.entry_list(&list, &mut context)?,
-                TrackData(ref track) => processor.track_data(&track, &mut context)?,
-                EntryListCar(ref car) => processor.entry_list_car(&car, &mut context)?,
-                BroadcastingEvent(ref event) => processor.broadcast_even(&event, &mut context)?,
-            }
-        }
+        self.base_processor
+            .process_message(&message, &mut context)?;
 
         if let Message::RealtimeUpdate(_) = message {
             if let Some(session) = context.model.current_session() {
@@ -226,6 +206,27 @@ struct AccProcessorContext<'a> {
 /// This trait descibes a processor that can process the
 /// data events from the game and modify the model.
 trait AccProcessor {
+    fn process_message(
+        &mut self,
+        message: &Message,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        use Message::*;
+        match message {
+            Unknown(t) => Err(ConnectionError::Other(format!(
+                "Unknown message type: {}",
+                t
+            ))),
+            RegistrationResult(ref result) => self.registration_result(&result, context),
+            RealtimeUpdate(ref update) => self.realtime_update(&update, context),
+            RealtimeCarUpdate(ref update) => self.realtime_car_update(&update, context),
+            EntryList(ref list) => self.entry_list(&list, context),
+            TrackData(ref track) => self.track_data(&track, context),
+            EntryListCar(ref car) => self.entry_list_car(&car, context),
+            BroadcastingEvent(ref event) => self.broadcast_even(&event, context),
+        }
+    }
+
     #[allow(unused_variables)]
     fn registration_result(
         &mut self,
