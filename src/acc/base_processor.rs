@@ -1,8 +1,7 @@
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::{
     acc::{data::CarLocation, ConnectionError},
-    log_todo,
     model::{self, Driver, Entry, Time},
 };
 
@@ -14,9 +13,12 @@ use super::{
     AccProcessor, AccProcessorContext, Result,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BaseProcessor {
+    /// Index of the current session.
     current_session_index: i16,
+    /// True if a new entry list should be requested.
+    requested_entry_list: bool,
 }
 
 impl AccProcessor for BaseProcessor {
@@ -35,7 +37,7 @@ impl AccProcessor for BaseProcessor {
         context.socket.connection_id = result.connection_id;
         context.socket.read_only = result.read_only;
 
-        context.socket.send_entry_list_request()?;
+        //context.socket.send_entry_list_request()?;
         context.socket.send_track_data_request()?;
         Ok(())
     }
@@ -48,9 +50,9 @@ impl AccProcessor for BaseProcessor {
         debug!("Realtime Update");
 
         if self.current_session_index != update.session_index || context.model.sessions.is_empty() {
-            info!("New session detected");
             // A new session has started.
             let session = map_session(update, context.model.sessions.len() as i32);
+            info!("New session detected {}", session.session_type);
             context.model.current_session = context.model.sessions.len();
             context.model.sessions.push(session);
             self.current_session_index = update.session_index;
@@ -63,16 +65,16 @@ impl AccProcessor for BaseProcessor {
 
         let current_phase = map_session_phase(&update.session_phase);
         if current_phase != session.phase {
-            info!(
-                "Session phase changed from {:?} to {:?}",
-                session.phase, current_phase
-            );
+            info!("Session phase changed to {:?}", current_phase);
             session.phase = current_phase;
         }
         session.time_remaining = Time::from(update.session_end_time);
         session.time_of_day = Time::from(update.time_of_day * 1000.0);
         session.ambient_temp = update.ambient_temp as f32;
         session.track_temp = update.track_temp as f32;
+
+        self.requested_entry_list = false;
+
         Ok(())
     }
 
@@ -99,8 +101,12 @@ impl AccProcessor for BaseProcessor {
             entry.gear = update.gear as i32;
             entry.speed = update.kmh as f32;
         } else {
-            warn!("Realtime update for unknown car id:{}", update.car_id);
-            log_todo((), "Send a new entry list request to receive new cars");
+            debug!("Realtime update for unknown car id:{}", update.car_id);
+            if !self.requested_entry_list {
+                debug!("Requesting new entry list");
+                context.socket.send_entry_list_request()?;
+                self.requested_entry_list = true;
+            }
         }
         Ok(())
     }
@@ -164,11 +170,6 @@ impl AccProcessor for BaseProcessor {
         _context: &mut AccProcessorContext,
     ) -> Result<()> {
         debug!("Broadcasting event");
-        Ok(())
-    }
-
-    fn post_update(&mut self, _context: &mut AccProcessorContext) -> Result<()> {
-        debug!("Post update");
         Ok(())
     }
 

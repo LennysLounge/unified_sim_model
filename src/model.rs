@@ -40,6 +40,17 @@ pub enum SessionType {
     None,
 }
 
+impl Display for SessionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SessionType::Practice => write!(f, "Practice"),
+            SessionType::Qualifying => write!(f, "Qualifying"),
+            SessionType::Race => write!(f, "Race"),
+            SessionType::None => write!(f, "None"),
+        }
+    }
+}
+
 /// The phase of the current session.
 #[derive(Debug, Default, PartialEq, Eq)]
 #[allow(dead_code)]

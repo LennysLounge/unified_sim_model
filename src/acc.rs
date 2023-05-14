@@ -9,7 +9,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tracing::{debug, info};
+use tracing::info;
 
 use self::{
     base_processor::BaseProcessor,
@@ -113,15 +113,12 @@ impl AccConnection {
         self.socket.send_registration_request(1000, "", "")?;
 
         loop {
-            debug!("Read messages");
-            let messages = self.socket.read_availabe_messages()?;
-
-            debug!("process messages");
-            self.process_messages(messages)?;
+            let message = self.socket.read_message()?;
+            self.process_message(message)?;
         }
     }
 
-    fn process_messages(&mut self, messages: Vec<Message>) -> Result<()> {
+    fn process_message(&mut self, message: Message) -> Result<()> {
         let mut context = AccProcessorContext {
             socket: &mut self.socket,
             model: self
@@ -131,39 +128,35 @@ impl AccConnection {
         };
 
         for processor in self.processors.iter_mut() {
-            for message in messages.iter() {
-                use Message::*;
-                match message {
-                    Unknown(t) => {
-                        return Err(ConnectionError::Other(format!(
-                            "Unknown message type: {}",
-                            t
-                        )));
-                    }
-                    RegistrationResult(result) => {
-                        processor.registration_result(&result, &mut context)?
-                    }
-                    RealtimeUpdate(update) => processor.realtime_update(&update, &mut context)?,
-                    RealtimeCarUpdate(update) => {
-                        processor.realtime_car_update(&update, &mut context)?
-                    }
-                    EntryList(list) => processor.entry_list(&list, &mut context)?,
-                    TrackData(track) => processor.track_data(&track, &mut context)?,
-                    EntryListCar(car) => processor.entry_list_car(&car, &mut context)?,
-                    BroadcastingEvent(event) => processor.broadcast_even(&event, &mut context)?,
+            use Message::*;
+            match message {
+                Unknown(t) => {
+                    return Err(ConnectionError::Other(format!(
+                        "Unknown message type: {}",
+                        t
+                    )));
                 }
+                RegistrationResult(ref result) => {
+                    processor.registration_result(&result, &mut context)?
+                }
+                RealtimeUpdate(ref update) => processor.realtime_update(&update, &mut context)?,
+                RealtimeCarUpdate(ref update) => {
+                    processor.realtime_car_update(&update, &mut context)?
+                }
+                EntryList(ref list) => processor.entry_list(&list, &mut context)?,
+                TrackData(ref track) => processor.track_data(&track, &mut context)?,
+                EntryListCar(ref car) => processor.entry_list_car(&car, &mut context)?,
+                BroadcastingEvent(ref event) => processor.broadcast_even(&event, &mut context)?,
             }
         }
-        debug!("Additional processing now");
-        for processor in self.processors.iter_mut() {
-            processor.post_update(&mut context)?;
-        }
 
-        if let Some(session) = context.model.current_session() {
-            info!(
-                "Session time: {}, Session time remaining: {}",
-                session.session_time, session.time_remaining
-            );
+        if let Message::RealtimeUpdate(_) = message {
+            if let Some(session) = context.model.current_session() {
+                info!(
+                    "Session time: {}, Session time remaining: {}",
+                    session.session_time, session.time_remaining
+                );
+            }
         }
 
         //addition processing
@@ -212,33 +205,15 @@ impl AccSocket {
         self.send(&data::track_data_request(self.connection_id))
     }
 
-    /// Read all available messages and return them as a list.
-    /// Will block until a message in available and then
-    /// read all available messages.
-    fn read_availabe_messages(&mut self) -> Result<Vec<Message>> {
+    fn read_message(&mut self) -> Result<Message> {
         let mut buf = [0u8; 2048];
+        self.socket.recv(&mut buf).map_err(|e| match e.kind() {
+            ErrorKind::TimedOut => ConnectionError::TimedOut,
+            ErrorKind::ConnectionReset => ConnectionError::SocketUnavailable,
+            _ => ConnectionError::CannotReceive(e),
+        })?;
 
-        // Set blocking to block until a new message is available.
-        self.socket
-            .set_nonblocking(false)
-            .expect("Should be able to set nonblocking");
-
-        let mut messages = Vec::new();
-        loop {
-            if let Err(e) = self.socket.recv(&mut buf) {
-                match e.kind() {
-                    ErrorKind::WouldBlock => break,
-                    ErrorKind::TimedOut => return Err(ConnectionError::TimedOut),
-                    ErrorKind::ConnectionReset => return Err(ConnectionError::SocketUnavailable),
-                    _ => return Err(ConnectionError::CannotReceive(e)),
-                }
-            }
-            // Set nonblocking to read all messages until the first time it would block, then return.
-            self.socket.set_nonblocking(true).unwrap();
-
-            messages.push(data::read_response(&buf).map_err(ConnectionError::CannotParse)?);
-        }
-        Ok(messages)
+        data::read_response(&buf).map_err(ConnectionError::CannotParse)
     }
 }
 
@@ -303,12 +278,6 @@ trait AccProcessor {
         event: &BroadcastingEvent,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
-        Ok(())
-    }
-
-    /// This method is run after all other messages have been processed.
-    #[allow(unused_variables)]
-    fn post_update(&mut self, context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
 }
