@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tracing::{debug, info};
 
 use crate::{
@@ -19,6 +21,14 @@ pub struct BaseProcessor {
     current_session_index: i16,
     /// True if a new entry list should be requested.
     requested_entry_list: bool,
+    /// State of the entries.
+    entries: HashMap<i32, EntryState>,
+}
+
+/// The internal state of an entry.
+#[derive(Debug)]
+struct EntryState {
+    connected: bool,
 }
 
 impl AccProcessor for BaseProcessor {
@@ -73,7 +83,28 @@ impl AccProcessor for BaseProcessor {
         session.ambient_temp = update.ambient_temp as f32;
         session.track_temp = update.track_temp as f32;
 
+        // Reset entry list flag
         self.requested_entry_list = false;
+
+        // Check disconnects
+        for entry in session.entries.values_mut() {
+            let state = self
+                .entries
+                .get_mut(&entry.id)
+                .expect("Entry states should always contain the same entries as the model");
+            match (entry.connected, state.connected) {
+                (true, false) => {
+                    info!("Entry disconnected #{}", entry.car_number);
+                }
+                (false, true) => {
+                    info!("Entry reconnected #{}", entry.car_number);
+                }
+                _ => (),
+            }
+            entry.connected = state.connected;
+            // Reset connection state for next update.
+            state.connected = false;
+        }
 
         Ok(())
     }
@@ -100,6 +131,13 @@ impl AccProcessor for BaseProcessor {
             entry.in_pits = update.car_location == CarLocation::Pitlane;
             entry.gear = update.gear as i32;
             entry.speed = update.kmh as f32;
+
+            // Update connected flag for this entry.
+            let entry_state = self
+                .entries
+                .get_mut(&entry.id)
+                .expect("When an entry is in the model it should also be present here");
+            entry_state.connected = true;
         } else {
             debug!("Realtime update for unknown car id:{}", update.car_id);
             if !self.requested_entry_list {
@@ -157,9 +195,12 @@ impl AccProcessor for BaseProcessor {
             car: car.car_model_type.clone(),
             car_number: car.race_number,
             nationality: car.car_nationality.clone(),
+            connected: true,
             ..Default::default()
         };
 
+        self.entries
+            .insert(entry.id, EntryState { connected: true });
         session.entries.insert(entry.id, entry);
         Ok(())
     }
