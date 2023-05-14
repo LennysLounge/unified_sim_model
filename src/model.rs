@@ -52,22 +52,45 @@ impl Display for SessionType {
 }
 
 /// The phase of the current session.
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(dead_code)]
 pub enum SessionPhase {
-    /// The session is waiting to start.
-    Waiting,
-    /// The session is about to start.
-    PreSession,
-    /// The session is active and running.
-    Session,
-    /// The session is ending.
-    PostSession,
-    /// The session is finished.
-    Finished,
     /// The session phase is unknown or unavailable
     #[default]
     None,
+    /// The session is waiting to start while a different session is active.
+    Waiting,
+    /// The session is preparing to start.
+    /// Drivers and teams are getting ready.
+    Preparing,
+    /// The session is forming. Mostly in the form of a formation lap.
+    Formation,
+    /// The session is active and running.
+    Active,
+    /// The session is ending. The end condition for the session has been met
+    /// (either lap count reached or timer expired etc.) and the session is waiting
+    /// for all drivers to finish the session.
+    Ending,
+    /// The session is finished. All drivers have finished their session and the
+    /// results of the session are finalised.
+    Finished,
+}
+
+impl SessionPhase {
+    /// Returns the next phase in order.
+    /// Once session is in the finished state it does not advance further.
+    pub fn next(&self) -> Self {
+        use SessionPhase::*;
+        match self {
+            None => Waiting,
+            Waiting => Preparing,
+            Preparing => Formation,
+            Formation => Active,
+            Active => Ending,
+            Ending => Finished,
+            Finished => Finished,
+        }
+    }
 }
 
 #[derive(Debug, Default)]

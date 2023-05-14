@@ -59,13 +59,23 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Realtime Update");
 
+        // Check if a new session has started.
         if self.current_session_index != update.session_index || context.model.sessions.is_empty() {
-            // A new session has started.
-            let session = map_session(update, context.model.sessions.len() as i32);
-            info!("New session detected {}", session.session_type);
-            context.model.current_session = context.model.sessions.len();
-            context.model.sessions.push(session);
+            // Fast forward old session to end.
+            if let Some(old_session) = context.model.current_session_mut() {
+                while old_session.phase != model::SessionPhase::Finished {
+                    info!("Session phase fast forwarded to {:?}", old_session.phase);
+                    old_session.phase = old_session.phase.next();
+                }
+            }
+
+            // Add new session to the model.
+            let new_session = map_session(update, context.model.sessions.len() as i32);
+            info!("New {} session detected", new_session.session_type);
             self.current_session_index = update.session_index;
+
+            context.model.current_session = context.model.sessions.len();
+            context.model.sessions.push(new_session);
         }
 
         let session = context
@@ -73,18 +83,16 @@ impl AccProcessor for BaseProcessor {
             .current_session_mut()
             .expect("No Session available. If the list is empty then a new session should have been created");
 
+        // Update session data.
         let current_phase = map_session_phase(&update.session_phase);
-        if current_phase != session.phase {
-            info!("Session phase changed to {:?}", current_phase);
-            session.phase = current_phase;
+        while current_phase > session.phase {
+            session.phase = session.phase.next();
+            info!("Session phase changed to {:?}", session.phase);
         }
         session.time_remaining = Time::from(update.session_end_time);
         session.time_of_day = Time::from(update.time_of_day * 1000.0);
         session.ambient_temp = update.ambient_temp as f32;
         session.track_temp = update.track_temp as f32;
-
-        // Reset entry list flag
-        self.requested_entry_list = false;
 
         // Check disconnects
         for entry in session.entries.values_mut() {
@@ -105,6 +113,9 @@ impl AccProcessor for BaseProcessor {
             // Reset connection state for next update.
             state.connected = false;
         }
+
+        // Reset entry list flag
+        self.requested_entry_list = false;
 
         Ok(())
     }
@@ -229,11 +240,7 @@ fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
         id,
         session_type: map_session_type(&update.session_type),
         session_time: Time::from(update.session_time + update.session_end_time),
-        time_remaining: Time::from(update.session_end_time),
-        phase: map_session_phase(&update.session_phase),
-        time_of_day: Time::from(update.time_of_day * 1000.0),
-        ambient_temp: update.ambient_temp as f32,
-        track_temp: update.track_temp as f32,
+        phase: model::SessionPhase::Waiting,
         ..Default::default()
     }
 }
@@ -241,13 +248,13 @@ fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
 fn map_session_phase(value: &SessionPhase) -> model::SessionPhase {
     match value {
         SessionPhase::None => model::SessionPhase::None,
-        SessionPhase::Starting => model::SessionPhase::PreSession,
-        SessionPhase::PreFormation => model::SessionPhase::PreSession,
-        SessionPhase::FormationLap => model::SessionPhase::PostSession,
-        SessionPhase::PreSession => model::SessionPhase::PreSession,
-        SessionPhase::Session => model::SessionPhase::Session,
-        SessionPhase::SessionOver => model::SessionPhase::PostSession,
-        SessionPhase::PostSession => model::SessionPhase::PostSession,
+        SessionPhase::Starting => model::SessionPhase::Preparing,
+        SessionPhase::PreFormation => model::SessionPhase::Preparing,
+        SessionPhase::FormationLap => model::SessionPhase::Formation,
+        SessionPhase::PreSession => model::SessionPhase::Formation,
+        SessionPhase::Session => model::SessionPhase::Active,
+        SessionPhase::SessionOver => model::SessionPhase::Ending,
+        SessionPhase::PostSession => model::SessionPhase::Finished,
         SessionPhase::ResultUi => model::SessionPhase::Finished,
     }
 }
