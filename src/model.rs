@@ -130,7 +130,7 @@ pub struct Lap {
     pub invalid: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CarCategory {
     pub name: &'static str,
 }
@@ -141,7 +141,7 @@ impl CarCategory {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Car {
     pub name: &'static str,
     pub manufacturer: &'static str,

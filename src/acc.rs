@@ -1,7 +1,4 @@
-use crate::{
-    log_todo,
-    model::{self, Driver, Entry, Model, Time},
-};
+use crate::model::Model;
 use std::{
     error::Error,
     fmt::Display,
@@ -12,13 +9,17 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
-use self::data::{
-    CarLocation, EntryListCar, IncompleteTypeError, Message, RealtimeCarUpdate, RealtimeUpdate,
-    RegistrationResult, SessionPhase, SessionType,
+use self::{
+    base_processor::BaseProcessor,
+    data::{
+        BroadcastingEvent, EntryList, EntryListCar, IncompleteTypeError, Message,
+        RealtimeCarUpdate, RealtimeUpdate, RegistrationResult, TrackData,
+    },
 };
 
+mod base_processor;
 pub mod data;
 
 /// A specialized result for Connection errors.
@@ -72,9 +73,14 @@ impl AccAdapter {
         let model = Arc::new(RwLock::new(Model::default()));
 
         let mut connection = AccConnection {
-            socket: AccSocket { socket },
+            socket: AccSocket {
+                socket,
+                connected: false,
+                connection_id: 0,
+                read_only: false,
+            },
             model: model.clone(),
-            inner_model: InnerModel::default(),
+            base_processor: base_processor::BaseProcessor::default(),
         };
 
         Ok(AccAdapter {
@@ -90,7 +96,7 @@ impl AccAdapter {
 struct AccConnection {
     socket: AccSocket,
     model: Arc<RwLock<Model>>,
-    inner_model: InnerModel,
+    base_processor: BaseProcessor,
 }
 
 impl AccConnection {
@@ -107,42 +113,46 @@ impl AccConnection {
     }
 
     fn process_messages(&mut self, messages: Vec<Message>) -> Result<()> {
-        let mut model = self
+        let model = self
             .model
             .write()
             .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?;
 
+        let mut context = AccProcessorContext {
+            socket: &mut self.socket,
+            model,
+        };
+
         for message in messages {
+            use Message::*;
             match message {
-                Message::Unknown(t) => {
+                Unknown(t) => {
                     return Err(ConnectionError::Other(format!(
                         "Unknown message type: {}",
                         t
                     )));
                 }
-                Message::RegistrationResult(result) => self
-                    .inner_model
-                    .process_registration_result(result, &self.socket)?,
-                Message::RealtimeUpdate(update) => self
-                    .inner_model
-                    .process_realtime_update(update, &mut model)?,
-                Message::RealtimeCarUpdate(update) => self
-                    .inner_model
-                    .process_realtime_car_update(update, &mut model)?,
-                Message::EntryList(_) => info!("EntryList"),
-                Message::TrackData(track_data) => {
-                    model.track_name = track_data.track_name;
-                    model.track_length = track_data.track_meter;
+                RegistrationResult(result) => self
+                    .base_processor
+                    .registration_result(&result, &mut context)?,
+                RealtimeUpdate(update) => {
+                    self.base_processor.realtime_update(&update, &mut context)?
                 }
-                Message::EntryListCar(message) => self
-                    .inner_model
-                    .process_entry_list_car(message, &mut model)?,
-                Message::BroadcastingEvent(_) => info!("BroadcastingEvent"),
+                RealtimeCarUpdate(update) => self
+                    .base_processor
+                    .realtime_car_update(&update, &mut context)?,
+                EntryList(list) => self.base_processor.entry_list(&list, &mut context)?,
+                TrackData(track) => self.base_processor.track_data(&track, &mut context)?,
+                EntryListCar(car) => self.base_processor.entry_list_car(&car, &mut context)?,
+                BroadcastingEvent(event) => {
+                    self.base_processor.broadcast_even(&event, &mut context)?
+                }
             }
         }
 
         debug!("Additional processing now");
-        if let Some(session) = model.current_session() {
+        self.base_processor.post_update(&mut context)?;
+        if let Some(session) = context.model.current_session() {
             info!(
                 "Session time: {}, Session time remaining: {}",
                 session.session_time, session.time_remaining
@@ -154,150 +164,11 @@ impl AccConnection {
     }
 }
 
-#[derive(Default)]
-struct InnerModel {
+/// A wrapper around a udp socket for easier use.
+struct AccSocket {
     connected: bool,
     connection_id: i32,
     read_only: bool,
-    current_session_index: i16,
-}
-
-impl InnerModel {
-    fn process_registration_result(
-        &mut self,
-        result: RegistrationResult,
-        socket: &AccSocket,
-    ) -> Result<()> {
-        debug!("Registration result");
-        if !result.success {
-            return Err(ConnectionError::ConnectionRefused {
-                message: result.message,
-            });
-        }
-        self.connected = true;
-        self.connection_id = result.connection_id;
-        self.read_only = result.read_only;
-
-        socket.send(&data::entry_list_request(self.connection_id))?;
-        socket.send(&data::track_data_request(self.connection_id))?;
-        Ok(())
-    }
-
-    fn process_realtime_update(
-        &mut self,
-        update: RealtimeUpdate,
-        model: &mut RwLockWriteGuard<Model>,
-    ) -> Result<()> {
-        debug!("RealtimeUpdate");
-
-        if self.current_session_index != update.session_index || model.sessions.is_empty() {
-            info!("New session detected");
-            // A new session has started.
-            let session = map_session(&update, model.sessions.len() as i32);
-            model.current_session = model.sessions.len();
-            model.sessions.push(session);
-            self.current_session_index = update.session_index;
-        }
-
-        let current_session = model
-            .current_session_mut()
-            .expect("There should be a session available");
-
-        current_session.time_remaining = Time::from(update.session_end_time);
-
-        let current_phase = map_session_phase(&update.session_phase);
-        if current_phase != current_session.phase {
-            info!(
-                "Session phase changed from {:?} to {:?}",
-                current_session.phase, current_phase
-            );
-            current_session.phase = current_phase;
-        }
-        current_session.time_of_day = Time::from(update.time_of_day * 1000.0);
-        current_session.ambient_temp = update.ambient_temp as f32;
-        current_session.track_temp = update.track_temp as f32;
-        Ok(())
-    }
-
-    fn process_realtime_car_update(
-        &self,
-        update: RealtimeCarUpdate,
-        model: &mut RwLockWriteGuard<Model>,
-    ) -> Result<()> {
-        info!("RealtimeCarUpdate");
-        let current_session = model
-            .current_session_mut()
-            .expect("There should have been a session update before a realtime update");
-
-        if let Some(entry) = current_session.entries.get_mut(&(update.car_id as i32)) {
-            entry.orientation = [update.pitch, update.yaw, update.roll];
-            entry.position = update.position as i32;
-            entry.spline_pos = update.spline_position;
-            entry.current_lap.time = update.current_lap.laptime_ms.into();
-            entry.current_lap.invalid = update.current_lap.is_invaliud;
-            entry.performance_delta = update.delta.into();
-            entry.in_pits = update.car_location == CarLocation::Pitlane;
-            entry.gear = update.gear as i32;
-            entry.speed = update.kmh as f32;
-        } else {
-            warn!("Realtime update for unknown car id:{}", update.car_id);
-            log_todo((), "Send a new entry list request to receive new cars");
-        }
-
-        Ok(())
-    }
-
-    fn process_entry_list_car(
-        &self,
-        entry_list_car: EntryListCar,
-        model: &mut RwLockWriteGuard<Model>,
-    ) -> Result<()> {
-        debug!("EntryListCar");
-
-        let session = match model.current_session_mut() {
-            None => return Ok(()),
-            Some(s) => s,
-        };
-
-        if session
-            .entries
-            .contains_key(&(entry_list_car.car_id as i32))
-        {
-            return Ok(());
-        }
-
-        info!("New entry has connected: #{}", entry_list_car.race_number);
-        let entry = Entry {
-            id: entry_list_car.car_id as i32,
-            drivers: {
-                let mut drivers = Vec::new();
-                for (i, driver_info) in entry_list_car.drivers.iter().enumerate() {
-                    drivers.push(Driver {
-                        id: i as usize,
-                        first_name: driver_info.first_name.clone(),
-                        last_name: driver_info.last_name.clone(),
-                        short_name: driver_info.short_name.clone(),
-                        nationality: driver_info.nationality.clone(),
-                        driving_time: Time::from(0),
-                    });
-                }
-                drivers
-            },
-            current_driver: entry_list_car.current_driver_index as usize,
-            team_name: entry_list_car.team_name,
-            car: entry_list_car.car_model_type,
-            car_number: entry_list_car.race_number,
-            nationality: entry_list_car.car_nationality,
-            ..Default::default()
-        };
-
-        session.entries.insert(entry.id, entry);
-        Ok(())
-    }
-}
-
-/// A wrapper around a udp socket for easier use.
-struct AccSocket {
     socket: UdpSocket,
 }
 
@@ -322,6 +193,16 @@ impl AccSocket {
             update_interval,
             command_password,
         ))
+    }
+
+    /// Send a entry list request.
+    fn send_entry_list_request(&self) -> Result<()> {
+        self.send(&data::entry_list_request(self.connection_id))
+    }
+
+    /// Send a track data request.
+    fn send_track_data_request(&self) -> Result<()> {
+        self.send(&data::track_data_request(self.connection_id))
     }
 
     /// Read all available messages and return them as a list.
@@ -354,44 +235,73 @@ impl AccSocket {
     }
 }
 
-fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
-    model::Session {
-        id,
-        session_type: map_session_type(&update.session_type),
-        session_time: Time::from(update.session_end_time + update.session_time),
-        time_remaining: Time::from(update.session_end_time),
-        phase: map_session_phase(&update.session_phase),
-        time_of_day: Time::from(update.time_of_day * 1000.0),
-        ambient_temp: update.ambient_temp as f32,
-        track_temp: update.track_temp as f32,
-        ..Default::default()
-    }
+/// A context for a processor to work in.
+struct AccProcessorContext<'a> {
+    socket: &'a mut AccSocket,
+    model: RwLockWriteGuard<'a, Model>,
 }
 
-fn map_session_phase(value: &data::SessionPhase) -> model::SessionPhase {
-    match value {
-        SessionPhase::None => model::SessionPhase::None,
-        SessionPhase::Starting => model::SessionPhase::PreSession,
-        SessionPhase::PreFormation => model::SessionPhase::PreSession,
-        SessionPhase::FormationLap => model::SessionPhase::PostSession,
-        SessionPhase::PreSession => model::SessionPhase::PreSession,
-        SessionPhase::Session => model::SessionPhase::Session,
-        SessionPhase::SessionOver => model::SessionPhase::PostSession,
-        SessionPhase::PostSession => model::SessionPhase::PostSession,
-        SessionPhase::ResultUi => model::SessionPhase::Finished,
+/// This trait descibes a processor that can process the
+/// data events from the game and modify the model.
+trait AccUpdateProcessor {
+    #[allow(unused_variables)]
+    fn registration_result(
+        &mut self,
+        result: &RegistrationResult,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        Ok(())
     }
-}
 
-fn map_session_type(value: &SessionType) -> model::SessionType {
-    match value {
-        SessionType::Practice => model::SessionType::Practice,
-        SessionType::Qualifying => model::SessionType::Qualifying,
-        SessionType::Superpole => model::SessionType::Qualifying,
-        SessionType::Race => model::SessionType::Race,
-        SessionType::Hotlap => model::SessionType::Practice,
-        SessionType::Hotstint => model::SessionType::Practice,
-        SessionType::HotlapSuperpole => model::SessionType::Practice,
-        SessionType::Replay => model::SessionType::None,
-        SessionType::None => model::SessionType::None,
+    #[allow(unused_variables)]
+    fn realtime_update(
+        &mut self,
+        update: &RealtimeUpdate,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn realtime_car_update(
+        &mut self,
+        update: &RealtimeCarUpdate,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn entry_list(&mut self, list: &EntryList, context: &mut AccProcessorContext) -> Result<()> {
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn track_data(&mut self, track: &TrackData, context: &mut AccProcessorContext) -> Result<()> {
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn entry_list_car(
+        &mut self,
+        car: &EntryListCar,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    #[allow(unused_variables)]
+    fn broadcast_even(
+        &mut self,
+        event: &BroadcastingEvent,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    /// This method is run after all other messages have been processed.
+    #[allow(unused_variables)]
+    fn post_update(&mut self, context: &mut AccProcessorContext) -> Result<()> {
+        Ok(())
     }
 }

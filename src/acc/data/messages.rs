@@ -2,7 +2,7 @@ use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display
 
 use crate::model::{Car, Nationality};
 
-use super::cars::cars;
+use super::cars;
 
 #[derive(Debug)]
 pub struct IncompleteTypeError {
