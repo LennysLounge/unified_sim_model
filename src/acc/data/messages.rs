@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
+
 use crate::model::{Car, Nationality};
 
 use super::cars;
@@ -125,8 +126,8 @@ pub enum SessionPhase {
     ResultUi,
 }
 
-fn read_session_phase(mut buf: &[u8]) -> Result<SessionPhase, IncompleteTypeError> {
-    match read_u8(&mut buf)? {
+fn read_session_phase(buf: &mut &[u8]) -> Result<SessionPhase, IncompleteTypeError> {
+    match read_u8(buf)? {
         0 => Ok(SessionPhase::None),
         1 => Ok(SessionPhase::Starting),
         2 => Ok(SessionPhase::PreFormation),
@@ -156,8 +157,8 @@ pub enum SessionType {
     None,
 }
 
-fn read_session_type(mut buf: &[u8]) -> Result<SessionType, IncompleteTypeError> {
-    match read_u8(&mut buf)? {
+fn read_session_type(buf: &mut &[u8]) -> Result<SessionType, IncompleteTypeError> {
+    match read_u8(buf)? {
         0 => Ok(SessionType::Practice),
         4 => Ok(SessionType::Qualifying),
         9 => Ok(SessionType::Superpole),
@@ -457,7 +458,7 @@ fn read_u8(buf: &mut &[u8]) -> Result<u8, IncompleteTypeError> {
 }
 
 fn read_i16(buf: &mut &[u8]) -> Result<i16, IncompleteTypeError> {
-    if buf.len() < 4 {
+    if buf.len() < 2 {
         return Err(IncompleteTypeError {
             backtrace: Backtrace::force_capture(),
         });
@@ -504,7 +505,6 @@ fn read_f32(buf: &mut &[u8]) -> Result<f32, IncompleteTypeError> {
 }
 
 fn parse_nationality(value: i16) -> Nationality {
-    println!("Converting nationality: {}", value);
     match value {
         0 => Nationality::NONE,
         1 => Nationality::ITALY,

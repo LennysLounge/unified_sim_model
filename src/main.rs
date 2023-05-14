@@ -1,7 +1,11 @@
+use std::env;
+
 use tracing::{info, Level};
 use unified_sim_model::acc::AccAdapter;
 
 fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
+
     let subscriber = tracing_subscriber::fmt()
         .compact()
         .with_thread_names(true)

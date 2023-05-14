@@ -11,7 +11,7 @@ use super::{
         BroadcastingEvent, EntryListCar, RealtimeCarUpdate, RealtimeUpdate, RegistrationResult,
         SessionPhase, SessionType, TrackData,
     },
-    AccProcessorContext, AccUpdateProcessor, Result,
+    AccProcessor, AccProcessorContext, Result,
 };
 
 #[derive(Default)]
@@ -19,7 +19,7 @@ pub struct BaseProcessor {
     current_session_index: i16,
 }
 
-impl AccUpdateProcessor for BaseProcessor {
+impl AccProcessor for BaseProcessor {
     fn registration_result(
         &mut self,
         result: &RegistrationResult,
@@ -186,7 +186,7 @@ fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
     model::Session {
         id,
         session_type: map_session_type(&update.session_type),
-        session_time: Time::from(update.session_end_time + update.session_time),
+        session_time: Time::from(update.session_time + update.session_end_time),
         time_remaining: Time::from(update.session_end_time),
         phase: map_session_phase(&update.session_phase),
         time_of_day: Time::from(update.time_of_day * 1000.0),

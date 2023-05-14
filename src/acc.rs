@@ -72,22 +72,8 @@ impl AccAdapter {
             .expect("Read timeout duration should be larger than 0");
         let model = Arc::new(RwLock::new(Model::default()));
 
-        let mut connection = AccConnection {
-            socket: AccSocket {
-                socket,
-                connected: false,
-                connection_id: 0,
-                read_only: false,
-            },
-            model: model.clone(),
-            base_processor: base_processor::BaseProcessor::default(),
-        };
-
         Ok(AccAdapter {
-            join_handle: thread::Builder::new()
-                .name("Acc connection".into())
-                .spawn(move || connection.run_connection())
-                .expect("should be able to spawn thread"),
+            join_handle: AccConnection::spawn(socket, model.clone()),
             model,
         })
     }
@@ -96,10 +82,33 @@ impl AccAdapter {
 struct AccConnection {
     socket: AccSocket,
     model: Arc<RwLock<Model>>,
-    base_processor: BaseProcessor,
+    processors: Vec<Box<dyn AccProcessor>>,
 }
 
 impl AccConnection {
+    fn spawn(socket: UdpSocket, model: Arc<RwLock<Model>>) -> JoinHandle<Result<()>> {
+        thread::Builder::new()
+            .name("Acc connection".into())
+            .spawn(move || {
+                let mut connection = Self::new(socket, model);
+                connection.run_connection()
+            })
+            .expect("should be able to spawn thread")
+    }
+
+    fn new(socket: UdpSocket, model: Arc<RwLock<Model>>) -> Self {
+        Self {
+            socket: AccSocket {
+                socket,
+                connected: false,
+                connection_id: 0,
+                read_only: false,
+            },
+            model: model,
+            processors: vec![Box::new(BaseProcessor::default())],
+        }
+    }
+
     fn run_connection(&mut self) -> Result<()> {
         self.socket.send_registration_request(1000, "", "")?;
 
@@ -113,45 +122,43 @@ impl AccConnection {
     }
 
     fn process_messages(&mut self, messages: Vec<Message>) -> Result<()> {
-        let model = self
-            .model
-            .write()
-            .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?;
-
         let mut context = AccProcessorContext {
             socket: &mut self.socket,
-            model,
+            model: self
+                .model
+                .write()
+                .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?,
         };
 
-        for message in messages {
-            use Message::*;
-            match message {
-                Unknown(t) => {
-                    return Err(ConnectionError::Other(format!(
-                        "Unknown message type: {}",
-                        t
-                    )));
-                }
-                RegistrationResult(result) => self
-                    .base_processor
-                    .registration_result(&result, &mut context)?,
-                RealtimeUpdate(update) => {
-                    self.base_processor.realtime_update(&update, &mut context)?
-                }
-                RealtimeCarUpdate(update) => self
-                    .base_processor
-                    .realtime_car_update(&update, &mut context)?,
-                EntryList(list) => self.base_processor.entry_list(&list, &mut context)?,
-                TrackData(track) => self.base_processor.track_data(&track, &mut context)?,
-                EntryListCar(car) => self.base_processor.entry_list_car(&car, &mut context)?,
-                BroadcastingEvent(event) => {
-                    self.base_processor.broadcast_even(&event, &mut context)?
+        for processor in self.processors.iter_mut() {
+            for message in messages.iter() {
+                use Message::*;
+                match message {
+                    Unknown(t) => {
+                        return Err(ConnectionError::Other(format!(
+                            "Unknown message type: {}",
+                            t
+                        )));
+                    }
+                    RegistrationResult(result) => {
+                        processor.registration_result(&result, &mut context)?
+                    }
+                    RealtimeUpdate(update) => processor.realtime_update(&update, &mut context)?,
+                    RealtimeCarUpdate(update) => {
+                        processor.realtime_car_update(&update, &mut context)?
+                    }
+                    EntryList(list) => processor.entry_list(&list, &mut context)?,
+                    TrackData(track) => processor.track_data(&track, &mut context)?,
+                    EntryListCar(car) => processor.entry_list_car(&car, &mut context)?,
+                    BroadcastingEvent(event) => processor.broadcast_even(&event, &mut context)?,
                 }
             }
         }
-
         debug!("Additional processing now");
-        self.base_processor.post_update(&mut context)?;
+        for processor in self.processors.iter_mut() {
+            processor.post_update(&mut context)?;
+        }
+
         if let Some(session) = context.model.current_session() {
             info!(
                 "Session time: {}, Session time remaining: {}",
@@ -243,7 +250,7 @@ struct AccProcessorContext<'a> {
 
 /// This trait descibes a processor that can process the
 /// data events from the game and modify the model.
-trait AccUpdateProcessor {
+trait AccProcessor {
     #[allow(unused_variables)]
     fn registration_result(
         &mut self,
