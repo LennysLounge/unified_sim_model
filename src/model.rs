@@ -81,8 +81,7 @@ pub struct Session {
 }
 
 /// The type of the session.
-#[derive(Debug, Default)]
-#[allow(dead_code)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum SessionType {
     Practice,
     Qualifying,
@@ -93,8 +92,7 @@ pub enum SessionType {
 }
 
 /// The phase of the current session.
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(dead_code)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum SessionPhase {
     /// The session phase is unknown or unavailable
     #[default]
@@ -136,7 +134,7 @@ impl SessionPhase {
 }
 
 /// Describes the day a session takes part in.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum Day {
     Monday,
     Thuesday,
