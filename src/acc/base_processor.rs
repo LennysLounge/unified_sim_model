@@ -15,6 +15,8 @@ use super::{
     AccProcessor, AccProcessorContext, Result,
 };
 
+/// A processor to transfer game data directly into the model.
+/// Transfers only data that is available without doing any additional processing.
 #[derive(Default, Debug)]
 pub struct BaseProcessor {
     /// Index of the current session.

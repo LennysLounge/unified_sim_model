@@ -57,9 +57,11 @@ impl Error for ConnectionError {}
 
 /// An adapter for Assetto corsa competizione.
 pub struct AccAdapter {
+    /// The join handle to close the connection thread to the game.
     pub join_handle: JoinHandle<Result<()>>,
+    /// The shared model.
     pub model: Arc<RwLock<Model>>,
-    // channel
+    // TODO: channel
 }
 
 impl AccAdapter {
@@ -81,7 +83,7 @@ impl AccAdapter {
 struct AccConnection {
     socket: AccSocket,
     model: Arc<RwLock<Model>>,
-    base_processor: BaseProcessor,
+    base_proc: BaseProcessor,
 }
 
 impl AccConnection {
@@ -104,7 +106,7 @@ impl AccConnection {
                 read_only: false,
             },
             model: model,
-            base_processor: BaseProcessor::default(),
+            base_proc: BaseProcessor::default(),
         }
     }
 
@@ -112,6 +114,8 @@ impl AccConnection {
         self.socket.send_registration_request(1000, "", "")?;
 
         loop {
+            // TODO: read channel
+
             let message = self.socket.read_message()?;
             self.process_message(message)?;
         }
@@ -126,8 +130,7 @@ impl AccConnection {
                 .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?,
         };
 
-        self.base_processor
-            .process_message(&message, &mut context)?;
+        self.base_proc.process_message(&message, &mut context)?;
 
         //addition processing
         Ok(())

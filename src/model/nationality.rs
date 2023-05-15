@@ -3,11 +3,9 @@ pub struct Nationality {
     pub name: &'static str,
 }
 
-#[rustfmt::skip]
 impl Nationality {
-
-    const fn new(name: &'static str) -> Self{
-        Self{name}
+    const fn new(name: &'static str) -> Self {
+        Self { name }
     }
 
     pub const NONE: Self = Self::new("None");
