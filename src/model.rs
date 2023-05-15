@@ -63,7 +63,8 @@ pub enum SessionPhase {
     /// The session is preparing to start.
     /// Drivers and teams are getting ready.
     Preparing,
-    /// The session is forming. Mostly in the form of a formation lap.
+    /// The session is forming befor the start.
+    /// This is mostly in form of a formation lap.
     Formation,
     /// The session is active and running.
     Active,
@@ -160,7 +161,8 @@ pub struct Driver {
 pub struct Lap {
     pub time: Time,
     pub splits: Vec<Time>,
-    pub driver_id: i32,
+    pub driver_index: usize,
+    pub entry_id: i32,
     pub invalid: bool,
 }
 

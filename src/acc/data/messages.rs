@@ -1,6 +1,5 @@
 use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
-
 use crate::model::{Car, Nationality};
 
 use super::cars;
@@ -174,7 +173,7 @@ fn read_session_type(buf: &mut &[u8]) -> Result<SessionType, IncompleteTypeError
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct LapInfo {
     pub laptime_ms: i32,
     pub car_id: i16,
@@ -431,7 +430,7 @@ fn read_driver_info(buf: &mut &[u8]) -> Result<DriverInfo, IncompleteTypeError> 
 
 #[derive(Debug, Default)]
 pub struct BroadcastingEvent {
-    pub event_type: u8,
+    pub kind: EventKind,
     pub message: String,
     pub time: i32,
     pub car_id: i32,
@@ -439,11 +438,41 @@ pub struct BroadcastingEvent {
 
 fn read_broadcasting_event(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
     Ok(Message::BroadcastingEvent(BroadcastingEvent {
-        event_type: read_u8(buf)?,
+        kind: read_event_kind(buf)?,
         message: read_string(buf)?,
         time: read_i32(buf)?,
         car_id: read_i32(buf)?,
     }))
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub enum EventKind {
+    #[default]
+    None,
+    GreenFlag,
+    SessionOver,
+    PenaltyComMsg,
+    Accident,
+    LapCompleted,
+    BestSessionLap,
+    BestPersonalLap,
+}
+
+fn read_event_kind(buf: &mut &[u8]) -> Result<EventKind, IncompleteTypeError> {
+    use EventKind::*;
+    match read_u8(buf)? {
+        0 => Ok(None),
+        1 => Ok(GreenFlag),
+        2 => Ok(SessionOver),
+        3 => Ok(PenaltyComMsg),
+        4 => Ok(Accident),
+        5 => Ok(LapCompleted),
+        6 => Ok(BestSessionLap),
+        7 => Ok(BestPersonalLap),
+        _ => Err(IncompleteTypeError {
+            backtrace: Backtrace::force_capture(),
+        }),
+    }
 }
 
 fn read_u8(buf: &mut &[u8]) -> Result<u8, IncompleteTypeError> {

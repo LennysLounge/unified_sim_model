@@ -9,7 +9,7 @@ fn main() {
     let subscriber = tracing_subscriber::fmt()
         .compact()
         .with_thread_names(true)
-        .with_max_level(Level::DEBUG)
+        .with_max_level(Level::INFO)
         .finish();
     tracing::subscriber::set_global_default(subscriber)
         .expect("Should be able to set global subscriber");

@@ -9,8 +9,8 @@ use crate::{
 
 use super::{
     data::{
-        BroadcastingEvent, EntryListCar, RealtimeCarUpdate, RealtimeUpdate, RegistrationResult,
-        SessionPhase, SessionType, TrackData,
+        BroadcastingEvent, EntryListCar, LapInfo, RealtimeCarUpdate, RealtimeUpdate,
+        RegistrationResult, SessionPhase, SessionType, TrackData,
     },
     AccProcessor, AccProcessorContext, Result,
 };
@@ -29,6 +29,7 @@ pub struct BaseProcessor {
 #[derive(Debug)]
 struct EntryState {
     connected: bool,
+    laps: Option<i16>,
 }
 
 impl AccProcessor for BaseProcessor {
@@ -143,12 +144,22 @@ impl AccProcessor for BaseProcessor {
             entry.gear = update.gear as i32;
             entry.speed = update.kmh as f32;
 
-            // Update connected flag for this entry.
             let entry_state = self
                 .entries
                 .get_mut(&entry.id)
                 .expect("When an entry is in the model it should also be present here");
+            // Update connected flag for this entry.
             entry_state.connected = true;
+
+            // Check for lap completed.
+            if let Some(laps) = entry_state.laps {
+                if update.laps != laps {
+                    let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
+                    info!("Car #{} completed lap: {}", entry.car_number, lap.time);
+                    entry.laps.push(lap);
+                }
+            }
+            entry_state.laps = Some(update.laps);
         } else {
             debug!("Realtime update for unknown car id:{}", update.car_id);
             if !self.requested_entry_list {
@@ -176,7 +187,10 @@ impl AccProcessor for BaseProcessor {
         debug!("Entry List Car");
 
         let session = match context.model.current_session_mut() {
-            None => return Ok(()),
+            None => {
+                debug!("No active session");
+                return Ok(());
+            }
             Some(s) => s,
         };
 
@@ -210,8 +224,13 @@ impl AccProcessor for BaseProcessor {
             ..Default::default()
         };
 
-        self.entries
-            .insert(entry.id, EntryState { connected: true });
+        self.entries.insert(
+            entry.id,
+            EntryState {
+                connected: true,
+                laps: None,
+            },
+        );
         session.entries.insert(entry.id, entry);
         Ok(())
     }
@@ -235,6 +254,20 @@ impl AccProcessor for BaseProcessor {
     }
 }
 
+fn map_lap(lap_info: &LapInfo, driver_index: usize, entry_id: i32) -> model::Lap {
+    model::Lap {
+        time: lap_info.laptime_ms.into(),
+        splits: lap_info
+            .splits
+            .clone()
+            .iter()
+            .map(|ms| Time::from(*ms))
+            .collect(),
+        invalid: lap_info.is_invaliud,
+        driver_index,
+        entry_id,
+    }
+}
 fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
     model::Session {
         id,
