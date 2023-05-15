@@ -85,7 +85,7 @@ impl AccProcessor for BaseProcessor {
             .current_session_mut()
             .expect("No Session available. If the list is empty then a new session should have been created");
 
-        // Update session data.
+        // Update session data
         let current_phase = map_session_phase(&update.session_phase);
         while current_phase > session.phase {
             session.phase = session.phase.next();
@@ -112,7 +112,7 @@ impl AccProcessor for BaseProcessor {
                 _ => (),
             }
             entry.connected = state.connected;
-            // Reset connection state for next update.
+            // Reset connection state for next update
             state.connected = false;
         }
 
@@ -134,10 +134,9 @@ impl AccProcessor for BaseProcessor {
             .current_session_mut()
             .expect("There should have been a session update before a realtime update");
 
-        match current_session
-            .entries
-            .get_mut(&EntryId(update.car_id as i32))
-        {
+        let entry_id = EntryId(update.car_id as i32);
+
+        match current_session.entries.get_mut(&entry_id) {
             Some(entry) => {
                 entry.orientation = [update.pitch, update.yaw, update.roll];
                 entry.position = update.position as i32;
@@ -161,6 +160,48 @@ impl AccProcessor for BaseProcessor {
                     if update.laps != laps {
                         let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
                         info!("Car #{} completed lap: {}", entry.car_number, lap.time);
+
+                        // Check personal best for entry
+                        let new_entry_best = match entry.laps.get(entry.best_lap) {
+                            Some(best_lap) => lap.time < best_lap.time,
+                            None => true,
+                        };
+                        if new_entry_best {
+                            info!(
+                                "Car #{} achieved a new personal best lap nr.{} {}",
+                                entry.car_number,
+                                entry.laps.len(),
+                                lap.time
+                            );
+                            entry.best_lap = entry.laps.len();
+                        }
+                        // Check personal best for driver
+                        if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
+                            let new_personal_best = match entry.laps.get(driver.best_lap) {
+                                Some(best_lap) => lap.time < best_lap.time,
+                                None => true,
+                            };
+                            if new_personal_best {
+                                info!(
+                                        "Driver {} {} in car #{} achieved a new personal best lap nr.{}: {}",
+                                        driver.first_name,
+                                        driver.last_name,
+                                        entry.car_number,
+                                        entry.laps.len(),
+                                        lap.time
+                                    );
+                                driver.best_lap = entry.laps.len();
+                            }
+                        }
+                        // Check session best.
+                        if lap.time < current_session.best_lap.time {
+                            info!(
+                                "Car #{} achieved a new session best lap: {}",
+                                entry.car_number, lap.time,
+                            );
+                            current_session.best_lap = lap.clone();
+                        }
+
                         entry.laps.push(lap);
                     }
                 }
@@ -175,45 +216,6 @@ impl AccProcessor for BaseProcessor {
                 }
             }
         }
-
-        // if let Some(entry) = current_session
-        //     .entries
-        //     .get_mut(&EntryId(update.car_id as i32))
-        // {
-        //     entry.orientation = [update.pitch, update.yaw, update.roll];
-        //     entry.position = update.position as i32;
-        //     entry.spline_pos = update.spline_position;
-        //     entry.current_lap.time = update.current_lap.laptime_ms.into();
-        //     entry.current_lap.invalid = update.current_lap.is_invaliud;
-        //     entry.performance_delta = update.delta.into();
-        //     entry.in_pits = update.car_location == CarLocation::Pitlane;
-        //     entry.gear = update.gear as i32;
-        //     entry.speed = update.kmh as f32;
-
-        //     let entry_state = self
-        //         .entries
-        //         .get_mut(&entry.id)
-        //         .expect("When an entry is in the model it should also be present here");
-        //     // Update connected flag for this entry.
-        //     entry_state.connected = true;
-
-        //     // Check for lap completed.
-        //     if let Some(laps) = entry_state.laps {
-        //         if update.laps != laps {
-        //             let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
-        //             info!("Car #{} completed lap: {}", entry.car_number, lap.time);
-        //             entry.laps.push(lap);
-        //         }
-        //     }
-        //     entry_state.laps = Some(update.laps);
-        // } else {
-        //     debug!("Realtime update for unknown car id:{}", update.car_id);
-        //     if !self.requested_entry_list {
-        //         debug!("Requesting new entry list");
-        //         context.socket.send_entry_list_request()?;
-        //         self.requested_entry_list = true;
-        //     }
-        // }
         Ok(())
     }
 
@@ -260,6 +262,7 @@ impl AccProcessor for BaseProcessor {
                         short_name: driver_info.short_name.clone(),
                         nationality: driver_info.nationality.clone(),
                         driving_time: Time::from(0),
+                        best_lap: 0,
                     };
                     (id, driver)
                 })

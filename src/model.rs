@@ -77,6 +77,7 @@ pub struct Session {
     pub day: Day,
     pub ambient_temp: f32,
     pub track_temp: f32,
+    pub best_lap: Lap,
 }
 
 /// The type of the session.
@@ -190,15 +191,28 @@ pub struct Driver {
     pub short_name: String,
     pub nationality: Nationality,
     pub driving_time: Time,
+    pub best_lap: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
 pub struct Lap {
     pub time: Time,
     pub splits: Vec<Time>,
     pub driver_id: DriverId,
     pub entry_id: EntryId,
     pub invalid: bool,
+}
+
+impl Default for Lap {
+    fn default() -> Self {
+        Self {
+            time: Time::from(i32::MAX),
+            splits: Default::default(),
+            driver_id: Default::default(),
+            entry_id: Default::default(),
+            invalid: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -234,9 +248,9 @@ impl Car {
 }
 
 /// A Time value. Represented in milliseconds.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Time {
-    raw: i32,
+    pub raw: i32,
 }
 
 impl From<i32> for Time {
