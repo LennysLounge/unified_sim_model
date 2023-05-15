@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    slice::{Iter, IterMut},
+};
 
 pub mod nationality;
 pub use nationality::Nationality;
@@ -7,9 +11,10 @@ pub use nationality::Nationality;
 #[derive(Debug, Default)]
 pub struct Model {
     /// List of sessions that have happend during the event.
-    pub sessions: Vec<Session>,
+    /// Sessions are orderd in the order they occur in the event.
+    sessions: Vec<Session>,
     /// Index of the current active session.
-    pub current_session: usize,
+    pub current_session: SessionId,
     /// Name of the event.
     pub event_name: String,
     /// Name of the track.
@@ -19,13 +24,59 @@ pub struct Model {
 }
 
 impl Model {
+    /// Add a session to the model.
+    /// Sets the id of the session and returns it.
+    pub fn add_session(&mut self, mut session: Session) -> SessionId {
+        let id = SessionId(self.sessions.len());
+        session.id = id;
+        self.sessions.push(session);
+        id
+    }
+
     pub fn current_session(&self) -> Option<&Session> {
-        self.sessions.get(self.current_session)
+        self.sessions.get(self.current_session.0)
     }
 
     pub fn current_session_mut(&mut self) -> Option<&mut Session> {
-        self.sessions.get_mut(self.current_session)
+        self.sessions.get_mut(self.current_session.0)
     }
+
+    pub fn get_session(&self, id: &SessionId) -> Option<&Session> {
+        self.sessions.get(id.0)
+    }
+
+    pub fn get_session_mut(&mut self, id: &SessionId) -> Option<&mut Session> {
+        self.sessions.get_mut(id.0)
+    }
+
+    pub fn get_sessions(&self) -> Iter<Session> {
+        self.sessions.iter()
+    }
+
+    pub fn get_sessions_mut(&mut self) -> IterMut<Session> {
+        self.sessions.iter_mut()
+    }
+}
+
+/// A session id.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct SessionId(pub usize);
+
+/// A session.
+#[derive(Debug, Default)]
+pub struct Session {
+    pub id: SessionId,
+    pub entries: HashMap<EntryId, Entry>,
+    pub session_type: SessionType,
+    pub session_time: Time,
+    pub time_remaining: Time,
+    pub laps: i32,
+    pub laps_remaining: i32,
+    pub phase: SessionPhase,
+    pub time_of_day: Time,
+    pub day: Day,
+    pub ambient_temp: f32,
+    pub track_temp: f32,
 }
 
 /// The type of the session.
@@ -38,17 +89,6 @@ pub enum SessionType {
     /// Session type is unknown or unavailable.
     #[default]
     None,
-}
-
-impl Display for SessionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SessionType::Practice => write!(f, "Practice"),
-            SessionType::Qualifying => write!(f, "Qualifying"),
-            SessionType::Race => write!(f, "Race"),
-            SessionType::None => write!(f, "None"),
-        }
-    }
 }
 
 /// The phase of the current session.
@@ -94,6 +134,7 @@ impl SessionPhase {
     }
 }
 
+/// Describes the day a session takes part in.
 #[derive(Debug, Default)]
 pub enum Day {
     Monday,
@@ -106,27 +147,16 @@ pub enum Day {
     Sunday,
 }
 
-#[derive(Debug, Default)]
-pub struct Session {
-    pub id: i32,
-    pub entries: HashMap<i32, Entry>,
-    pub session_type: SessionType,
-    pub session_time: Time,
-    pub time_remaining: Time,
-    pub laps: i32,
-    pub laps_remaining: i32,
-    pub phase: SessionPhase,
-    pub time_of_day: Time,
-    pub day: Day,
-    pub ambient_temp: f32,
-    pub track_temp: f32,
-}
+/// An id for an entry.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EntryId(pub i32);
 
+/// A team entry in the session.
 #[derive(Debug, Default)]
 pub struct Entry {
-    pub id: i32,
-    pub drivers: Vec<Driver>,
-    pub current_driver: usize,
+    pub id: EntryId,
+    pub drivers: HashMap<DriverId, Driver>,
+    pub current_driver: DriverId,
     pub team_name: String,
     pub car: Car,
     pub car_number: i32,
@@ -147,9 +177,14 @@ pub struct Entry {
     pub stint_time: Time,
 }
 
+/// An id for a driver.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DriverId(pub i32);
+
+/// A Driver in a team.
 #[derive(Debug, Default)]
 pub struct Driver {
-    pub id: usize,
+    pub id: DriverId,
     pub first_name: String,
     pub last_name: String,
     pub short_name: String,
@@ -161,8 +196,8 @@ pub struct Driver {
 pub struct Lap {
     pub time: Time,
     pub splits: Vec<Time>,
-    pub driver_index: usize,
-    pub entry_id: i32,
+    pub driver_id: DriverId,
+    pub entry_id: EntryId,
     pub invalid: bool,
 }
 

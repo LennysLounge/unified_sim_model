@@ -4,7 +4,7 @@ use tracing::{debug, info};
 
 use crate::{
     acc::{data::CarLocation, ConnectionError},
-    model::{self, Driver, Entry, Time},
+    model::{self, Driver, DriverId, Entry, EntryId, Time},
 };
 
 use super::{
@@ -22,7 +22,7 @@ pub struct BaseProcessor {
     /// True if a new entry list should be requested.
     requested_entry_list: bool,
     /// State of the entries.
-    entries: HashMap<i32, EntryState>,
+    entries: HashMap<EntryId, EntryState>,
 }
 
 /// The internal state of an entry.
@@ -61,9 +61,10 @@ impl AccProcessor for BaseProcessor {
         debug!("Realtime Update");
 
         // Check if a new session has started.
-        if self.current_session_index != update.session_index || context.model.sessions.is_empty() {
+        let session = context.model.current_session_mut();
+        if session.is_none() || self.current_session_index != update.session_index {
             // Fast forward old session to end.
-            if let Some(old_session) = context.model.current_session_mut() {
+            if let Some(old_session) = session {
                 while old_session.phase != model::SessionPhase::Finished {
                     info!("Session phase fast forwarded to {:?}", old_session.phase);
                     old_session.phase = old_session.phase.next();
@@ -71,12 +72,12 @@ impl AccProcessor for BaseProcessor {
             }
 
             // Add new session to the model.
-            let new_session = map_session(update, context.model.sessions.len() as i32);
-            info!("New {} session detected", new_session.session_type);
-            self.current_session_index = update.session_index;
+            let new_session = map_session(update);
+            info!("New {:?} session detected", new_session.session_type);
+            let session_id = context.model.add_session(new_session);
+            context.model.current_session = session_id;
 
-            context.model.current_session = context.model.sessions.len();
-            context.model.sessions.push(new_session);
+            self.current_session_index = update.session_index;
         }
 
         let session = context
@@ -133,41 +134,86 @@ impl AccProcessor for BaseProcessor {
             .current_session_mut()
             .expect("There should have been a session update before a realtime update");
 
-        if let Some(entry) = current_session.entries.get_mut(&(update.car_id as i32)) {
-            entry.orientation = [update.pitch, update.yaw, update.roll];
-            entry.position = update.position as i32;
-            entry.spline_pos = update.spline_position;
-            entry.current_lap.time = update.current_lap.laptime_ms.into();
-            entry.current_lap.invalid = update.current_lap.is_invaliud;
-            entry.performance_delta = update.delta.into();
-            entry.in_pits = update.car_location == CarLocation::Pitlane;
-            entry.gear = update.gear as i32;
-            entry.speed = update.kmh as f32;
+        match current_session
+            .entries
+            .get_mut(&EntryId(update.car_id as i32))
+        {
+            Some(entry) => {
+                entry.orientation = [update.pitch, update.yaw, update.roll];
+                entry.position = update.position as i32;
+                entry.spline_pos = update.spline_position;
+                entry.current_lap.time = update.current_lap.laptime_ms.into();
+                entry.current_lap.invalid = update.current_lap.is_invaliud;
+                entry.performance_delta = update.delta.into();
+                entry.in_pits = update.car_location == CarLocation::Pitlane;
+                entry.gear = update.gear as i32;
+                entry.speed = update.kmh as f32;
 
-            let entry_state = self
-                .entries
-                .get_mut(&entry.id)
-                .expect("When an entry is in the model it should also be present here");
-            // Update connected flag for this entry.
-            entry_state.connected = true;
+                let entry_state = self
+                    .entries
+                    .get_mut(&entry.id)
+                    .expect("When an entry is in the model it should also be present here");
+                // Update connected flag for this entry.
+                entry_state.connected = true;
 
-            // Check for lap completed.
-            if let Some(laps) = entry_state.laps {
-                if update.laps != laps {
-                    let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
-                    info!("Car #{} completed lap: {}", entry.car_number, lap.time);
-                    entry.laps.push(lap);
+                // Check for lap completed.
+                if let Some(laps) = entry_state.laps {
+                    if update.laps != laps {
+                        let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
+                        info!("Car #{} completed lap: {}", entry.car_number, lap.time);
+                        entry.laps.push(lap);
+                    }
+                }
+                entry_state.laps = Some(update.laps);
+            }
+            None => {
+                debug!("Realtime update for unknown car id:{}", update.car_id);
+                if !self.requested_entry_list {
+                    debug!("Requesting new entry list");
+                    context.socket.send_entry_list_request()?;
+                    self.requested_entry_list = true;
                 }
             }
-            entry_state.laps = Some(update.laps);
-        } else {
-            debug!("Realtime update for unknown car id:{}", update.car_id);
-            if !self.requested_entry_list {
-                debug!("Requesting new entry list");
-                context.socket.send_entry_list_request()?;
-                self.requested_entry_list = true;
-            }
         }
+
+        // if let Some(entry) = current_session
+        //     .entries
+        //     .get_mut(&EntryId(update.car_id as i32))
+        // {
+        //     entry.orientation = [update.pitch, update.yaw, update.roll];
+        //     entry.position = update.position as i32;
+        //     entry.spline_pos = update.spline_position;
+        //     entry.current_lap.time = update.current_lap.laptime_ms.into();
+        //     entry.current_lap.invalid = update.current_lap.is_invaliud;
+        //     entry.performance_delta = update.delta.into();
+        //     entry.in_pits = update.car_location == CarLocation::Pitlane;
+        //     entry.gear = update.gear as i32;
+        //     entry.speed = update.kmh as f32;
+
+        //     let entry_state = self
+        //         .entries
+        //         .get_mut(&entry.id)
+        //         .expect("When an entry is in the model it should also be present here");
+        //     // Update connected flag for this entry.
+        //     entry_state.connected = true;
+
+        //     // Check for lap completed.
+        //     if let Some(laps) = entry_state.laps {
+        //         if update.laps != laps {
+        //             let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
+        //             info!("Car #{} completed lap: {}", entry.car_number, lap.time);
+        //             entry.laps.push(lap);
+        //         }
+        //     }
+        //     entry_state.laps = Some(update.laps);
+        // } else {
+        //     debug!("Realtime update for unknown car id:{}", update.car_id);
+        //     if !self.requested_entry_list {
+        //         debug!("Requesting new entry list");
+        //         context.socket.send_entry_list_request()?;
+        //         self.requested_entry_list = true;
+        //     }
+        // }
         Ok(())
     }
 
@@ -194,28 +240,31 @@ impl AccProcessor for BaseProcessor {
             Some(s) => s,
         };
 
-        if session.entries.contains_key(&(car.car_id as i32)) {
+        if session.entries.contains_key(&EntryId(car.car_id as i32)) {
             return Ok(());
         }
 
         info!("New entry has connected: #{}", car.race_number);
         let entry = Entry {
-            id: car.car_id as i32,
-            drivers: {
-                let mut drivers = Vec::new();
-                for (i, driver_info) in car.drivers.iter().enumerate() {
-                    drivers.push(Driver {
-                        id: i,
+            id: EntryId(car.car_id as i32),
+            drivers: car
+                .drivers
+                .iter()
+                .enumerate()
+                .map(|(i, driver_info)| {
+                    let id = DriverId(i as i32);
+                    let driver = Driver {
+                        id,
                         first_name: driver_info.first_name.clone(),
                         last_name: driver_info.last_name.clone(),
                         short_name: driver_info.short_name.clone(),
                         nationality: driver_info.nationality.clone(),
                         driving_time: Time::from(0),
-                    });
-                }
-                drivers
-            },
-            current_driver: car.current_driver_index as usize,
+                    };
+                    (id, driver)
+                })
+                .collect(),
+            current_driver: DriverId(car.current_driver_index as i32),
             team_name: car.team_name.clone(),
             car: car.car_model_type.clone(),
             car_number: car.race_number,
@@ -254,7 +303,7 @@ impl AccProcessor for BaseProcessor {
     }
 }
 
-fn map_lap(lap_info: &LapInfo, driver_index: usize, entry_id: i32) -> model::Lap {
+fn map_lap(lap_info: &LapInfo, driver_index: DriverId, entry_id: EntryId) -> model::Lap {
     model::Lap {
         time: lap_info.laptime_ms.into(),
         splits: lap_info
@@ -264,13 +313,12 @@ fn map_lap(lap_info: &LapInfo, driver_index: usize, entry_id: i32) -> model::Lap
             .map(|ms| Time::from(*ms))
             .collect(),
         invalid: lap_info.is_invaliud,
-        driver_index,
+        driver_id: driver_index,
         entry_id,
     }
 }
-fn map_session(update: &RealtimeUpdate, id: i32) -> model::Session {
+fn map_session(update: &RealtimeUpdate) -> model::Session {
     model::Session {
-        id,
         session_type: map_session_type(&update.session_type),
         session_time: Time::from(update.session_time + update.session_end_time),
         phase: model::SessionPhase::Waiting,
