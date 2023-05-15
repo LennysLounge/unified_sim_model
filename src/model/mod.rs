@@ -9,6 +9,9 @@ pub use nationality::Nationality;
 pub mod time;
 pub use time::Time;
 
+pub mod event;
+pub use event::Event;
+
 /// The unified sim model.
 #[derive(Debug, Default)]
 pub struct Model {
@@ -23,6 +26,8 @@ pub struct Model {
     pub track_name: String,
     /// Length of the track in meter.
     pub track_length: i32,
+    /// List of events that have happened since the last update.
+    pub events: Vec<Event>,
 }
 
 impl Model {

@@ -3,16 +3,14 @@ use std::collections::HashMap;
 use tracing::{debug, info};
 
 use crate::{
-    acc::{data::CarLocation, ConnectionError},
-    model::{self, Driver, DriverId, Entry, EntryId, Time},
-};
-
-use super::{
-    data::{
-        BroadcastingEvent, EntryListCar, LapInfo, RealtimeCarUpdate, RealtimeUpdate,
-        RegistrationResult, SessionPhase, SessionType, TrackData,
+    acc::{
+        data::{
+            BroadcastingEvent, CarLocation, EntryList, EntryListCar, LapInfo, RealtimeCarUpdate,
+            RealtimeUpdate, RegistrationResult, SessionPhase, SessionType, TrackData,
+        },
+        AccProcessor, AccProcessorContext, ConnectionError, Result,
     },
-    AccProcessor, AccProcessorContext, Result,
+    model::{self, Driver, DriverId, Entry, EntryId, Time},
 };
 
 /// A processor to transfer game data directly into the model.
@@ -97,26 +95,6 @@ impl AccProcessor for BaseProcessor {
         session.time_of_day = Time::from(update.time_of_day * 1000.0);
         session.ambient_temp = update.ambient_temp as f32;
         session.track_temp = update.track_temp as f32;
-
-        // Check disconnects
-        for entry in session.entries.values_mut() {
-            let state = self
-                .entries
-                .get_mut(&entry.id)
-                .expect("Entry states should always contain the same entries as the model");
-            match (entry.connected, state.connected) {
-                (true, false) => {
-                    info!("Entry disconnected #{}", entry.car_number);
-                }
-                (false, true) => {
-                    info!("Entry reconnected #{}", entry.car_number);
-                }
-                _ => (),
-            }
-            entry.connected = state.connected;
-            // Reset connection state for next update
-            state.connected = false;
-        }
 
         // Reset entry list flag
         self.requested_entry_list = false;
@@ -248,36 +226,10 @@ impl AccProcessor for BaseProcessor {
             return Ok(());
         }
 
-        info!("New entry has connected: #{}", car.race_number);
-        let entry = Entry {
-            id: EntryId(car.car_id as i32),
-            drivers: car
-                .drivers
-                .iter()
-                .enumerate()
-                .map(|(i, driver_info)| {
-                    let id = DriverId(i as i32);
-                    let driver = Driver {
-                        id,
-                        first_name: driver_info.first_name.clone(),
-                        last_name: driver_info.last_name.clone(),
-                        short_name: driver_info.short_name.clone(),
-                        nationality: driver_info.nationality.clone(),
-                        driving_time: Time::from(0),
-                        best_lap: 0,
-                    };
-                    (id, driver)
-                })
-                .collect(),
-            current_driver: DriverId(car.current_driver_index as i32),
-            team_name: car.team_name.clone(),
-            car: car.car_model_type.clone(),
-            car_number: car.race_number,
-            nationality: car.car_nationality.clone(),
-            connected: true,
-            ..Default::default()
-        };
-
+        info!("Entry connected: #{}", car.race_number);
+        let entry = map_entry(car);
+        let event = model::Event::EntryConnected(entry.id);
+        context.events.push_back(event);
         self.entries.insert(
             entry.id,
             EntryState {
@@ -289,7 +241,7 @@ impl AccProcessor for BaseProcessor {
         Ok(())
     }
 
-    fn broadcast_even(
+    fn broadcast_event(
         &mut self,
         _event: &BroadcastingEvent,
         _context: &mut AccProcessorContext,
@@ -298,13 +250,40 @@ impl AccProcessor for BaseProcessor {
         Ok(())
     }
 
-    fn entry_list(
-        &mut self,
-        _list: &super::data::EntryList,
-        _context: &mut AccProcessorContext,
-    ) -> super::Result<()> {
+    fn entry_list(&mut self, _list: &EntryList, _context: &mut AccProcessorContext) -> Result<()> {
         debug!("Entry List");
         Ok(())
+    }
+}
+
+fn map_entry(car: &EntryListCar) -> model::Entry {
+    Entry {
+        id: EntryId(car.car_id as i32),
+        drivers: car
+            .drivers
+            .iter()
+            .enumerate()
+            .map(|(i, driver_info)| {
+                let id = DriverId(i as i32);
+                let driver = Driver {
+                    id,
+                    first_name: driver_info.first_name.clone(),
+                    last_name: driver_info.last_name.clone(),
+                    short_name: driver_info.short_name.clone(),
+                    nationality: driver_info.nationality.clone(),
+                    driving_time: Time::from(0),
+                    best_lap: 0,
+                };
+                (id, driver)
+            })
+            .collect(),
+        current_driver: DriverId(car.current_driver_index as i32),
+        team_name: car.team_name.clone(),
+        car: car.car_model_type.clone(),
+        car_number: car.race_number,
+        nationality: car.car_nationality.clone(),
+        connected: true,
+        ..Default::default()
     }
 }
 

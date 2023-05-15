@@ -1,5 +1,6 @@
-use crate::model::Model;
+use crate::model::{Event, Model};
 use std::{
+    collections::VecDeque,
     error::Error,
     fmt::Display,
     io::ErrorKind,
@@ -11,15 +12,15 @@ use std::{
 };
 
 use self::{
-    base_processor::BaseProcessor,
     data::{
         BroadcastingEvent, EntryList, EntryListCar, IncompleteTypeError, Message,
         RealtimeCarUpdate, RealtimeUpdate, RegistrationResult, TrackData,
     },
+    processors::{base::BaseProcessor, connection::ConnectionProcessor},
 };
 
-mod base_processor;
 pub mod data;
+mod processors;
 
 /// A specialized result for Connection errors.
 pub type Result<T> = result::Result<T, ConnectionError>;
@@ -84,6 +85,7 @@ struct AccConnection {
     socket: AccSocket,
     model: Arc<RwLock<Model>>,
     base_proc: BaseProcessor,
+    connection_proc: ConnectionProcessor,
 }
 
 impl AccConnection {
@@ -107,6 +109,7 @@ impl AccConnection {
             },
             model: model,
             base_proc: BaseProcessor::default(),
+            connection_proc: ConnectionProcessor::default(),
         }
     }
 
@@ -128,9 +131,18 @@ impl AccConnection {
                 .model
                 .write()
                 .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?,
+            events: VecDeque::new(),
         };
 
-        self.base_proc.process_message(&message, &mut context)?;
+        process_message(&mut self.base_proc, &message, &mut context)?;
+        process_message(&mut self.connection_proc, &message, &mut context)?;
+
+        while !context.events.is_empty() {
+            let event = context.events.pop_front().unwrap();
+            self.base_proc.event(&event, &mut context)?;
+            self.connection_proc.event(&event, &mut context)?;
+            context.model.events.push(event);
+        }
 
         //addition processing
         Ok(())
@@ -194,84 +206,82 @@ impl AccSocket {
 struct AccProcessorContext<'a> {
     socket: &'a mut AccSocket,
     model: RwLockWriteGuard<'a, Model>,
+    events: VecDeque<Event>,
 }
 
 /// This trait descibes a processor that can process the
 /// data events from the game and modify the model.
 trait AccProcessor {
-    fn process_message(
-        &mut self,
-        message: &Message,
-        context: &mut AccProcessorContext,
-    ) -> Result<()> {
-        use Message::*;
-        match message {
-            Unknown(t) => Err(ConnectionError::Other(format!(
-                "Unknown message type: {}",
-                t
-            ))),
-            RegistrationResult(ref result) => self.registration_result(&result, context),
-            RealtimeUpdate(ref update) => self.realtime_update(&update, context),
-            RealtimeCarUpdate(ref update) => self.realtime_car_update(&update, context),
-            EntryList(ref list) => self.entry_list(&list, context),
-            TrackData(ref track) => self.track_data(&track, context),
-            EntryListCar(ref car) => self.entry_list_car(&car, context),
-            BroadcastingEvent(ref event) => self.broadcast_even(&event, context),
-        }
-    }
-
-    #[allow(unused_variables)]
     fn registration_result(
         &mut self,
-        result: &RegistrationResult,
-        context: &mut AccProcessorContext,
+        _result: &RegistrationResult,
+        _context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
     fn realtime_update(
         &mut self,
-        update: &RealtimeUpdate,
-        context: &mut AccProcessorContext,
+        _update: &RealtimeUpdate,
+        _context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
     fn realtime_car_update(
         &mut self,
-        update: &RealtimeCarUpdate,
-        context: &mut AccProcessorContext,
+        _update: &RealtimeCarUpdate,
+        _context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
-    fn entry_list(&mut self, list: &EntryList, context: &mut AccProcessorContext) -> Result<()> {
+    fn entry_list(&mut self, _list: &EntryList, _context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
-    fn track_data(&mut self, track: &TrackData, context: &mut AccProcessorContext) -> Result<()> {
+    fn track_data(&mut self, _track: &TrackData, _context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
     fn entry_list_car(
         &mut self,
-        car: &EntryListCar,
-        context: &mut AccProcessorContext,
+        _car: &EntryListCar,
+        _context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
-    #[allow(unused_variables)]
-    fn broadcast_even(
+    fn broadcast_event(
         &mut self,
-        event: &BroadcastingEvent,
-        context: &mut AccProcessorContext,
+        _event: &BroadcastingEvent,
+        _context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
+    }
+
+    fn event(&mut self, _event: &Event, _context: &mut AccProcessorContext) -> Result<()> {
+        Ok(())
+    }
+}
+
+fn process_message(
+    me: &mut impl AccProcessor,
+    message: &Message,
+    context: &mut AccProcessorContext,
+) -> Result<()> {
+    use Message::*;
+    match message {
+        Unknown(t) => Err(ConnectionError::Other(format!(
+            "Unknown message type: {}",
+            t
+        ))),
+        RegistrationResult(ref result) => me.registration_result(&result, context),
+        RealtimeUpdate(ref update) => me.realtime_update(&update, context),
+        RealtimeCarUpdate(ref update) => me.realtime_car_update(&update, context),
+        EntryList(ref list) => me.entry_list(&list, context),
+        TrackData(ref track) => me.track_data(&track, context),
+        EntryListCar(ref car) => me.entry_list_car(&car, context),
+        BroadcastingEvent(ref event) => me.broadcast_event(&event, context),
     }
 }

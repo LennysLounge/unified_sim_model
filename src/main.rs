@@ -1,6 +1,6 @@
 use std::{env, thread, time::Duration};
 
-use tracing::{error, info, Level};
+use tracing::{error, info, Level, debug};
 use unified_sim_model::acc::AccAdapter;
 
 fn main() {
@@ -18,22 +18,34 @@ fn main() {
     let acc_adapter = AccAdapter::new().expect("Cannot connect to game");
 
     loop {
-        {
-            let model = match acc_adapter.model.read() {
-                Ok(lock) => lock,
-                Err(e) => {
-                    error!("Model was poisoned: {:?}", e);
-                    break;
-                }
-            };
+        let model = match acc_adapter.model.read() {
+            Ok(lock) => lock,
+            Err(e) => {
+                error!("Model was poisoned: {:?}", e);
+                break;
+            }
+        };
 
-            if let Some(session) = model.current_session() {
-                info!(
-                    "Session time: {}, Session time remaining: {}",
-                    session.session_time, session.time_remaining
-                );
-            };
+        if let Some(session) = model.current_session() {
+            info!(
+                "Session time: {}, Session time remaining: {}",
+                session.session_time, session.time_remaining
+            );
+        };
+
+        for event in model.events.iter() {
+            info!("Event: {:?}", event);
         }
+        drop(model);
+
+        debug!("Clearing model of events");
+        match acc_adapter.model.write() {
+            Ok(mut model) => model.events.clear(),
+            Err(e) => {
+                error!("Model was poisoned: {:?}", e);
+                break;
+            }
+        };
 
         thread::sleep(Duration::from_millis(1000));
     }
