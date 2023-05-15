@@ -4,7 +4,7 @@ use tracing::info;
 
 use crate::{
     acc::{
-        data::{RealtimeCarUpdate, RealtimeUpdate},
+        data::{RealtimeCarUpdate, SessionUpdate},
         AccProcessor, AccProcessorContext, Result,
     },
     model::{EntryId, Event},
@@ -30,9 +30,9 @@ pub struct ConnectionProcessor {
 }
 
 impl AccProcessor for ConnectionProcessor {
-    fn realtime_update(
+    fn session_update(
         &mut self,
-        _update: &RealtimeUpdate,
+        _update: &SessionUpdate,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
         let session = context

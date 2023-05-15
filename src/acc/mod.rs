@@ -14,7 +14,7 @@ use std::{
 use self::{
     data::{
         BroadcastingEvent, EntryList, EntryListCar, IncompleteTypeError, Message,
-        RealtimeCarUpdate, RealtimeUpdate, RegistrationResult, TrackData,
+        RealtimeCarUpdate, RegistrationResult, SessionUpdate, TrackData,
     },
     processors::{base::BaseProcessor, connection::ConnectionProcessor},
 };
@@ -220,9 +220,9 @@ trait AccProcessor {
         Ok(())
     }
 
-    fn realtime_update(
+    fn session_update(
         &mut self,
-        _update: &RealtimeUpdate,
+        _update: &SessionUpdate,
         _context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
@@ -277,7 +277,7 @@ fn process_message(
             t
         ))),
         RegistrationResult(ref result) => me.registration_result(&result, context),
-        RealtimeUpdate(ref update) => me.realtime_update(&update, context),
+        SessionUpdate(ref update) => me.session_update(&update, context),
         RealtimeCarUpdate(ref update) => me.realtime_car_update(&update, context),
         EntryList(ref list) => me.entry_list(&list, context),
         TrackData(ref track) => me.track_data(&track, context),

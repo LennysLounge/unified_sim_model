@@ -21,7 +21,7 @@ impl Error for IncompleteTypeError {}
 pub enum Message {
     Unknown(u8),
     RegistrationResult(RegistrationResult),
-    RealtimeUpdate(RealtimeUpdate),
+    SessionUpdate(SessionUpdate),
     RealtimeCarUpdate(RealtimeCarUpdate),
     EntryList(EntryList),
     TrackData(TrackData),
@@ -32,7 +32,7 @@ pub enum Message {
 pub fn read_response(mut buf: &[u8]) -> Result<Message, IncompleteTypeError> {
     Ok(match read_u8(&mut buf)? {
         1 => read_registration_result(&mut buf)?,
-        2 => read_realtime_update(&mut buf)?,
+        2 => read_session_update(&mut buf)?,
         3 => read_realtime_car_update(&mut buf)?,
         4 => read_entry_list(&mut buf)?,
         5 => read_track_data(&mut buf)?,
@@ -60,7 +60,7 @@ fn read_registration_result(buf: &mut &[u8]) -> Result<Message, IncompleteTypeEr
 }
 
 #[derive(Debug, Default)]
-pub struct RealtimeUpdate {
+pub struct SessionUpdate {
     pub event_index: i16,
     pub session_index: i16,
     pub session_type: SessionType,
@@ -84,8 +84,8 @@ pub struct RealtimeUpdate {
 }
 
 #[allow(clippy::field_reassign_with_default)]
-fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
-    let mut me = RealtimeUpdate::default();
+fn read_session_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError> {
+    let mut me = SessionUpdate::default();
     me.event_index = read_i16(buf)?;
     me.session_index = read_i16(buf)?;
     me.session_type = read_session_type(buf)?;
@@ -108,7 +108,7 @@ fn read_realtime_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeError>
     me.rain_level = read_u8(buf)?;
     me.wetness = read_u8(buf)?;
     me.best_session_lap = read_lap_info(buf)?;
-    Ok(Message::RealtimeUpdate(me))
+    Ok(Message::SessionUpdate(me))
 }
 
 #[derive(Debug, Default, Clone)]

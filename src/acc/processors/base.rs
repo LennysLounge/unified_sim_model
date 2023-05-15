@@ -6,7 +6,7 @@ use crate::{
     acc::{
         data::{
             BroadcastingEvent, CarLocation, EntryList, EntryListCar, LapInfo, RealtimeCarUpdate,
-            RealtimeUpdate, RegistrationResult, SessionPhase, SessionType, TrackData,
+            RegistrationResult, SessionPhase, SessionType, SessionUpdate, TrackData,
         },
         AccProcessor, AccProcessorContext, ConnectionError, Result,
     },
@@ -53,12 +53,12 @@ impl AccProcessor for BaseProcessor {
         Ok(())
     }
 
-    fn realtime_update(
+    fn session_update(
         &mut self,
-        update: &RealtimeUpdate,
+        update: &SessionUpdate,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
-        debug!("Realtime Update");
+        debug!("Session Update");
 
         // Check if a new session has started.
         let session = context.model.current_session_mut();
@@ -301,7 +301,7 @@ fn map_lap(lap_info: &LapInfo, driver_index: DriverId, entry_id: EntryId) -> mod
         entry_id,
     }
 }
-fn map_session(update: &RealtimeUpdate) -> model::Session {
+fn map_session(update: &SessionUpdate) -> model::Session {
     model::Session {
         session_type: map_session_type(&update.session_type),
         session_time: Time::from(update.session_time + update.session_end_time),
