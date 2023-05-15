@@ -9,7 +9,6 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tracing::info;
 
 use self::{
     base_processor::BaseProcessor,
@@ -129,15 +128,6 @@ impl AccConnection {
 
         self.base_processor
             .process_message(&message, &mut context)?;
-
-        if let Message::RealtimeUpdate(_) = message {
-            if let Some(session) = context.model.current_session() {
-                info!(
-                    "Session time: {}, Session time remaining: {}",
-                    session.session_time, session.time_remaining
-                );
-            }
-        }
 
         //addition processing
         Ok(())
