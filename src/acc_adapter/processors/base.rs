@@ -8,7 +8,7 @@ use crate::{
         },
         AccProcessor, AccProcessorContext, ConnectionError, Result,
     },
-    model::{self, Driver, DriverId, Entry, EntryId, Event, Time},
+    model::{self, Driver, DriverId, Entry, EntryId, Event, SessionId, Time},
 };
 
 /// A processor to transfer game data directly into the model.
@@ -16,7 +16,7 @@ use crate::{
 #[derive(Default, Debug)]
 pub struct BaseProcessor {
     /// Index of the current session.
-    current_session_index: i16,
+    current_session_index: Option<i16>,
     /// True if a new entry list should be requested.
     requested_entry_list: bool,
 }
@@ -49,29 +49,34 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Session Update");
 
-        // Check if a new session has started.
-        let session = context.model.current_session_mut();
-        if session.is_none() || self.current_session_index != update.session_index {
-            // Fast forward old session to end.
-            if let Some(old_session) = session {
-                while old_session.phase != model::SessionPhase::Finished {
-                    info!("Session phase fast forwarded to {:?}", old_session.phase);
-                    old_session.phase = old_session.phase.next();
-                    context.events.push_back(Event::SessionPhaseChanged(
-                        old_session.id,
-                        old_session.phase,
-                    ));
+        let is_new_session = match self.current_session_index {
+            Some(index) => update.session_index != index,
+            None => true,
+        };
+
+        if is_new_session {
+            // Fast forward old session
+            if let Some(session) = context.model.current_session_mut() {
+                while session.phase != model::SessionPhase::Finished {
+                    info!("Session phase fast forwarded to {:?}", session.phase);
+                    session.phase = session.phase.next();
+                    context
+                        .events
+                        .push_back(Event::SessionPhaseChanged(session.id, session.phase));
                 }
             }
 
-            // Add new session to the model.
-            let new_session = map_session(update);
-            info!("New {:?} session detected", new_session.session_type);
-            let session_id = context.model.add_session(new_session);
-            context.model.current_session = session_id;
-            context.events.push_back(Event::SessionChanged(session_id));
+            // Make new session
+            let mut session = map_session(update);
+            session.id = SessionId(context.model.sessions.len());
 
-            self.current_session_index = update.session_index;
+            // Create event
+            info!("New {:?} session detected", session.session_type);
+            context.events.push_back(Event::SessionChanged(session.id));
+
+            // Add session to model
+            context.model.current_session = session.id;
+            context.model.sessions.insert(session.id, session);
         }
 
         let session = context

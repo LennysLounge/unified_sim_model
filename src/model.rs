@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    slice::{Iter, IterMut},
-};
+use std::collections::HashMap;
 
 pub mod event;
 pub mod nationality;
@@ -9,6 +6,7 @@ pub mod session;
 pub mod time;
 
 pub use event::Event;
+use indexmap::IndexMap;
 pub use nationality::Nationality;
 pub use session::*;
 pub use time::Time;
@@ -18,7 +16,7 @@ pub use time::Time;
 pub struct Model {
     /// List of sessions that have happend during the event.
     /// Sessions are orderd in the order they occur in the event.
-    sessions: Vec<Session>,
+    pub sessions: IndexMap<SessionId, Session>,
     /// Index of the current active session.
     pub current_session: SessionId,
     /// Name of the event.
@@ -37,32 +35,16 @@ impl Model {
     pub fn add_session(&mut self, mut session: Session) -> SessionId {
         let id = SessionId(self.sessions.len());
         session.id = id;
-        self.sessions.push(session);
+        self.sessions.insert(id, session);
         id
     }
 
     pub fn current_session(&self) -> Option<&Session> {
-        self.sessions.get(self.current_session.0)
+        self.sessions.get(&self.current_session)
     }
 
     pub fn current_session_mut(&mut self) -> Option<&mut Session> {
-        self.sessions.get_mut(self.current_session.0)
-    }
-
-    pub fn get_session(&self, id: &SessionId) -> Option<&Session> {
-        self.sessions.get(id.0)
-    }
-
-    pub fn get_session_mut(&mut self, id: &SessionId) -> Option<&mut Session> {
-        self.sessions.get_mut(id.0)
-    }
-
-    pub fn get_sessions(&self) -> Iter<Session> {
-        self.sessions.iter()
-    }
-
-    pub fn get_sessions_mut(&mut self) -> IterMut<Session> {
-        self.sessions.iter_mut()
+        self.sessions.get_mut(&self.current_session)
     }
 }
 

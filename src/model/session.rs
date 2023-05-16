@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use super::{Entry, EntryId, Lap, Time};
 
 /// A session id.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SessionId(pub usize);
 
 /// A session.
