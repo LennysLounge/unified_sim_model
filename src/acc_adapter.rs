@@ -108,7 +108,7 @@ impl AccConnection {
                 connection_id: 0,
                 read_only: false,
             },
-            model: model,
+            model,
             base_proc: BaseProcessor::default(),
             connection_proc: ConnectionProcessor::default(),
             lap_proc: LapProcessor::default(),
@@ -280,12 +280,12 @@ fn process_message(
             "Unknown message type: {}",
             t
         ))),
-        RegistrationResult(ref result) => me.registration_result(&result, context),
-        SessionUpdate(ref update) => me.session_update(&update, context),
-        RealtimeCarUpdate(ref update) => me.realtime_car_update(&update, context),
-        EntryList(ref list) => me.entry_list(&list, context),
-        TrackData(ref track) => me.track_data(&track, context),
-        EntryListCar(ref car) => me.entry_list_car(&car, context),
-        BroadcastingEvent(ref event) => me.broadcast_event(&event, context),
+        RegistrationResult(ref result) => me.registration_result(result, context),
+        SessionUpdate(ref update) => me.session_update(update, context),
+        RealtimeCarUpdate(ref update) => me.realtime_car_update(update, context),
+        EntryList(ref list) => me.entry_list(list, context),
+        TrackData(ref track) => me.track_data(track, context),
+        EntryListCar(ref car) => me.entry_list_car(car, context),
+        BroadcastingEvent(ref event) => me.broadcast_event(event, context),
     }
 }

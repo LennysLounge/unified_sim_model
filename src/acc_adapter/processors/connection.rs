@@ -75,11 +75,8 @@ impl AccProcessor for ConnectionProcessor {
     }
 
     fn event(&mut self, event: &Event, _context: &mut AccProcessorContext) -> Result<()> {
-        match event {
-            Event::EntryConnected(entry_id) => {
-                self.entries.insert(*entry_id, true);
-            }
-            _ => (),
+        if let Event::EntryConnected(entry_id) = event {
+            self.entries.insert(*entry_id, true);
         }
         Ok(())
     }
