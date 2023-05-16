@@ -1,6 +1,6 @@
 use tracing::warn;
 
-pub mod acc;
+pub mod acc_adapter;
 pub mod model;
 
 #[allow(dead_code)]

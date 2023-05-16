@@ -1,7 +1,7 @@
 use std::{env, thread, time::Duration};
 
-use tracing::{error, info, Level, debug};
-use unified_sim_model::acc::AccAdapter;
+use tracing::{debug, error, info, Level};
+use unified_sim_model::acc_adapter::AccAdapter;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");

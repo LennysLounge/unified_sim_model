@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tracing::{debug, info};
 
 use crate::{
-    acc::{
+    acc_adapter::{
         data::{
             BroadcastingEvent, CarLocation, EntryList, EntryListCar, LapInfo, RealtimeCarUpdate,
             RegistrationResult, SessionPhase, SessionType, SessionUpdate, TrackData,
