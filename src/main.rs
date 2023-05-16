@@ -18,6 +18,10 @@ fn main() {
     let acc_adapter = AccAdapter::new().expect("Cannot connect to game");
 
     loop {
+        if acc_adapter.join_handle.is_finished() {
+            break;
+        }
+
         let model = match acc_adapter.model.read() {
             Ok(lock) => lock,
             Err(e) => {
