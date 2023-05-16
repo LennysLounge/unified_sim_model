@@ -16,7 +16,7 @@ use self::{
         BroadcastingEvent, EntryList, EntryListCar, IncompleteTypeError, Message,
         RealtimeCarUpdate, RegistrationResult, SessionUpdate, TrackData,
     },
-    processors::{base::BaseProcessor, connection::ConnectionProcessor},
+    processors::{base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor},
 };
 
 pub mod data;
@@ -86,6 +86,7 @@ struct AccConnection {
     model: Arc<RwLock<Model>>,
     base_proc: BaseProcessor,
     connection_proc: ConnectionProcessor,
+    lap_proc: LapProcessor,
 }
 
 impl AccConnection {
@@ -110,6 +111,7 @@ impl AccConnection {
             model: model,
             base_proc: BaseProcessor::default(),
             connection_proc: ConnectionProcessor::default(),
+            lap_proc: LapProcessor::default(),
         }
     }
 
@@ -136,11 +138,13 @@ impl AccConnection {
 
         process_message(&mut self.base_proc, &message, &mut context)?;
         process_message(&mut self.connection_proc, &message, &mut context)?;
+        process_message(&mut self.lap_proc, &message, &mut context)?;
 
         while !context.events.is_empty() {
             let event = context.events.pop_front().unwrap();
             self.base_proc.event(&event, &mut context)?;
             self.connection_proc.event(&event, &mut context)?;
+            self.lap_proc.event(&event, &mut context)?;
             context.model.events.push(event);
         }
 

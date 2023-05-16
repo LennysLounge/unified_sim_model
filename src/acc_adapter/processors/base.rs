@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use tracing::{debug, info};
 
 use crate::{
     acc_adapter::{
         data::{
-            BroadcastingEvent, CarLocation, EntryList, EntryListCar, LapInfo, RealtimeCarUpdate,
-            RegistrationResult, SessionPhase, SessionType, SessionUpdate, TrackData,
+            CarLocation, EntryListCar, RealtimeCarUpdate, RegistrationResult, SessionPhase,
+            SessionType, SessionUpdate, TrackData,
         },
         AccProcessor, AccProcessorContext, ConnectionError, Result,
     },
@@ -21,15 +19,6 @@ pub struct BaseProcessor {
     current_session_index: i16,
     /// True if a new entry list should be requested.
     requested_entry_list: bool,
-    /// State of the entries.
-    entries: HashMap<EntryId, EntryState>,
-}
-
-/// The internal state of an entry.
-#[derive(Debug)]
-struct EntryState {
-    connected: bool,
-    laps: Option<i16>,
 }
 
 impl AccProcessor for BaseProcessor {
@@ -127,65 +116,6 @@ impl AccProcessor for BaseProcessor {
                 entry.in_pits = update.car_location == CarLocation::Pitlane;
                 entry.gear = update.gear as i32;
                 entry.speed = update.kmh as f32;
-
-                let entry_state = self
-                    .entries
-                    .get_mut(&entry.id)
-                    .expect("When an entry is in the model it should also be present here");
-                // Update connected flag for this entry.
-                entry_state.connected = true;
-
-                // Check for lap completed.
-                if let Some(laps) = entry_state.laps {
-                    if update.laps != laps {
-                        let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
-                        info!("Car #{} completed lap: {}", entry.car_number, lap.time);
-
-                        // Check personal best for entry
-                        let new_entry_best = match entry.laps.get(entry.best_lap) {
-                            Some(best_lap) => lap.time < best_lap.time,
-                            None => true,
-                        };
-                        if new_entry_best {
-                            info!(
-                                "Car #{} achieved a new personal best lap nr.{} {}",
-                                entry.car_number,
-                                entry.laps.len(),
-                                lap.time
-                            );
-                            entry.best_lap = entry.laps.len();
-                        }
-                        // Check personal best for driver
-                        if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
-                            let new_personal_best = match entry.laps.get(driver.best_lap) {
-                                Some(best_lap) => lap.time < best_lap.time,
-                                None => true,
-                            };
-                            if new_personal_best {
-                                info!(
-                                        "Driver {} {} in car #{} achieved a new personal best lap nr.{}: {}",
-                                        driver.first_name,
-                                        driver.last_name,
-                                        entry.car_number,
-                                        entry.laps.len(),
-                                        lap.time
-                                    );
-                                driver.best_lap = entry.laps.len();
-                            }
-                        }
-                        // Check session best.
-                        if lap.time < current_session.best_lap.time {
-                            info!(
-                                "Car #{} achieved a new session best lap: {}",
-                                entry.car_number, lap.time,
-                            );
-                            current_session.best_lap = lap.clone();
-                        }
-
-                        entry.laps.push(lap);
-                    }
-                }
-                entry_state.laps = Some(update.laps);
             }
             None => {
                 debug!("Realtime update for unknown car id:{}", update.car_id);
@@ -201,7 +131,6 @@ impl AccProcessor for BaseProcessor {
 
     fn track_data(&mut self, track: &TrackData, context: &mut AccProcessorContext) -> Result<()> {
         debug!("Track data");
-
         context.model.track_name = track.track_name.clone();
         context.model.track_length = track.track_meter;
         Ok(())
@@ -228,30 +157,10 @@ impl AccProcessor for BaseProcessor {
 
         info!("Entry connected: #{}", car.race_number);
         let entry = map_entry(car);
-        let event = model::Event::EntryConnected(entry.id);
-        context.events.push_back(event);
-        self.entries.insert(
-            entry.id,
-            EntryState {
-                connected: true,
-                laps: None,
-            },
-        );
+        context
+            .events
+            .push_back(model::Event::EntryConnected(entry.id));
         session.entries.insert(entry.id, entry);
-        Ok(())
-    }
-
-    fn broadcast_event(
-        &mut self,
-        _event: &BroadcastingEvent,
-        _context: &mut AccProcessorContext,
-    ) -> Result<()> {
-        debug!("Broadcasting event");
-        Ok(())
-    }
-
-    fn entry_list(&mut self, _list: &EntryList, _context: &mut AccProcessorContext) -> Result<()> {
-        debug!("Entry List");
         Ok(())
     }
 }
@@ -287,20 +196,6 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
     }
 }
 
-fn map_lap(lap_info: &LapInfo, driver_index: DriverId, entry_id: EntryId) -> model::Lap {
-    model::Lap {
-        time: lap_info.laptime_ms.into(),
-        splits: lap_info
-            .splits
-            .clone()
-            .iter()
-            .map(|ms| Time::from(*ms))
-            .collect(),
-        invalid: lap_info.is_invaliud,
-        driver_id: driver_index,
-        entry_id,
-    }
-}
 fn map_session(update: &SessionUpdate) -> model::Session {
     model::Session {
         session_type: map_session_type(&update.session_type),
