@@ -1,12 +1,12 @@
-use super::{EntryId, Lap};
+use super::{EntryId, Lap, SessionId, SessionPhase};
 
 #[derive(Debug)]
 pub enum Event {
     EntryConnected(EntryId),
     EntryReconnected(EntryId),
     EntryDisconnected(EntryId),
-    SessionChanged,
-    SessionPhaseChanged,
+    SessionChanged(SessionId),
+    SessionPhaseChanged(SessionId, SessionPhase),
     LapCompleted(LapCompleted),
 }
 

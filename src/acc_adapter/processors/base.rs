@@ -8,7 +8,7 @@ use crate::{
         },
         AccProcessor, AccProcessorContext, ConnectionError, Result,
     },
-    model::{self, Driver, DriverId, Entry, EntryId, Time},
+    model::{self, Driver, DriverId, Entry, EntryId, Event, Time},
 };
 
 /// A processor to transfer game data directly into the model.
@@ -57,6 +57,10 @@ impl AccProcessor for BaseProcessor {
                 while old_session.phase != model::SessionPhase::Finished {
                     info!("Session phase fast forwarded to {:?}", old_session.phase);
                     old_session.phase = old_session.phase.next();
+                    context.events.push_back(Event::SessionPhaseChanged(
+                        old_session.id,
+                        old_session.phase,
+                    ));
                 }
             }
 
@@ -65,6 +69,7 @@ impl AccProcessor for BaseProcessor {
             info!("New {:?} session detected", new_session.session_type);
             let session_id = context.model.add_session(new_session);
             context.model.current_session = session_id;
+            context.events.push_back(Event::SessionChanged(session_id));
 
             self.current_session_index = update.session_index;
         }
@@ -79,6 +84,9 @@ impl AccProcessor for BaseProcessor {
         while current_phase > session.phase {
             session.phase = session.phase.next();
             info!("Session phase changed to {:?}", session.phase);
+            context
+                .events
+                .push_back(Event::SessionPhaseChanged(session.id, session.phase));
         }
         session.time_remaining = Time::from(update.session_end_time);
         session.time_of_day = Time::from(update.time_of_day * 1000.0);
