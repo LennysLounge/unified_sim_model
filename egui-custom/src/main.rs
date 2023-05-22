@@ -2,11 +2,11 @@ mod app_window;
 mod test_app;
 mod tree;
 
-use app_window::{AppCreator, AppWindowState};
+use app_window::{AppCreator, AppWindow, AppWindowState};
 use std::{cell::RefCell, env};
 use test_app::TestApp;
 use tracing::{info, Level};
-use tree::Tree;
+use tree::{NodeId, Tree};
 use winit::{event::WindowEvent, event_loop::EventLoop};
 
 fn main() {
@@ -24,6 +24,26 @@ fn main() {
         .expect("Should be able to set global subscriber");
 
     run_event_loop(Box::new(|| Box::new(TestApp::default())));
+}
+
+pub struct WindowRequest {
+    source: NodeId,
+    app_window: Box<dyn AppWindow>,
+}
+
+/// A Proxy to interact with different windows.
+pub struct WindowProxy<'a> {
+    id: NodeId,
+    new_window_requests: &'a mut Vec<WindowRequest>,
+}
+
+impl<'a> WindowProxy<'a> {
+    fn new_window(&mut self, app: impl AppWindow + 'static) {
+        self.new_window_requests.push(WindowRequest {
+            source: self.id,
+            app_window: Box::new(app),
+        });
+    }
 }
 
 fn run_event_loop(creator: AppCreator) {
@@ -66,8 +86,23 @@ fn run_event_loop(creator: AppCreator) {
             }
 
             Event::RedrawRequested(ref window_id) => {
-                for node in windows.values() {
-                    node.value.borrow_mut().run_and_paint(event_loop, window_id);
+                let mut window_requests = Vec::<WindowRequest>::new();
+
+                for (id, node) in windows.iter() {
+                    let mut window_proxy = WindowProxy {
+                        id: *id,
+                        new_window_requests: &mut window_requests,
+                    };
+                    node.value
+                        .borrow_mut()
+                        .run_and_paint(event_loop, window_id, &mut window_proxy);
+                }
+                for request in window_requests {
+                    let window_node_id = windows.new_node(RefCell::new(AppWindowState::new(
+                        event_loop,
+                        request.app_window,
+                    )));
+                    request.source.add(window_node_id, &mut windows);
                 }
             }
 

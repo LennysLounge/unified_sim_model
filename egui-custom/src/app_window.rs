@@ -6,21 +6,16 @@ use winit::{
     window::{Window, WindowId},
 };
 
+use crate::WindowProxy;
+
 /// Interface to show an egui context in a native os window.
 /// This function is called to run the gui inside a native os window.
 pub trait AppWindow {
-    fn update(&mut self, ctx: &egui::Context, windower: &mut Windower);
+    fn update(&mut self, ctx: &egui::Context, windower: &mut WindowProxy);
 }
 
 /// A function that creates a AppWindow.
 pub type AppCreator = Box<dyn Fn() -> Box<dyn AppWindow>>;
-
-/// Wrapper used to create a new window or access its parent window.
-pub struct Windower {}
-
-impl Windower {
-    pub fn new_window(&mut self, _app_window: impl AppWindow + 'static) {}
-}
 
 /// Bundles together all data needed to draw egui in a native os window.
 pub struct AppWindowState {
@@ -94,12 +89,15 @@ impl AppWindowState {
     }
 
     /// Run the egui gui on this window.
-    pub fn run_and_paint(&mut self, _event_loop: &EventLoopWindowTarget<()>, window_id: &WindowId) {
+    pub fn run_and_paint(
+        &mut self,
+        _event_loop: &EventLoopWindowTarget<()>,
+        window_id: &WindowId,
+        window_proxy: &mut WindowProxy,
+    ) {
         if window_id == &self.window.id() {
             // Gather input (mouse, touches, keyboard, screen size, etc):
             let raw_input: egui::RawInput = self.state.take_egui_input(&self.window);
-
-            let mut windower = Windower {};
 
             let egui::FullOutput {
                 platform_output,
@@ -107,7 +105,7 @@ impl AppWindowState {
                 textures_delta,
                 shapes,
             } = self.context.run(raw_input, |egui_ctx| {
-                self.app.update(egui_ctx, &mut windower);
+                self.app.update(egui_ctx, window_proxy);
             });
 
             self.state

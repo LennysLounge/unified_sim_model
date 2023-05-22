@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tracing::info;
 
-use crate::app_window::{AppWindow, Windower};
+use crate::{app_window::AppWindow, WindowProxy};
 
 pub struct TestApp {
     pub name: String,
@@ -21,7 +21,7 @@ impl Default for TestApp {
 }
 
 impl AppWindow for TestApp {
-    fn update(&mut self, ctx: &egui::Context, windower: &mut Windower) {
+    fn update(&mut self, ctx: &egui::Context, windower: &mut WindowProxy) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             ui.horizontal(|ui| {
@@ -53,7 +53,7 @@ struct PopUp {
 }
 
 impl AppWindow for PopUp {
-    fn update(&mut self, ctx: &egui::Context, _windower: &mut Windower) {
+    fn update(&mut self, ctx: &egui::Context, _windower: &mut WindowProxy) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("I am a new window!");
             if ui
