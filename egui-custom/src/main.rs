@@ -1,10 +1,12 @@
 mod app_window;
 mod test_app;
+mod tree;
 
-use app_window::{AppCreator, AppWindow};
-use std::env;
+use app_window::{AppCreator, AppWindowState};
+use std::{cell::RefCell, env};
 use test_app::TestApp;
 use tracing::{info, Level};
+use tree::Tree;
 use winit::{event::WindowEvent, event_loop::EventLoop};
 
 fn main() {
@@ -25,17 +27,14 @@ fn main() {
 }
 
 fn run_event_loop(creator: AppCreator) {
-    // List of currently active apps.
-    let mut apps = Vec::<AppWindow>::new();
-    let mut new_apps = Vec::<AppWindow>::new();
+    let mut windows = Tree::<RefCell<AppWindowState>>::new();
 
     EventLoop::new().run(move |event, event_loop, control_flow| {
         use winit::event::Event;
         match event {
             Event::NewEvents(_) => {
-                // Issue redraw requests for windows that requested it
-                for app in apps.iter_mut() {
-                    app.update_redraw_timer();
+                for node in windows.values() {
+                    node.value.borrow_mut().update_redraw_timer();
                 }
             }
 
@@ -51,50 +50,36 @@ fn run_event_loop(creator: AppCreator) {
 
             // Pass window events to the apps.
             Event::WindowEvent {
-                window_id,
+                ref window_id,
                 ref event,
             } => {
-                for app in apps.iter_mut() {
-                    if window_id != app.window.id() {
-                        continue;
-                    }
-                    if let WindowEvent::Resized(size) = event {
-                        if size.width > 0 && size.height > 0 {
-                            app.painter.on_window_resized(size.width, size.height);
-                        }
-                    }
-
-                    let response = app.state.on_event(&app.context, event);
-                    if response.repaint {
-                        app.window.request_redraw();
-                    }
+                for node in windows.values() {
+                    node.value.borrow_mut().on_window_event(event, window_id);
                 }
             }
 
             // Create the apps here.
             Event::Resumed => {
-                apps.push(AppWindow::new(event_loop, &creator));
+                windows.new_node(RefCell::new(AppWindowState::new_creator(
+                    event_loop, &creator,
+                )));
             }
 
-            Event::RedrawRequested(window_id) => {
-                // App should only be rendered when it needs to.
-                for app in apps.iter_mut() {
-                    if app.window.id() != window_id {
-                        continue;
-                    }
-                    app.run(event_loop, &mut new_apps);
-                }
-                while let Some(app) = new_apps.pop() {
-                    apps.push(app);
+            Event::RedrawRequested(ref window_id) => {
+                for node in windows.values() {
+                    node.value.borrow_mut().run_and_paint(event_loop, window_id);
                 }
             }
 
             // At the end of the event cycle set the control flow.
             Event::RedrawEventsCleared => {
-                let earliest_redraw = apps.iter().filter_map(|app| app.get_redraw_timer()).min();
+                let earliest_redraw = windows
+                    .values()
+                    .filter_map(|node| node.value.borrow().get_redraw_timer())
+                    .min();
 
                 if let Some(time) = earliest_redraw {
-                    control_flow.set_wait_until(*time);
+                    control_flow.set_wait_until(time);
                 } else {
                     control_flow.set_wait();
                 }

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tracing::info;
 
-use crate::app_window::{App, Windower};
+use crate::app_window::{AppWindow, Windower};
 
 pub struct TestApp {
     pub name: String,
@@ -20,8 +20,8 @@ impl Default for TestApp {
     }
 }
 
-impl App for TestApp {
-    fn update(&mut self, ctx: &egui::Context, mut windower: Windower) {
+impl AppWindow for TestApp {
+    fn update(&mut self, ctx: &egui::Context, windower: &mut Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             ui.horizontal(|ui| {
@@ -35,7 +35,7 @@ impl App for TestApp {
                 info!("Button clicked, {}", self.age);
             }
             if ui.button("Open a new window").clicked() {
-                windower.window(Box::new(|| Box::new(PopUp { value: 12 })));
+                windower.new_window(PopUp { value: 12 });
             }
             ui.checkbox(&mut self.checked, "Update every second");
             if self.checked {
@@ -52,8 +52,8 @@ struct PopUp {
     value: i32,
 }
 
-impl App for PopUp {
-    fn update(&mut self, ctx: &egui::Context, _windower: Windower) {
+impl AppWindow for PopUp {
+    fn update(&mut self, ctx: &egui::Context, _windower: &mut Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("I am a new window!");
             if ui

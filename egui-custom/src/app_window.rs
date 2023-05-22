@@ -1,47 +1,43 @@
 use std::time::Instant;
 
-use winit::{event_loop::EventLoopWindowTarget, window::Window};
+use winit::{
+    event::WindowEvent,
+    event_loop::EventLoopWindowTarget,
+    window::{Window, WindowId},
+};
 
-pub trait App {
-    fn update(&mut self, ctx: &egui::Context, windower: Windower);
+/// Interface to show an egui context in a native os window.
+/// This function is called to run the gui inside a native os window.
+pub trait AppWindow {
+    fn update(&mut self, ctx: &egui::Context, windower: &mut Windower);
 }
 
-pub type AppCreator = Box<dyn Fn() -> Box<dyn App>>;
+/// A function that creates a AppWindow.
+pub type AppCreator = Box<dyn Fn() -> Box<dyn AppWindow>>;
 
-pub struct Windower<'a> {
-    event_loop: &'a EventLoopWindowTarget<()>,
-    new_apps: &'a mut Vec<AppWindow>,
+/// Wrapper used to create a new window or access its parent window.
+pub struct Windower {}
+
+impl Windower {
+    pub fn new_window(&mut self, _app_window: impl AppWindow + 'static) {}
 }
 
-impl<'a> Windower<'a> {
-    pub fn window(&mut self, creator: AppCreator) {
-        self.new_apps
-            .push(AppWindow::new(self.event_loop, &creator));
+/// Bundles together all data needed to draw egui in a native os window.
+pub struct AppWindowState {
+    window: Window,
+    state: egui_winit::State,
+    context: egui::Context,
+    app: Box<dyn AppWindow>,
+    painter: egui_wgpu::winit::Painter,
+    redraw_time: Option<Instant>,
+}
+
+impl AppWindowState {
+    pub fn new_creator(event_loop: &EventLoopWindowTarget<()>, creator: &AppCreator) -> Self {
+        AppWindowState::new(event_loop, creator())
     }
-}
 
-/// An app that is created from a Fn.
-struct FnApp {
-    ui: Box<dyn Fn(&egui::Context, Windower)>,
-}
-impl App for FnApp {
-    fn update(&mut self, ctx: &egui::Context, windower: Windower) {
-        (self.ui)(ctx, windower);
-    }
-}
-
-/// An application window.
-pub struct AppWindow {
-    pub window: Window,
-    pub state: egui_winit::State,
-    pub context: egui::Context,
-    pub app: Box<dyn App>,
-    pub painter: egui_wgpu::winit::Painter,
-    pub redraw_time: Option<Instant>,
-}
-
-impl AppWindow {
-    pub fn new(event_loop: &EventLoopWindowTarget<()>, creator: &AppCreator) -> Self {
+    pub fn new(event_loop: &EventLoopWindowTarget<()>, app_window: Box<dyn AppWindow>) -> Self {
         let window = Window::new(event_loop).unwrap();
 
         let mut painter =
@@ -56,11 +52,11 @@ impl AppWindow {
             state.set_max_texture_side(size);
         }
 
-        AppWindow {
+        AppWindowState {
             window,
             state,
             context: egui::Context::default(),
-            app: creator(),
+            app: app_window,
             painter,
             redraw_time: None,
         }
@@ -78,53 +74,67 @@ impl AppWindow {
     }
 
     /// Return the current redraw timer.
-    pub fn get_redraw_timer(&self) -> Option<&Instant> {
-        return self.redraw_time.as_ref();
+    pub fn get_redraw_timer(&self) -> Option<Instant> {
+        self.redraw_time
+    }
+
+    pub fn on_window_event(&mut self, event: &WindowEvent, window_id: &WindowId) {
+        if window_id == &self.window.id() {
+            if let WindowEvent::Resized(size) = event {
+                if size.width > 0 && size.height > 0 {
+                    self.painter.on_window_resized(size.width, size.height);
+                }
+            }
+
+            let response = self.state.on_event(&self.context, event);
+            if response.repaint {
+                self.window.request_redraw();
+            }
+        }
     }
 
     /// Run the egui gui on this window.
-    pub fn run(&mut self, event_loop: &EventLoopWindowTarget<()>, new_apps: &mut Vec<AppWindow>) {
-        // Gather input (mouse, touches, keyboard, screen size, etc):
-        let raw_input: egui::RawInput = self.state.take_egui_input(&self.window);
+    pub fn run_and_paint(&mut self, _event_loop: &EventLoopWindowTarget<()>, window_id: &WindowId) {
+        if window_id == &self.window.id() {
+            // Gather input (mouse, touches, keyboard, screen size, etc):
+            let raw_input: egui::RawInput = self.state.take_egui_input(&self.window);
 
-        let windower = Windower {
-            new_apps,
-            event_loop,
-        };
+            let mut windower = Windower {};
 
-        let egui::FullOutput {
-            platform_output,
-            repaint_after,
-            textures_delta,
-            shapes,
-        } = self.context.run(raw_input, |egui_ctx| {
-            self.app.update(egui_ctx, windower);
-        });
+            let egui::FullOutput {
+                platform_output,
+                repaint_after,
+                textures_delta,
+                shapes,
+            } = self.context.run(raw_input, |egui_ctx| {
+                self.app.update(egui_ctx, &mut windower);
+            });
 
-        self.state
-            .handle_platform_output(&self.window, &self.context, platform_output);
+            self.state
+                .handle_platform_output(&self.window, &self.context, platform_output);
 
-        let clipped_primitives = self.context.tessellate(shapes); // creates triangles to paint
-        self.painter.paint_and_update_textures(
-            self.state.pixels_per_point(),
-            [1.0, 1.0, 1.0, 1.0],
-            &clipped_primitives,
-            &textures_delta,
-        );
+            let clipped_primitives = self.context.tessellate(shapes); // creates triangles to paint
+            self.painter.paint_and_update_textures(
+                self.state.pixels_per_point(),
+                [1.0, 1.0, 1.0, 1.0],
+                &clipped_primitives,
+                &textures_delta,
+            );
 
-        if repaint_after.is_zero() {
-            // We want to redraw on the next frame so we create a request for right now.
-            // This will trigger a `window.request_redraw()` next frame.
-            let now = Instant::now();
-            let redraw_time = self.redraw_time.get_or_insert(now);
-            if now < *redraw_time {
-                self.redraw_time = Some(now);
-            }
-        } else if let Some(time) = Instant::now().checked_add(repaint_after) {
-            // Trigger a redraw at some time in the future.
-            let redraw_time = self.redraw_time.get_or_insert(time);
-            if time < *redraw_time {
-                self.redraw_time = Some(time);
+            if repaint_after.is_zero() {
+                // We want to redraw on the next frame so we create a request for right now.
+                // This will trigger a `window.request_redraw()` next frame.
+                let now = Instant::now();
+                let redraw_time = self.redraw_time.get_or_insert(now);
+                if now < *redraw_time {
+                    self.redraw_time = Some(now);
+                }
+            } else if let Some(time) = Instant::now().checked_add(repaint_after) {
+                // Trigger a redraw at some time in the future.
+                let redraw_time = self.redraw_time.get_or_insert(time);
+                if time < *redraw_time {
+                    self.redraw_time = Some(time);
+                }
             }
         }
     }
