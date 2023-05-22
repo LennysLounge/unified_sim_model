@@ -2,13 +2,15 @@ use std::time::Duration;
 
 use tracing::info;
 
-pub struct MyApp {
+use crate::app_window::{App, Windower};
+
+pub struct TestApp {
     pub name: String,
     pub age: u32,
     pub checked: bool,
 }
 
-impl Default for MyApp {
+impl Default for TestApp {
     fn default() -> Self {
         Self {
             name: "Arthur".to_owned(),
@@ -18,9 +20,8 @@ impl Default for MyApp {
     }
 }
 
-impl MyApp {
-    #[allow(dead_code)]
-    pub fn update(&mut self, ctx: &egui::Context) {
+impl App for TestApp {
+    fn update(&mut self, ctx: &egui::Context, mut windower: Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             ui.horizontal(|ui| {
@@ -33,13 +34,8 @@ impl MyApp {
                 self.age += 1;
                 info!("Button clicked, {}", self.age);
             }
-            if ui.button("repaint now").clicked() {
-                info!("repaint now clicked");
-                ctx.request_repaint();
-            }
-            if ui.button("repaint now in 5 secs").clicked() {
-                info!("repaint later clicked");
-                ctx.request_repaint_after(Duration::from_secs(5));
+            if ui.button("Open a new window").clicked() {
+                windower.window(Box::new(|| Box::new(PopUp { value: 12 })));
             }
             ui.checkbox(&mut self.checked, "Update every second");
             if self.checked {
@@ -48,6 +44,26 @@ impl MyApp {
 
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
             self.age += 1;
+        });
+    }
+}
+
+struct PopUp {
+    value: i32,
+}
+
+impl App for PopUp {
+    fn update(&mut self, ctx: &egui::Context, _windower: Windower) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label("I am a new window!");
+            if ui
+                .button("i am also a button that you can click!")
+                .clicked()
+            {
+                info!("I am also clicked");
+                self.value += 1;
+            }
+            ui.label(format!("Value is: {}", self.value));
         });
     }
 }
