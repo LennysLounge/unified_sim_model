@@ -3,7 +3,7 @@ use std::{cell::RefCell, ops::Deref, rc::Rc, time::Instant};
 use winit::{
     event::WindowEvent,
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
-    window::{Window, WindowId},
+    window::{Window, WindowBuilder, WindowId},
 };
 
 use crate::UserEvent;
@@ -104,7 +104,10 @@ impl Backend {
         event_loop_proxy: EventLoopProxy<UserEvent>,
         app_window: Rc<RefCell<dyn Ui>>,
     ) -> Self {
-        let window = Window::new(window_target).unwrap();
+        let window = WindowBuilder::new()
+            .with_visible(false)
+            .build(window_target)
+            .unwrap();
 
         let mut painter =
             egui_wgpu::winit::Painter::new(egui_wgpu::WgpuConfiguration::default(), 1, 0, false);
@@ -118,7 +121,7 @@ impl Backend {
             state.set_max_texture_side(size);
         }
 
-        Backend {
+        let mut backedn = Backend {
             window,
             state,
             context: egui::Context::default(),
@@ -126,7 +129,10 @@ impl Backend {
             painter,
             redraw_time: None,
             event_loop_proxy,
-        }
+        };
+        backedn.run_and_paint(window_target);
+        backedn.window.set_visible(true);
+        backedn
     }
 
     /// Return the window id of the os window.
