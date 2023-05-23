@@ -2,44 +2,30 @@ use std::collections::{
     hash_map::{Iter, IterMut, Values, ValuesMut},
     HashMap,
 };
+use std::hash::Hash;
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct NodeId(usize);
-
-impl NodeId {
-    #[allow(dead_code)]
-    pub fn add<T>(&self, other: NodeId, tree: &mut Tree<T>) {
-        if let Some(me) = tree.map.get_mut(self) {
-            me.children.push(other);
-        }
-        if let Some(other) = tree.map.get_mut(&other) {
-            other.parent = Some(*self);
-        }
-    }
+pub struct Node<K, V> {
+    pub value: V,
+    pub parent: Option<K>,
+    pub children: Vec<K>,
 }
 
-pub struct Node<T> {
-    pub value: T,
-    pub parent: Option<NodeId>,
-    pub children: Vec<NodeId>,
-}
-
-pub struct Tree<T> {
-    map: HashMap<NodeId, Node<T>>,
-    id_count: usize,
+pub struct Tree<K, V> {
+    map: HashMap<K, Node<K, V>>,
 }
 
 #[allow(dead_code)]
-impl<T> Tree<T> {
+impl<K, V> Tree<K, V>
+where
+    K: Eq + Hash + Copy + Clone,
+{
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
-            id_count: 0,
         }
     }
-    pub fn new_node(&mut self, value: T) -> NodeId {
-        let id = NodeId(self.id_count);
-        self.id_count += 1;
+
+    pub fn add_node(&mut self, id: K, value: V) {
         self.map.insert(
             id,
             Node {
@@ -48,10 +34,9 @@ impl<T> Tree<T> {
                 children: Vec::new(),
             },
         );
-        id
     }
 
-    pub fn remove(&mut self, id: NodeId) {
+    pub fn remove(&mut self, id: K) {
         if let Some(node) = self.map.remove(&id) {
             // remove node from parent
             if let Some(parent_id) = node.parent {
@@ -66,25 +51,41 @@ impl<T> Tree<T> {
         }
     }
 
-    pub fn iter(&self) -> Iter<NodeId, Node<T>> {
+    pub fn add_child_to_parent(&mut self, child_id: K, parent_id: K) {
+        if let Some(parent) = self.map.get_mut(&parent_id) {
+            parent.children.push(child_id);
+        }
+        if let Some(child) = self.map.get_mut(&child_id) {
+            child.parent = Some(parent_id);
+        }
+    }
+
+    pub fn iter(&self) -> Iter<K, Node<K, V>> {
         self.map.iter()
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<NodeId, Node<T>> {
+    pub fn iter_mut(&mut self) -> IterMut<K, Node<K, V>> {
         self.map.iter_mut()
     }
 
-    pub fn values(&self) -> Values<NodeId, Node<T>> {
+    pub fn values(&self) -> Values<K, Node<K, V>> {
         self.map.values()
     }
-    pub fn values_mut(&mut self) -> ValuesMut<NodeId, Node<T>> {
+    pub fn values_mut(&mut self) -> ValuesMut<K, Node<K, V>> {
         self.map.values_mut()
     }
 
-    pub fn get(&self, id: &NodeId) -> Option<&Node<T>> {
+    pub fn get(&self, id: &K) -> Option<&V> {
+        self.map.get(id).map(|node| &node.value)
+    }
+    pub fn get_mut(&mut self, id: &K) -> Option<&mut V> {
+        self.map.get_mut(id).map(|node| &mut node.value)
+    }
+
+    pub fn get_node(&self, id: &K) -> Option<&Node<K, V>> {
         self.map.get(id)
     }
-    pub fn get_mut(&mut self, id: &NodeId) -> Option<&mut Node<T>> {
+    pub fn get_node_mut(&mut self, id: &K) -> Option<&mut Node<K, V>> {
         self.map.get_mut(id)
     }
 

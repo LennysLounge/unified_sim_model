@@ -6,8 +6,8 @@ use app_window::{AppCreator, AppWindow, AppWindowState};
 use std::{cell::RefCell, env};
 use test_app::TestApp;
 use tracing::{info, Level};
-use tree::{NodeId, Tree};
-use winit::{event::WindowEvent, event_loop::EventLoop};
+use tree::Tree;
+use winit::{event::WindowEvent, event_loop::EventLoop, window::WindowId};
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -27,33 +27,33 @@ fn main() {
 }
 
 pub struct WindowRequest {
-    source: NodeId,
+    src_window: WindowId,
     app_window: Box<dyn AppWindow>,
 }
 
 /// A Proxy to interact with different windows.
 pub struct WindowProxy<'a> {
-    id: NodeId,
+    id: WindowId,
     new_window_requests: &'a mut Vec<WindowRequest>,
 }
 
 impl<'a> WindowProxy<'a> {
     fn new_window(&mut self, app: impl AppWindow + 'static) {
         self.new_window_requests.push(WindowRequest {
-            source: self.id,
+            src_window: self.id,
             app_window: Box::new(app),
         });
     }
 }
 
 fn run_event_loop(creator: AppCreator) {
-    let mut windows = Tree::<RefCell<AppWindowState>>::new();
+    let mut window_tree: Tree<WindowId, RefCell<AppWindowState>> = Tree::new();
 
     EventLoop::new().run(move |event, event_loop, control_flow| {
         use winit::event::Event;
         match event {
             Event::NewEvents(_) => {
-                for node in windows.values() {
+                for node in window_tree.values() {
                     node.value.borrow_mut().update_redraw_timer();
                 }
             }
@@ -62,16 +62,9 @@ fn run_event_loop(creator: AppCreator) {
                 window_id,
                 event: WindowEvent::CloseRequested,
             } => {
-                let id = windows
-                    .iter()
-                    .find(|(_, node)| node.value.borrow().window_id() == window_id)
-                    .map(|(id, _)| id);
-                if let Some(id) = id {
-                    info!("Close requested");
-                    windows.remove(*id);
-                }
+                window_tree.remove(window_id);
 
-                if windows.is_empty() {
+                if window_tree.is_empty() {
                     info!("All windows closed. Quitting");
                     control_flow.set_exit();
                     #[allow(clippy::needless_return)]
@@ -81,45 +74,47 @@ fn run_event_loop(creator: AppCreator) {
 
             // Pass window events to the apps.
             Event::WindowEvent {
-                ref window_id,
+                window_id,
                 ref event,
             } => {
-                for node in windows.values() {
-                    node.value.borrow_mut().on_window_event(event, window_id);
+                if let Some(app_state) = window_tree.get(&window_id) {
+                    app_state.borrow_mut().on_window_event(event, &window_id);
                 }
             }
 
             // Create the apps here.
             Event::Resumed => {
-                windows.new_node(RefCell::new(AppWindowState::new_creator(
-                    event_loop, &creator,
-                )));
+                let app_state = RefCell::new(AppWindowState::new_creator(event_loop, &creator));
+                let id = app_state.borrow().window_id();
+                window_tree.add_node(id, app_state);
             }
 
-            Event::RedrawRequested(ref window_id) => {
+            Event::RedrawRequested(window_id) => {
                 let mut window_requests = Vec::<WindowRequest>::new();
 
-                for (id, node) in windows.iter() {
+                if let Some(app_state) = window_tree.get(&window_id) {
                     let mut window_proxy = WindowProxy {
-                        id: *id,
+                        id: window_id,
                         new_window_requests: &mut window_requests,
                     };
-                    node.value
+                    app_state
                         .borrow_mut()
-                        .run_and_paint(event_loop, window_id, &mut window_proxy);
+                        .run_and_paint(event_loop, &window_id, &mut window_proxy);
                 }
                 for request in window_requests {
-                    let window_node_id = windows.new_node(RefCell::new(AppWindowState::new(
-                        event_loop,
-                        request.app_window,
-                    )));
-                    request.source.add(window_node_id, &mut windows);
+                    let app_state =
+                        RefCell::new(AppWindowState::new(event_loop, request.app_window));
+                    let new_window_id = app_state.borrow().window_id();
+                    window_tree.add_node(new_window_id, app_state);
+
+                    // Add window to tree
+                    window_tree.add_child_to_parent(new_window_id, request.src_window);
                 }
             }
 
             // At the end of the event cycle set the control flow.
             Event::RedrawEventsCleared => {
-                let earliest_redraw = windows
+                let earliest_redraw = window_tree
                     .values()
                     .filter_map(|node| node.value.borrow().get_redraw_timer())
                     .min();
