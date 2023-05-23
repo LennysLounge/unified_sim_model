@@ -1,13 +1,14 @@
 use std::time::Duration;
 
+use egui_custom::window::{Ui, WindowHandle, Windower};
 use tracing::info;
-
-use crate::{app_window::AppWindow, WindowProxy};
 
 pub struct TestApp {
     pub name: String,
     pub age: u32,
     pub checked: bool,
+    popup: Option<WindowHandle<PopUp>>,
+    popups: Vec<WindowHandle<PopUp>>,
 }
 
 impl Default for TestApp {
@@ -16,12 +17,14 @@ impl Default for TestApp {
             name: "Arthur".to_owned(),
             age: 42,
             checked: false,
+            popup: None,
+            popups: Vec::new(),
         }
     }
 }
 
-impl AppWindow for TestApp {
-    fn update(&mut self, ctx: &egui::Context, windower: &mut WindowProxy) {
+impl Ui for TestApp {
+    fn show(&mut self, ctx: &egui::Context, windower: &mut Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
             ui.horizontal(|ui| {
@@ -35,7 +38,11 @@ impl AppWindow for TestApp {
                 info!("Button clicked, {}", self.age);
             }
             if ui.button("Open a new window").clicked() {
-                windower.new_window(PopUp { value: 12 });
+                let new_window = windower.new_window(PopUp { value: 12 });
+                if let Some(old_window) = self.popup.take() {
+                    self.popups.push(old_window);
+                }
+                self.popup = Some(new_window);
             }
             ui.checkbox(&mut self.checked, "Update every second");
             if self.checked {
@@ -43,6 +50,19 @@ impl AppWindow for TestApp {
             }
 
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
+
+            if let Some(popup) = &self.popup {
+                if ui.button("Increase value").clicked() {
+                    popup.borrow_mut().increase();
+                }
+                ui.label(format!("The popup has value: {}", popup.borrow().value));
+            }
+
+            if !self.popups.is_empty() {
+                if ui.button("Close old windows").clicked() {
+                    self.popups.clear();
+                }
+            }
             self.age += 1;
         });
     }
@@ -52,8 +72,14 @@ struct PopUp {
     value: i32,
 }
 
-impl AppWindow for PopUp {
-    fn update(&mut self, ctx: &egui::Context, _windower: &mut WindowProxy) {
+impl PopUp {
+    fn increase(&mut self) {
+        self.value += 1;
+    }
+}
+
+impl Ui for PopUp {
+    fn show(&mut self, ctx: &egui::Context, _windower: &mut Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("I am a new window!");
             if ui
