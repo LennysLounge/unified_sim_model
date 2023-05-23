@@ -59,6 +59,15 @@ pub struct WindowHandleInner<T> {
     event_loop: EventLoopProxy<UserEvent>,
 }
 
+impl<T> WindowHandleInner<T> {
+    /// Request a redraw for this window.
+    pub fn request_redraw(&self) {
+        self.event_loop
+            .send_event(UserEvent::RequestRedraw(self.id))
+            .unwrap();
+    }
+}
+
 impl<T> Drop for WindowHandleInner<T> {
     fn drop(&mut self) {
         self.event_loop
@@ -189,17 +198,17 @@ impl Backend {
         if repaint_after.is_zero() {
             // We want to redraw on the next frame so we create a request for right now.
             // This will trigger a `window.request_redraw()` next frame.
-            let now = Instant::now();
-            let redraw_time = self.redraw_time.get_or_insert(now);
-            if now < *redraw_time {
-                self.redraw_time = Some(now);
-            }
+            self.set_redraw_time(Instant::now());
         } else if let Some(time) = Instant::now().checked_add(repaint_after) {
             // Trigger a redraw at some time in the future.
-            let redraw_time = self.redraw_time.get_or_insert(time);
-            if time < *redraw_time {
-                self.redraw_time = Some(time);
-            }
+            self.set_redraw_time(time);
+        }
+    }
+
+    pub fn set_redraw_time(&mut self, time: Instant) {
+        let redraw_time = self.redraw_time.get_or_insert(time);
+        if time < *redraw_time {
+            self.redraw_time = Some(time);
         }
     }
 }

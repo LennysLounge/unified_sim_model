@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, time::Instant};
 use tracing::info;
 use tree::Tree;
 use window::{Backend, Ui};
@@ -20,6 +20,12 @@ pub enum UserEvent {
         /// Id of the window to destroy.
         id: WindowId,
     },
+
+    /// Request a redraw for a window.
+    RequestRedraw(
+        /// The if of the window to redraw
+        WindowId,
+    ),
 }
 
 impl Debug for UserEvent {
@@ -29,9 +35,8 @@ impl Debug for UserEvent {
                 .debug_struct("CreateWindow")
                 .field("src_id", src_id)
                 .finish_non_exhaustive(),
-            UserEvent::DestroyWindow { id } => {
-                f.debug_struct("DestroyWindow").field("id", id).finish()
-            }
+            Self::DestroyWindow { id } => f.debug_struct("DestroyWindow").field("id", id).finish(),
+            Self::RequestRedraw(id) => f.debug_tuple("RequestRedraw").field(id).finish(),
         }
     }
 }
@@ -63,6 +68,11 @@ pub fn run_event_loop(creator: AppCreator) {
                 }
                 UserEvent::DestroyWindow { id: src_id } => {
                     window_tree.remove(src_id);
+                }
+                UserEvent::RequestRedraw(id) => {
+                    window_tree
+                        .get(&id)
+                        .map(|backend| backend.borrow_mut().set_redraw_time(Instant::now()));
                 }
             },
 

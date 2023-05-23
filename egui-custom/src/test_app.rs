@@ -54,6 +54,7 @@ impl Ui for TestApp {
             if let Some(popup) = &self.popup {
                 if ui.button("Increase value").clicked() {
                     popup.borrow_mut().increase();
+                    popup.request_redraw();
                 }
                 ui.label(format!("The popup has value: {}", popup.borrow().value));
             }
