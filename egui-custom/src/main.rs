@@ -59,13 +59,24 @@ fn run_event_loop(creator: AppCreator) {
             }
 
             Event::WindowEvent {
+                window_id,
                 event: WindowEvent::CloseRequested,
-                ..
             } => {
-                info!("Close requested");
-                control_flow.set_exit();
-                #[allow(clippy::needless_return)]
-                return;
+                let id = windows
+                    .iter()
+                    .find(|(_, node)| node.value.borrow().window_id() == window_id)
+                    .map(|(id, _)| id);
+                if let Some(id) = id {
+                    info!("Close requested");
+                    windows.remove(*id);
+                }
+
+                if windows.is_empty() {
+                    info!("All windows closed. Quitting");
+                    control_flow.set_exit();
+                    #[allow(clippy::needless_return)]
+                    return;
+                }
             }
 
             // Pass window events to the apps.

@@ -57,6 +57,10 @@ impl AppWindowState {
         }
     }
 
+    pub fn window_id(&self) -> WindowId {
+        self.window.id()
+    }
+
     /// Update the windows internal redraw timer and triggers a
     /// redraw if the timer expired.
     pub fn update_redraw_timer(&mut self) {

@@ -87,4 +87,8 @@ impl<T> Tree<T> {
     pub fn get_mut(&mut self, id: &NodeId) -> Option<&mut Node<T>> {
         self.map.get_mut(id)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 }
