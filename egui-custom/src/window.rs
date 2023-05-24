@@ -1,9 +1,11 @@
 use std::{cell::RefCell, ops::Deref, rc::Rc, time::Instant};
 
 use winit::{
+    dpi::Size,
     event::WindowEvent,
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
-    window::{Window, WindowBuilder, WindowId},
+    platform::windows::WindowBuilderExtWindows,
+    window::{Window, WindowBuilder, WindowButtons, WindowId},
 };
 
 use crate::UserEvent;
@@ -26,7 +28,12 @@ impl<'a> Windower<'a> {
     /// Returns a window handle to the new window.
     pub fn new_window<T: Ui + 'static>(&mut self, app: T) -> WindowHandle<T> {
         let rc = Rc::new(RefCell::new(app));
-        let state = Backend::new(self.window_target, self.event_loop.clone(), rc.clone());
+        let state = Backend::new(
+            self.window_target,
+            self.event_loop.clone(),
+            &WindowOptions::default(),
+            rc.clone(),
+        );
         let new_window_id = state.window_id();
         self.event_loop
             .send_event(UserEvent::CreateWindow {
@@ -102,12 +109,33 @@ impl Backend {
     pub fn new(
         window_target: &EventLoopWindowTarget<UserEvent>,
         event_loop_proxy: EventLoopProxy<UserEvent>,
+        window_options: &WindowOptions,
         app_window: Rc<RefCell<dyn Ui>>,
     ) -> Self {
-        let window = WindowBuilder::new()
-            .with_visible(false)
-            .build(window_target)
-            .unwrap();
+        let mut window_builder = WindowBuilder::new()
+            .with_title(window_options.title.clone())
+            .with_active(window_options.active)
+            .with_decorations(window_options.decorated)
+            .with_enabled_buttons(window_options.enabled_buttons)
+            .with_maximized(window_options.maximised)
+            .with_resizable(window_options.resizeable)
+            .with_drag_and_drop(true)
+            .with_visible(false);
+
+        window_builder = match window_options.size {
+            Some(size) => window_builder.with_inner_size(size),
+            None => window_builder,
+        };
+        window_builder = match window_options.min_size {
+            Some(size) => window_builder.with_min_inner_size(size),
+            None => window_builder,
+        };
+        window_builder = match window_options.max_size {
+            Some(size) => window_builder.with_max_inner_size(size),
+            None => window_builder,
+        };
+
+        let window = window_builder.build(window_target).unwrap();
 
         let mut painter =
             egui_wgpu::winit::Painter::new(egui_wgpu::WgpuConfiguration::default(), 1, 0, false);
@@ -215,6 +243,57 @@ impl Backend {
         let redraw_time = self.redraw_time.get_or_insert(time);
         if time < *redraw_time {
             self.redraw_time = Some(time);
+        }
+    }
+}
+
+/// Options for how a window should be created.
+pub struct WindowOptions {
+    /// The title of the window.
+    pub title: String,
+
+    /// Whether the window will be initially focused or not.
+    /// Default true.
+    pub active: bool,
+
+    /// Sets whether the window should have a border, a title bar, etc.
+    /// Default true.
+    pub decorated: bool,
+
+    /// Sets the enabled window buttons.
+    /// Default `WindowButtons::all`.
+    pub enabled_buttons: WindowButtons,
+
+    /// Request that the window is maximized upon creation.
+    /// Default false.
+    pub maximised: bool,
+
+    /// Requests the window to be created with this size.
+    pub size: Option<Size>,
+
+    /// The minimum allowed size of window.
+    pub min_size: Option<Size>,
+
+    /// The maximum allowed size of the window.
+    pub max_size: Option<Size>,
+
+    /// Whether the window is resizeable or not.
+    /// Default true.
+    pub resizeable: bool,
+}
+
+impl Default for WindowOptions {
+    fn default() -> Self {
+        Self {
+            title: "Egui window".to_string(),
+            active: true,
+            decorated: true,
+            enabled_buttons: WindowButtons::all(),
+            maximised: false,
+            size: None,
+            min_size: None,
+            max_size: None,
+            resizeable: true,
         }
     }
 }

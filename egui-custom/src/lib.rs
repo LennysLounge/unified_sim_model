@@ -4,6 +4,8 @@ use tree::Tree;
 use window::{Backend, Ui};
 use winit::{event::WindowEvent, event_loop::EventLoopBuilder, window::WindowId};
 
+use crate::window::WindowOptions;
+
 mod tree;
 pub mod window;
 
@@ -20,7 +22,6 @@ pub enum UserEvent {
         /// Id of the window to destroy.
         id: WindowId,
     },
-
     /// Request a redraw for a window.
     RequestRedraw(
         /// The if of the window to redraw
@@ -45,7 +46,7 @@ impl Debug for UserEvent {
 pub type AppCreator = Box<dyn Fn() -> Rc<RefCell<dyn Ui>>>;
 
 /// Run the event loop with a app.
-pub fn run_event_loop(creator: AppCreator) {
+pub fn run_event_loop(window_options: WindowOptions, creator: AppCreator) {
     let mut window_tree: Tree<WindowId, RefCell<Backend>> = Tree::new();
 
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
@@ -105,6 +106,7 @@ pub fn run_event_loop(creator: AppCreator) {
                 let app_state = RefCell::new(Backend::new(
                     window_target,
                     event_loop_proxy.clone(),
+                    &window_options,
                     creator(),
                 ));
                 let id = app_state.borrow().window_id();
