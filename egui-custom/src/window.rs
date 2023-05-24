@@ -1,9 +1,10 @@
-use std::{cell::RefCell, ops::Deref, rc::Rc, time::Instant};
+use std::{cell::RefCell, rc::Rc, time::Instant};
 
+use tracing::info;
 use winit::{
     dpi::Size,
     event::WindowEvent,
-    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    event_loop::EventLoopWindowTarget,
     platform::windows::WindowBuilderExtWindows,
     window::{Window, WindowBuilder, WindowButtons, WindowId},
 };
@@ -16,36 +17,22 @@ pub trait Ui {
     fn show(&mut self, ctx: &egui::Context, windower: &mut Windower);
 }
 
-/// Allows the creating of windows.
-pub struct Windower<'a> {
-    id: WindowId,
-    event_loop: EventLoopProxy<UserEvent>,
-    window_target: &'a EventLoopWindowTarget<UserEvent>,
+// A handle to a ui.
+type UiHandle<T> = Rc<RefCell<UiEvents<T>>>;
+
+/// Expands a specific Ui implementation with a list of
+/// events that were raised by or for that ui.
+pub struct UiEvents<T: Ui + ?Sized> {
+    pub events: Vec<UiEvent>,
+    pub ui: T,
 }
 
-impl<'a> Windower<'a> {
-    /// Create a new window.
-    /// Returns a window handle to the new window.
-    pub fn new_window<T: Ui + 'static>(&mut self, app: T) -> WindowHandle<T> {
-        let rc = Rc::new(RefCell::new(app));
-        let state = Backend::new(
-            self.window_target,
-            self.event_loop.clone(),
-            &WindowOptions::default(),
-            rc.clone(),
-        );
-        let new_window_id = state.window_id();
-        self.event_loop
-            .send_event(UserEvent::CreateWindow {
-                src_id: self.id,
-                backend: state,
-            })
-            .unwrap();
-        WindowHandle::new(WindowHandleInner {
-            ui: rc,
-            id: new_window_id,
-            event_loop: self.event_loop.clone(),
-        })
+impl<T: Ui> UiEvents<T> {
+    pub fn new_with_handle(ui: T) -> UiHandle<T> {
+        Rc::new(RefCell::new(Self {
+            events: Vec::new(),
+            ui: ui,
+        }))
     }
 }
 
@@ -56,38 +43,39 @@ impl<'a> Windower<'a> {
 ///
 /// If the window is closed by other means, this handle will continue to
 /// allow access to the Ui object even if the window itself no longer exists.
-pub type WindowHandle<T> = Rc<WindowHandleInner<T>>;
+pub type WindowHandle<T> = Rc<WindowHandleDropGuard<T>>;
 
 /// The inner struct to a `WindowHandle`.
 /// If this instance is dropped, the referenced window is destroyed aswell.
-pub struct WindowHandleInner<T> {
-    pub ui: Rc<RefCell<T>>,
-    id: WindowId,
-    event_loop: EventLoopProxy<UserEvent>,
+pub struct WindowHandleDropGuard<T: Ui> {
+    pub ui: UiHandle<T>,
 }
 
-impl<T> WindowHandleInner<T> {
-    /// Request a redraw for this window.
-    pub fn request_redraw(&self) {
-        self.event_loop
-            .send_event(UserEvent::RequestRedraw(self.id))
-            .unwrap();
-    }
-}
-
-impl<T> Drop for WindowHandleInner<T> {
+impl<T: Ui> Drop for WindowHandleDropGuard<T> {
     fn drop(&mut self) {
-        self.event_loop
-            .send_event(UserEvent::DestroyWindow { id: self.id })
-            .unwrap();
+        // TODO create destroy window event.
     }
 }
 
-impl<T> Deref for WindowHandleInner<T> {
-    type Target = RefCell<T>;
+#[derive(Clone)]
+pub enum UiEvent {
+    CreateWindow(UiHandle<dyn Ui>),
+}
 
-    fn deref(&self) -> &Self::Target {
-        &(*self.ui)
+/// Allows the creating of windows.
+#[derive(Default)]
+pub struct Windower {
+    events: Vec<UiEvent>,
+}
+
+impl Windower {
+    pub fn new_window<T: Ui + 'static>(&mut self, ui: T) -> WindowHandle<T> {
+        let ui_handle = UiEvents::new_with_handle(ui);
+        info!("Add new window event");
+        self.events.push(UiEvent::CreateWindow(ui_handle.clone()));
+        WindowHandle::new(WindowHandleDropGuard {
+            ui: ui_handle.clone(),
+        })
     }
 }
 
@@ -98,19 +86,17 @@ pub struct Backend {
     window: Window,
     state: egui_winit::State,
     context: egui::Context,
-    app: Rc<RefCell<dyn Ui>>,
+    ui: UiHandle<dyn Ui>,
     painter: egui_wgpu::winit::Painter,
     redraw_time: Option<Instant>,
-    event_loop_proxy: EventLoopProxy<UserEvent>,
 }
 
 impl Backend {
     /// Create a new os window backend.
     pub fn new(
         window_target: &EventLoopWindowTarget<UserEvent>,
-        event_loop_proxy: EventLoopProxy<UserEvent>,
         window_options: &WindowOptions,
-        app_window: Rc<RefCell<dyn Ui>>,
+        ui: UiHandle<dyn Ui>,
     ) -> Self {
         let mut window_builder = WindowBuilder::new()
             .with_title(window_options.title.clone())
@@ -149,18 +135,17 @@ impl Backend {
             state.set_max_texture_side(size);
         }
 
-        let mut backedn = Backend {
+        let mut backend = Backend {
             window,
             state,
             context: egui::Context::default(),
-            app: app_window,
+            ui,
             painter,
             redraw_time: None,
-            event_loop_proxy,
         };
-        backedn.run_and_paint(window_target);
-        backedn.window.set_visible(true);
-        backedn
+        backend.run_and_paint();
+        backend.window.set_visible(true);
+        backend
     }
 
     /// Return the window id of the os window.
@@ -199,15 +184,11 @@ impl Backend {
     }
 
     /// Run the egui ui on this window.
-    pub fn run_and_paint(&mut self, window_target: &EventLoopWindowTarget<UserEvent>) {
+    pub fn run_and_paint(&mut self) {
         // Gather input (mouse, touches, keyboard, screen size, etc):
         let raw_input: egui::RawInput = self.state.take_egui_input(&self.window);
 
-        let mut window_proxy = Windower {
-            id: self.window_id(),
-            event_loop: self.event_loop_proxy.clone(),
-            window_target,
-        };
+        let mut window_proxy = Windower::default();
 
         let egui::FullOutput {
             platform_output,
@@ -215,8 +196,10 @@ impl Backend {
             textures_delta,
             shapes,
         } = self.context.run(raw_input, |egui_ctx| {
-            self.app.borrow_mut().show(egui_ctx, &mut window_proxy);
+            self.ui.borrow_mut().ui.show(egui_ctx, &mut window_proxy);
         });
+
+        self.ui.borrow_mut().events.extend(window_proxy.events);
 
         self.state
             .handle_platform_output(&self.window, &self.context, platform_output);
@@ -244,6 +227,12 @@ impl Backend {
         if time < *redraw_time {
             self.redraw_time = Some(time);
         }
+    }
+
+    pub fn poll_ui_events(&mut self) -> Vec<UiEvent> {
+        let events = self.ui.borrow().events.clone();
+        self.ui.borrow_mut().events.clear();
+        events
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, env, rc::Rc};
+use std::env;
 
 use egui_custom::{run_event_loop, window::WindowOptions};
 use test_app::TestApp;
@@ -30,6 +30,6 @@ fn main() {
             })),
             ..Default::default()
         },
-        Box::new(|| Rc::new(RefCell::new(TestApp::default()))),
+        TestApp::default(),
     );
 }

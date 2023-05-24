@@ -3,6 +3,7 @@ use std::time::Duration;
 use egui_custom::window::{Ui, WindowHandle, Windower};
 use tracing::info;
 
+#[derive(Clone)]
 pub struct TestApp {
     pub name: String,
     pub age: u32,
@@ -52,11 +53,11 @@ impl Ui for TestApp {
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
 
             if let Some(popup) = &self.popup {
-                if ui.button("Increase value").clicked() {
-                    popup.borrow_mut().increase();
-                    popup.request_redraw();
-                }
-                ui.label(format!("The popup has value: {}", popup.borrow().value));
+                // if ui.button("Increase value").clicked() {
+                //     popup.borrow_mut().increase();
+                //     popup.request_redraw();
+                // }
+                // ui.label(format!("The popup has value: {}", popup.borrow().value));
             }
 
             if !self.popups.is_empty() {
