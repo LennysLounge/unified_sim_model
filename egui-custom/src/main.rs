@@ -1,9 +1,8 @@
 use std::env;
 
-use egui_custom::{run_event_loop, ui::WindowOptions};
+use egui_custom::run_event_loop;
 use test_app::TestApp;
 use tracing::Level;
-use winit::dpi::{PhysicalSize, Size};
 
 mod test_app;
 
@@ -21,15 +20,5 @@ fn main() {
     tracing::subscriber::set_global_default(subscriber)
         .expect("Should be able to set global subscriber");
 
-    run_event_loop(
-        WindowOptions {
-            title: "Test window".to_string(),
-            size: Some(Size::Physical(PhysicalSize {
-                width: 340,
-                height: 260,
-            })),
-            ..Default::default()
-        },
-        TestApp::default(),
-    );
+    run_event_loop(TestApp::default());
 }

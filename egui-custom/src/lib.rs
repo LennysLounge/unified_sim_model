@@ -1,14 +1,12 @@
 use std::{cell::RefCell, time::Instant};
 use tracing::info;
 use tree::Tree;
-use ui::{Ui, UiEvent, UiHandle, UiWindow};
+use ui::{Backend, Ui, UiEvent, UiHandle, UiWindow};
 use winit::{
     event::WindowEvent,
     event_loop::{EventLoop, EventLoopWindowTarget},
     window::WindowId,
 };
-
-use crate::ui::WindowOptions;
 
 mod tree;
 pub mod ui;
@@ -61,9 +59,9 @@ impl WindowTree {
         &mut self,
         window_target: &EventLoopWindowTarget<()>,
         parent_window_id: WindowId,
-        window_options: &WindowOptions,
         ui_handle: UiHandle<dyn Ui>,
     ) {
+        let window_options = ui_handle.borrow().get_window_options();
         // If this window is modal we need to find the window handle of the parent window.
         let owner = match window_options.modal {
             true => self
@@ -72,12 +70,10 @@ impl WindowTree {
                 .map(|parent_window| parent_window.borrow_mut().get_window_handle()),
             false => None,
         };
-        let ui_window = RefCell::new(UiWindow::new(
-            window_target,
-            window_options,
-            ui_handle.as_weak(),
-            owner,
-        ));
+
+        let backend = Backend::new(window_target, &window_options, owner);
+        let ui_window = RefCell::new(UiWindow::new(ui_handle, backend));
+
         // add window to tree
         let id = ui_window.borrow().window_id();
         self.tree.add_node(id, ui_window);
@@ -95,17 +91,16 @@ impl WindowTree {
     fn create_root(
         &mut self,
         window_target: &EventLoopWindowTarget<()>,
-        window_options: &WindowOptions,
         ui_handle: UiHandle<dyn Ui>,
     ) {
-        let app_state = RefCell::new(UiWindow::new(
+        let backend = Backend::new(
             window_target,
-            window_options,
-            ui_handle.as_weak(),
+            &ui_handle.borrow().get_window_options(),
             None,
-        ));
-        let id = app_state.borrow().window_id();
-        self.tree.add_node(id, app_state);
+        );
+        let ui_window = RefCell::new(UiWindow::new(ui_handle, backend));
+        let id = ui_window.borrow().window_id();
+        self.tree.add_node(id, ui_window);
     }
 
     /// Collect ui events from all windows and return them as a list
@@ -124,7 +119,7 @@ impl WindowTree {
 }
 
 /// Run the event loop with a app.
-pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui: T) {
+pub fn run_event_loop<T: Ui + Clone + 'static>(ui: T) {
     let mut window_tree = WindowTree::new();
     let ui_handle = UiHandle::new(ui).to_dyn();
 
@@ -163,7 +158,7 @@ pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui
 
             // Create the apps here.
             Event::Resumed => {
-                window_tree.create_root(window_target, &window_options, ui_handle.clone());
+                window_tree.create_root(window_target, ui_handle.clone());
             }
 
             Event::MainEventsCleared => {}
@@ -183,13 +178,8 @@ pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui
                 // Handle all ui events.
                 for (src_window_id, event) in ui_events {
                     match event {
-                        ui::UiEvent::CreateWindow(window_options, ui_handle) => {
-                            window_tree.create_window(
-                                window_target,
-                                src_window_id,
-                                &window_options,
-                                ui_handle,
-                            );
+                        ui::UiEvent::CreateWindow(ui_handle) => {
+                            window_tree.create_window(window_target, src_window_id, ui_handle);
                         }
                         ui::UiEvent::RequestRedraw => {
                             if let Some(ui_window) = window_tree.get(src_window_id) {

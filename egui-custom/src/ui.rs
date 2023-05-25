@@ -16,6 +16,10 @@ use winit::{
 
 /// Interface for an Egui ui inside an os window.
 pub trait Ui {
+    /// Returns the window options for this window.
+    fn get_window_options(&self) -> WindowOptions {
+        WindowOptions::default()
+    }
     /// Runs the ui code.
     fn show(&mut self, ctx: &egui::Context, windower: &mut Windower);
 }
@@ -89,7 +93,7 @@ impl<T: Ui + ?Sized> WeakUiHandle<T> {
 /// Events that can be raised on a Ui window.
 #[derive(Clone)]
 pub enum UiEvent {
-    CreateWindow(WindowOptions, UiHandle<dyn Ui>),
+    CreateWindow(UiHandle<dyn Ui>),
     RequestRedraw,
     Close,
 }
@@ -100,16 +104,10 @@ pub struct Windower<'a> {
 }
 
 impl<'a> Windower<'a> {
-    pub fn new_window<T: Ui + 'static>(
-        &mut self,
-        window_options: WindowOptions,
-        ui: T,
-    ) -> UiHandle<T> {
+    pub fn new_window<T: Ui + 'static>(&mut self, ui: T) -> UiHandle<T> {
         let ui_handle = UiHandle::new(ui);
-        self.events.push(UiEvent::CreateWindow(
-            window_options,
-            ui_handle.clone().to_dyn(),
-        ));
+        self.events
+            .push(UiEvent::CreateWindow(ui_handle.clone().to_dyn()));
         ui_handle
     }
 }
@@ -173,17 +171,12 @@ pub struct UiWindow {
 
 impl UiWindow {
     /// Create a new os window backend.
-    pub fn new(
-        window_target: &EventLoopWindowTarget<()>,
-        window_options: &WindowOptions,
-        ui: WeakUiHandle<dyn Ui>,
-        owner: Option<HWND>,
-    ) -> Self {
+    pub fn new(ui: UiHandle<dyn Ui>, backend: Backend) -> Self {
         let mut ui_window = UiWindow {
-            ui,
+            ui: ui.as_weak(),
             redraw_time: None,
             modal: None,
-            backend: Backend::new(window_target, window_options, owner),
+            backend,
         };
         ui_window.run_and_paint();
         ui_window.backend.window.set_visible(true);
@@ -339,7 +332,7 @@ impl Default for WindowOptions {
     }
 }
 
-struct Backend {
+pub struct Backend {
     window: Window,
     state: egui_winit::State,
     painter: egui_wgpu::winit::Painter,

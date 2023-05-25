@@ -2,6 +2,10 @@ use std::time::Duration;
 
 use egui_custom::ui::{Ui, UiHandle, WindowOptions, Windower};
 use tracing::info;
+use winit::{
+    dpi::{PhysicalSize, Size},
+    window::WindowButtons,
+};
 
 #[derive(Clone)]
 pub struct TestApp {
@@ -25,6 +29,17 @@ impl Default for TestApp {
 }
 
 impl Ui for TestApp {
+    fn get_window_options(&self) -> WindowOptions {
+        WindowOptions {
+            title: "Test window".to_string(),
+            size: Some(Size::Physical(PhysicalSize {
+                width: 340,
+                height: 260,
+            })),
+            ..Default::default()
+        }
+    }
+
     fn show(&mut self, ctx: &egui::Context, windower: &mut Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("My egui Application");
@@ -39,13 +54,7 @@ impl Ui for TestApp {
                 info!("Button clicked, {}", self.age);
             }
             if ui.button("Open a new window").clicked() {
-                let new_window = windower.new_window(
-                    WindowOptions {
-                        modal: true,
-                        ..Default::default()
-                    },
-                    PopUp { value: 12 },
-                );
+                let new_window = windower.new_window(PopUp { value: 12 });
                 if let Some(old_window) = self.popup.take() {
                     self.popups.push(old_window);
                 }
@@ -105,5 +114,18 @@ impl Ui for PopUp {
             }
             ui.label(format!("Value is: {}", self.value));
         });
+    }
+
+    fn get_window_options(&self) -> WindowOptions {
+        WindowOptions {
+            enabled_buttons: WindowButtons::CLOSE,
+            resizeable: false,
+            size: Some(Size::Physical(PhysicalSize {
+                width: 220,
+                height: 80,
+            })),
+            modal: true,
+            ..Default::default()
+        }
     }
 }
