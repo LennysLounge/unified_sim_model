@@ -90,15 +90,7 @@ impl<T: Ui + ?Sized> WeakUiHandle<T> {
     }
 }
 
-/// Events that can be raised on a Ui window.
-#[derive(Clone)]
-pub enum UiEvent {
-    CreateWindow(UiHandle<dyn Ui>),
-    RequestRedraw,
-    Close,
-}
-
-/// Allows the creating of windows.
+/// Allows the creating of windows from inside a egui context.
 pub struct Windower<'a> {
     events: &'a mut Vec<UiEvent>,
 }
@@ -112,8 +104,8 @@ impl<'a> Windower<'a> {
     }
 }
 
-/// Expands a specific Ui implementation with a list of
-/// events that were raised by or for that ui.
+/// Wrapps around a specific ui object and collects events that
+/// were created for or by the ui.
 pub struct UiContainer<T: Ui + ?Sized> {
     events: Vec<UiEvent>,
     ui: T,
@@ -161,8 +153,77 @@ impl<T: Ui + ?Sized> DerefMut for UiContainer<T> {
     }
 }
 
+/// Options for how a window should be created
+#[derive(Clone)]
+pub struct WindowOptions {
+    /// The title of the window.
+    pub title: String,
+
+    /// Whether the window will be initially focused or not.
+    /// Default true.
+    pub active: bool,
+
+    /// Sets whether the window should have a border, a title bar, etc.
+    /// Default true.
+    pub decorated: bool,
+
+    /// Sets the enabled window buttons.
+    /// Default `WindowButtons::all`.
+    pub enabled_buttons: WindowButtons,
+
+    /// Request that the window is maximized upon creation.
+    /// Default false.
+    pub maximised: bool,
+
+    /// Requests the window to be created with this size.
+    pub size: Option<Size>,
+
+    /// The minimum allowed size of window.
+    pub min_size: Option<Size>,
+
+    /// The maximum allowed size of the window.
+    pub max_size: Option<Size>,
+
+    /// Whether the window is resizeable or not.
+    /// Default true.
+    pub resizeable: bool,
+
+    /// True if this window should behave like a modal window.
+    ///
+    /// The parent window will become disabled for all input and move focus
+    /// to this window. The parent window can only be interacted with again once
+    /// this window closes.
+    /// Default false.
+    pub modal: bool,
+}
+
+impl Default for WindowOptions {
+    fn default() -> Self {
+        Self {
+            title: "Egui window".to_string(),
+            active: true,
+            decorated: true,
+            enabled_buttons: WindowButtons::all(),
+            maximised: false,
+            size: None,
+            min_size: None,
+            max_size: None,
+            resizeable: true,
+            modal: false,
+        }
+    }
+}
+
+/// Events that can be raised on a Ui window.
+#[derive(Clone)]
+pub(crate) enum UiEvent {
+    CreateWindow(UiHandle<dyn Ui>),
+    RequestRedraw,
+    Close,
+}
+
 /// An os window that can display a egui Ui.
-pub struct UiWindow {
+pub(crate) struct UiWindow {
     ui: WeakUiHandle<dyn Ui>,
     redraw_time: Option<Instant>,
     modal: Option<WindowId>,
@@ -252,11 +313,6 @@ impl UiWindow {
         self.backend.window.id()
     }
 
-    /// Request a redraw for this window.
-    pub fn request_redraw(&self) {
-        self.backend.window.request_redraw();
-    }
-
     /// Set this window to be modal to another window.
     ///
     /// If given `Some(WindowId)`, this window will be disabled and receive no window events
@@ -271,68 +327,7 @@ impl UiWindow {
     }
 }
 
-/// Options for how a window should be created
-#[derive(Clone)]
-pub struct WindowOptions {
-    /// The title of the window.
-    pub title: String,
-
-    /// Whether the window will be initially focused or not.
-    /// Default true.
-    pub active: bool,
-
-    /// Sets whether the window should have a border, a title bar, etc.
-    /// Default true.
-    pub decorated: bool,
-
-    /// Sets the enabled window buttons.
-    /// Default `WindowButtons::all`.
-    pub enabled_buttons: WindowButtons,
-
-    /// Request that the window is maximized upon creation.
-    /// Default false.
-    pub maximised: bool,
-
-    /// Requests the window to be created with this size.
-    pub size: Option<Size>,
-
-    /// The minimum allowed size of window.
-    pub min_size: Option<Size>,
-
-    /// The maximum allowed size of the window.
-    pub max_size: Option<Size>,
-
-    /// Whether the window is resizeable or not.
-    /// Default true.
-    pub resizeable: bool,
-
-    /// True if this window should behave like a modal window.
-    ///
-    /// The parent window will become disabled for all input and move focus
-    /// to this window. The parent window can only be interacted with again once
-    /// this window closes.
-    /// Default false.
-    pub modal: bool,
-}
-
-impl Default for WindowOptions {
-    fn default() -> Self {
-        Self {
-            title: "Egui window".to_string(),
-            active: true,
-            decorated: true,
-            enabled_buttons: WindowButtons::all(),
-            maximised: false,
-            size: None,
-            min_size: None,
-            max_size: None,
-            resizeable: true,
-            modal: false,
-        }
-    }
-}
-
-pub struct Backend {
+pub(crate) struct Backend {
     window: Window,
     state: egui_winit::State,
     painter: egui_wgpu::winit::Painter,
