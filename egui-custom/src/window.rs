@@ -51,6 +51,13 @@ pub struct WindowHandleDropGuard<T: Ui> {
     pub ui: UiHandle<T>,
 }
 
+impl<T: Ui> WindowHandleDropGuard<T> {
+    /// Request a redraw for the window.
+    pub fn request_redraw(&self) {
+        self.ui.borrow_mut().events.push(UiEvent::RequestRedraw);
+    }
+}
+
 impl<T: Ui> Drop for WindowHandleDropGuard<T> {
     fn drop(&mut self) {
         // TODO create destroy window event.
@@ -60,6 +67,7 @@ impl<T: Ui> Drop for WindowHandleDropGuard<T> {
 #[derive(Clone)]
 pub enum UiEvent {
     CreateWindow(UiHandle<dyn Ui>),
+    RequestRedraw,
 }
 
 /// Allows the creating of windows.
@@ -227,6 +235,10 @@ impl Backend {
         if time < *redraw_time {
             self.redraw_time = Some(time);
         }
+    }
+
+    pub fn request_redraw(&self) {
+        self.window.request_redraw();
     }
 
     pub fn poll_ui_events(&mut self) -> Vec<UiEvent> {

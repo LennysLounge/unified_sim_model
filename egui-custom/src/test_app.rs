@@ -53,11 +53,14 @@ impl Ui for TestApp {
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
 
             if let Some(popup) = &self.popup {
-                // if ui.button("Increase value").clicked() {
-                //     popup.borrow_mut().increase();
-                //     popup.request_redraw();
-                // }
-                // ui.label(format!("The popup has value: {}", popup.borrow().value));
+                if ui.button("Increase value").clicked() {
+                    popup.ui.borrow_mut().ui.increase();
+                    popup.request_redraw();
+                }
+                ui.label(format!(
+                    "The popup has value: {}",
+                    popup.ui.borrow().ui.value
+                ));
             }
 
             if !self.popups.is_empty() {
