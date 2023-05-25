@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use egui_custom::window::{Ui, WindowHandle, Windower};
+use egui_custom::window::{Ui, UiHandle, Windower};
 use tracing::info;
 
 #[derive(Clone)]
@@ -8,8 +8,8 @@ pub struct TestApp {
     pub name: String,
     pub age: u32,
     pub checked: bool,
-    popup: Option<WindowHandle<PopUp>>,
-    popups: Vec<WindowHandle<PopUp>>,
+    popup: Option<UiHandle<PopUp>>,
+    popups: Vec<UiHandle<PopUp>>,
 }
 
 impl Default for TestApp {
@@ -54,17 +54,21 @@ impl Ui for TestApp {
 
             if let Some(popup) = &self.popup {
                 if ui.button("Increase value").clicked() {
-                    popup.ui.borrow_mut().ui.increase();
-                    popup.request_redraw();
+                    popup.borrow_mut().increase();
+                    popup.borrow_mut().request_redraw();
                 }
-                ui.label(format!(
-                    "The popup has value: {}",
-                    popup.ui.borrow().ui.value
-                ));
+                ui.label(format!("The popup has value: {}", popup.borrow().value));
+                if ui.button("Close window").clicked() {
+                    popup.borrow_mut().close();
+                }
+                ui.separator();
             }
 
             if !self.popups.is_empty() {
-                if ui.button("Close old windows").clicked() {
+                if ui
+                    .button("Close old windows by dropping their handles")
+                    .clicked()
+                {
                     self.popups.clear();
                 }
             }

@@ -1,6 +1,10 @@
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    ops::{Deref, DerefMut},
+    rc::{Rc, Weak},
+    time::Instant,
+};
 
-use tracing::info;
 use winit::{
     dpi::Size,
     event::WindowEvent,
@@ -9,31 +13,10 @@ use winit::{
     window::{Window, WindowBuilder, WindowButtons, WindowId},
 };
 
-use crate::UserEvent;
-
 /// Interface for an Egui ui inside an os window.
 pub trait Ui {
     /// Runs the ui code.
     fn show(&mut self, ctx: &egui::Context, windower: &mut Windower);
-}
-
-// A handle to a ui.
-type UiHandle<T> = Rc<RefCell<UiEvents<T>>>;
-
-/// Expands a specific Ui implementation with a list of
-/// events that were raised by or for that ui.
-pub struct UiEvents<T: Ui + ?Sized> {
-    pub events: Vec<UiEvent>,
-    pub ui: T,
-}
-
-impl<T: Ui> UiEvents<T> {
-    pub fn new_with_handle(ui: T) -> UiHandle<T> {
-        Rc::new(RefCell::new(Self {
-            events: Vec::new(),
-            ui: ui,
-        }))
-    }
 }
 
 /// A reference to a Ui object running inside a os window.
@@ -43,31 +26,115 @@ impl<T: Ui> UiEvents<T> {
 ///
 /// If the window is closed by other means, this handle will continue to
 /// allow access to the Ui object even if the window itself no longer exists.
-pub type WindowHandle<T> = Rc<WindowHandleDropGuard<T>>;
-
-/// The inner struct to a `WindowHandle`.
-/// If this instance is dropped, the referenced window is destroyed aswell.
-pub struct WindowHandleDropGuard<T: Ui> {
-    pub ui: UiHandle<T>,
+pub struct UiHandle<T: Ui + ?Sized> {
+    value: Rc<RefCell<UiContainer<T>>>,
 }
 
-impl<T: Ui> WindowHandleDropGuard<T> {
+impl<T: Ui + 'static> UiHandle<T> {
+    /// Create a new ui handle for a Ui object.
+    pub fn new(ui: T) -> UiHandle<T> {
+        UiHandle {
+            value: Rc::new(RefCell::new(UiContainer {
+                events: Vec::new(),
+                ui: ui,
+            })),
+        }
+    }
+    /// Transform this handle from a concrete type into its trait object type.
+    pub fn to_dyn(self) -> UiHandle<dyn Ui> {
+        let dyn_rc: Rc<RefCell<UiContainer<dyn Ui>>> = self.value;
+        UiHandle { value: dyn_rc }
+    }
+}
+
+impl<T: Ui + ?Sized> UiHandle<T> {
+    /// Return a clone of this Handle as a weak reference.
+    pub fn as_weak(&self) -> WeakUiHandle<T> {
+        WeakUiHandle {
+            value: Rc::downgrade(&self.value),
+        }
+    }
+}
+
+impl<T: Ui + ?Sized> Clone for UiHandle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+        }
+    }
+}
+
+impl<T: Ui + ?Sized> Deref for UiHandle<T> {
+    type Target = RefCell<UiContainer<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.value
+    }
+}
+
+/// A weak version of a ui handle. This handle will not keep the ui
+/// from being dropped.
+pub struct WeakUiHandle<T: Ui + ?Sized> {
+    value: Weak<RefCell<UiContainer<T>>>,
+}
+
+impl<T: Ui + ?Sized> WeakUiHandle<T> {
+    /// Upgrade to a UiHandle.
+    pub fn upgrade(&self) -> Option<UiHandle<T>> {
+        match self.value.upgrade() {
+            Some(rc) => Some(UiHandle { value: rc }),
+            None => None,
+        }
+    }
+}
+
+/// Expands a specific Ui implementation with a list of
+/// events that were raised by or for that ui.
+pub struct UiContainer<T: Ui + ?Sized> {
+    events: Vec<UiEvent>,
+    ui: T,
+}
+
+impl<T: Ui + ?Sized> UiContainer<T> {
     /// Request a redraw for the window.
-    pub fn request_redraw(&self) {
-        self.ui.borrow_mut().events.push(UiEvent::RequestRedraw);
+    pub fn request_redraw(&mut self) {
+        self.events.push(UiEvent::RequestRedraw);
+    }
+
+    /// Close this window. The underlying Ui will remain accessable
+    /// unitl all handles to it have been dropped.
+    pub fn close(&mut self) {
+        self.events.push(UiEvent::Close);
+    }
+
+    /// Return all current events for this ui and clear the list.
+    fn take_events(&mut self) -> Vec<UiEvent> {
+        let events = self.events.clone();
+        self.events.clear();
+        events
     }
 }
 
-impl<T: Ui> Drop for WindowHandleDropGuard<T> {
-    fn drop(&mut self) {
-        // TODO create destroy window event.
+impl<T: Ui + ?Sized> Deref for UiContainer<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ui
     }
 }
 
+impl<T: Ui + ?Sized> DerefMut for UiContainer<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.ui
+    }
+}
+
+/// Events that can be raised on a Ui window.
 #[derive(Clone)]
 pub enum UiEvent {
     CreateWindow(UiHandle<dyn Ui>),
     RequestRedraw,
+    Close,
 }
 
 /// Allows the creating of windows.
@@ -77,13 +144,11 @@ pub struct Windower {
 }
 
 impl Windower {
-    pub fn new_window<T: Ui + 'static>(&mut self, ui: T) -> WindowHandle<T> {
-        let ui_handle = UiEvents::new_with_handle(ui);
-        info!("Add new window event");
-        self.events.push(UiEvent::CreateWindow(ui_handle.clone()));
-        WindowHandle::new(WindowHandleDropGuard {
-            ui: ui_handle.clone(),
-        })
+    pub fn new_window<T: Ui + 'static>(&mut self, ui: T) -> UiHandle<T> {
+        let ui_handle = UiHandle::new(ui);
+        self.events
+            .push(UiEvent::CreateWindow(ui_handle.clone().to_dyn()));
+        ui_handle
     }
 }
 
@@ -94,7 +159,7 @@ pub struct Backend {
     window: Window,
     state: egui_winit::State,
     context: egui::Context,
-    ui: UiHandle<dyn Ui>,
+    ui: WeakUiHandle<dyn Ui>,
     painter: egui_wgpu::winit::Painter,
     redraw_time: Option<Instant>,
 }
@@ -102,9 +167,9 @@ pub struct Backend {
 impl Backend {
     /// Create a new os window backend.
     pub fn new(
-        window_target: &EventLoopWindowTarget<UserEvent>,
+        window_target: &EventLoopWindowTarget<()>,
         window_options: &WindowOptions,
-        ui: UiHandle<dyn Ui>,
+        ui: WeakUiHandle<dyn Ui>,
     ) -> Self {
         let mut window_builder = WindowBuilder::new()
             .with_title(window_options.title.clone())
@@ -193,6 +258,12 @@ impl Backend {
 
     /// Run the egui ui on this window.
     pub fn run_and_paint(&mut self) {
+        let ui = match self.ui.upgrade() {
+            Some(ui) => ui,
+            // If the Ui has been dropped then this window should be destroyed aswell.
+            None => return,
+        };
+
         // Gather input (mouse, touches, keyboard, screen size, etc):
         let raw_input: egui::RawInput = self.state.take_egui_input(&self.window);
 
@@ -204,10 +275,10 @@ impl Backend {
             textures_delta,
             shapes,
         } = self.context.run(raw_input, |egui_ctx| {
-            self.ui.borrow_mut().ui.show(egui_ctx, &mut window_proxy);
+            ui.borrow_mut().ui.show(egui_ctx, &mut window_proxy);
         });
 
-        self.ui.borrow_mut().events.extend(window_proxy.events);
+        ui.borrow_mut().events.extend(window_proxy.events);
 
         self.state
             .handle_platform_output(&self.window, &self.context, platform_output);
@@ -242,9 +313,15 @@ impl Backend {
     }
 
     pub fn poll_ui_events(&mut self) -> Vec<UiEvent> {
-        let events = self.ui.borrow().events.clone();
-        self.ui.borrow_mut().events.clear();
-        events
+        match self.ui.upgrade() {
+            Some(ui) => ui.borrow_mut().take_events(),
+            // If the Ui has been dropped then this window should also be closed.
+            None => {
+                let mut events = Vec::new();
+                events.push(UiEvent::Close);
+                events
+            }
+        }
     }
 }
 

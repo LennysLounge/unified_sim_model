@@ -26,7 +26,7 @@ fn main() {
             title: "Test window".to_string(),
             size: Some(Size::Physical(PhysicalSize {
                 width: 340,
-                height: 200,
+                height: 260,
             })),
             ..Default::default()
         },
