@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use egui_custom::window::{Ui, UiHandle, WindowOptions, Windower};
+use egui_custom::ui::{Ui, UiHandle, WindowOptions, Windower};
 use tracing::info;
 
 #[derive(Clone)]

@@ -1,6 +1,6 @@
 use std::env;
 
-use egui_custom::{run_event_loop, window::WindowOptions};
+use egui_custom::{run_event_loop, ui::WindowOptions};
 use test_app::TestApp;
 use tracing::Level;
 use winit::dpi::{PhysicalSize, Size};

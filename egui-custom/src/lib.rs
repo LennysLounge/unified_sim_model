@@ -1,24 +1,24 @@
 use std::{cell::RefCell, time::Instant};
 use tracing::info;
 use tree::Tree;
-use window::{Backend, Ui, UiHandle};
+use ui::{Ui, UiEvent, UiHandle, UiWindow};
 use winit::{
     event::WindowEvent,
     event_loop::{EventLoop, EventLoopWindowTarget},
     window::WindowId,
 };
 
-use crate::window::WindowOptions;
+use crate::ui::WindowOptions;
 
 mod tree;
-pub mod window;
+pub mod ui;
 
 /// A function that creates a AppWindow.
 pub type AppCreator = Box<dyn Fn() -> Box<dyn Ui>>;
 
 /// A container for a tree of windows.
 struct WindowTree {
-    tree: Tree<WindowId, RefCell<Backend>>,
+    tree: Tree<WindowId, RefCell<UiWindow>>,
 }
 impl WindowTree {
     /// Create a new window tree.
@@ -26,22 +26,23 @@ impl WindowTree {
         Self { tree: Tree::new() }
     }
 
-    /// Iterate over all window backends in this tree.
-    fn backends(&self) -> impl Iterator<Item = &RefCell<Backend>> + '_ {
+    /// Iterate over all ui windows in this tree.
+    fn ui_windows(&self) -> impl Iterator<Item = &RefCell<UiWindow>> + '_ {
         self.tree.values()
     }
 
     /// Close the window and all its child windows.
     fn close_window(&mut self, window_id: WindowId) {
         // Remove modal from parent window
-        if let Some(node) = self.tree.get_node(&window_id) {
-            if let Some(parent_window_id) = node.parent {
-                if let Some(parent_backend) = self.tree.get(&parent_window_id) {
-                    parent_backend.borrow_mut().set_modal(None);
-                }
-            }
+        if let Some(parent_window) = self
+            .tree
+            .get_node(&window_id)
+            .and_then(|node| node.parent)
+            .and_then(|parent_window_id| self.tree.get(&parent_window_id))
+        {
+            parent_window.borrow_mut().set_modal_to(None);
         }
-
+        // Remove window and its children from the tree.
         self.tree.remove(window_id);
     }
 
@@ -50,8 +51,8 @@ impl WindowTree {
         self.tree.is_empty()
     }
 
-    /// Return the backend for a given window.
-    fn get(&self, window_id: WindowId) -> Option<&RefCell<Backend>> {
+    /// Return the ui window for a given window id.
+    fn get(&self, window_id: WindowId) -> Option<&RefCell<UiWindow>> {
         self.tree.get(&window_id)
     }
 
@@ -63,25 +64,29 @@ impl WindowTree {
         window_options: &WindowOptions,
         ui_handle: UiHandle<dyn Ui>,
     ) {
+        // If this window is modal we need to find the window handle of the parent window.
         let owner = match window_options.modal {
             true => self
                 .tree
                 .get(&parent_window_id)
-                .map(|parent_backend| parent_backend.borrow_mut().get_window_handle()),
+                .map(|parent_window| parent_window.borrow_mut().get_window_handle()),
             false => None,
         };
-        let app_state = RefCell::new(Backend::new(
+        let ui_window = RefCell::new(UiWindow::new(
             window_target,
             window_options,
             ui_handle.as_weak(),
             owner,
         ));
-        let id = app_state.borrow().window_id();
-        self.tree.add_node(id, app_state);
+        // add window to tree
+        let id = ui_window.borrow().window_id();
+        self.tree.add_node(id, ui_window);
         self.tree.add_child_to_parent(id, parent_window_id);
+
+        // set the parent modal to the child
         if window_options.modal {
             if let Some(parent_node) = self.tree.get(&parent_window_id) {
-                parent_node.borrow_mut().set_modal(Some(id));
+                parent_node.borrow_mut().set_modal_to(Some(id));
             }
         }
     }
@@ -93,7 +98,7 @@ impl WindowTree {
         window_options: &WindowOptions,
         ui_handle: UiHandle<dyn Ui>,
     ) {
-        let app_state = RefCell::new(Backend::new(
+        let app_state = RefCell::new(UiWindow::new(
             window_target,
             window_options,
             ui_handle.as_weak(),
@@ -101,6 +106,20 @@ impl WindowTree {
         ));
         let id = app_state.borrow().window_id();
         self.tree.add_node(id, app_state);
+    }
+
+    /// Collect ui events from all windows and return them as a list
+    /// of tuples with the window id that created the event.
+    fn collect_ui_events(&self) -> Vec<(WindowId, UiEvent)> {
+        // Gather all ui events and the window id that caused them.
+        let mut all_events = Vec::<(WindowId, ui::UiEvent)>::new();
+        for ui_window in self.tree.values() {
+            let id = ui_window.borrow().window_id();
+            for event in ui_window.borrow_mut().poll_ui_events() {
+                all_events.push((id, event));
+            }
+        }
+        all_events
     }
 }
 
@@ -113,8 +132,8 @@ pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui
         use winit::event::Event;
         match event {
             Event::NewEvents(_) => {
-                for backend in window_tree.backends() {
-                    backend.borrow_mut().update_redraw_timer();
+                for ui_window in window_tree.ui_windows() {
+                    ui_window.borrow_mut().update_redraw_timer();
                 }
             }
 
@@ -160,17 +179,11 @@ pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui
             // set the control flow.
             Event::RedrawEventsCleared => {
                 // Gather all ui events and the window id that caused them.
-                let mut all_events = Vec::<(WindowId, window::UiEvent)>::new();
-                for backend in window_tree.backends() {
-                    let id = backend.borrow().window_id();
-                    for event in backend.borrow_mut().poll_ui_events() {
-                        all_events.push((id, event));
-                    }
-                }
+                let ui_events = window_tree.collect_ui_events();
                 // Handle all ui events.
-                for (src_window_id, event) in all_events {
+                for (src_window_id, event) in ui_events {
                     match event {
-                        window::UiEvent::CreateWindow(window_options, ui_handle) => {
+                        ui::UiEvent::CreateWindow(window_options, ui_handle) => {
                             window_tree.create_window(
                                 window_target,
                                 src_window_id,
@@ -178,12 +191,12 @@ pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui
                                 ui_handle,
                             );
                         }
-                        window::UiEvent::RequestRedraw => {
-                            if let Some(node) = window_tree.get(src_window_id) {
-                                node.borrow_mut().set_redraw_time(Instant::now());
+                        ui::UiEvent::RequestRedraw => {
+                            if let Some(ui_window) = window_tree.get(src_window_id) {
+                                ui_window.borrow_mut().set_redraw_time(Instant::now());
                             }
                         }
-                        window::UiEvent::Close => {
+                        ui::UiEvent::Close => {
                             window_tree.close_window(src_window_id);
                         }
                     }
@@ -191,8 +204,8 @@ pub fn run_event_loop<T: Ui + Clone + 'static>(window_options: WindowOptions, ui
 
                 // Set control flow.
                 let earliest_redraw = window_tree
-                    .backends()
-                    .filter_map(|node| node.borrow().get_redraw_timer())
+                    .ui_windows()
+                    .filter_map(|ui_window| ui_window.borrow().get_redraw_timer())
                     .min();
 
                 if let Some(time) = earliest_redraw {
