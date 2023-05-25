@@ -2,14 +2,14 @@ use std::{
     cell::RefCell,
     ops::{Deref, DerefMut},
     rc::{Rc, Weak},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use winit::{
-    dpi::Size,
+    dpi::{PhysicalSize, Size},
     event::WindowEvent,
     event_loop::EventLoopWindowTarget,
-    platform::windows::WindowBuilderExtWindows,
+    platform::windows::{WindowBuilderExtWindows, WindowExtWindows, HWND},
     window::{Window, WindowBuilder, WindowButtons, WindowId},
 };
 
@@ -36,7 +36,7 @@ impl<T: Ui + 'static> UiHandle<T> {
         UiHandle {
             value: Rc::new(RefCell::new(UiContainer {
                 events: Vec::new(),
-                ui: ui,
+                ui,
             })),
         }
     }
@@ -68,7 +68,7 @@ impl<T: Ui + ?Sized> Deref for UiHandle<T> {
     type Target = RefCell<UiContainer<T>>;
 
     fn deref(&self) -> &Self::Target {
-        &*self.value
+        &self.value
     }
 }
 
@@ -81,10 +81,7 @@ pub struct WeakUiHandle<T: Ui + ?Sized> {
 impl<T: Ui + ?Sized> WeakUiHandle<T> {
     /// Upgrade to a UiHandle.
     pub fn upgrade(&self) -> Option<UiHandle<T>> {
-        match self.value.upgrade() {
-            Some(rc) => Some(UiHandle { value: rc }),
-            None => None,
-        }
+        self.value.upgrade().map(|rc| UiHandle { value: rc })
     }
 }
 
@@ -132,7 +129,7 @@ impl<T: Ui + ?Sized> DerefMut for UiContainer<T> {
 /// Events that can be raised on a Ui window.
 #[derive(Clone)]
 pub enum UiEvent {
-    CreateWindow(UiHandle<dyn Ui>),
+    CreateWindow(WindowOptions, UiHandle<dyn Ui>),
     RequestRedraw,
     Close,
 }
@@ -144,10 +141,16 @@ pub struct Windower {
 }
 
 impl Windower {
-    pub fn new_window<T: Ui + 'static>(&mut self, ui: T) -> UiHandle<T> {
+    pub fn new_window<T: Ui + 'static>(
+        &mut self,
+        window_options: WindowOptions,
+        ui: T,
+    ) -> UiHandle<T> {
         let ui_handle = UiHandle::new(ui);
-        self.events
-            .push(UiEvent::CreateWindow(ui_handle.clone().to_dyn()));
+        self.events.push(UiEvent::CreateWindow(
+            window_options,
+            ui_handle.clone().to_dyn(),
+        ));
         ui_handle
     }
 }
@@ -162,6 +165,7 @@ pub struct Backend {
     ui: WeakUiHandle<dyn Ui>,
     painter: egui_wgpu::winit::Painter,
     redraw_time: Option<Instant>,
+    modal: Option<WindowId>,
 }
 
 impl Backend {
@@ -170,6 +174,7 @@ impl Backend {
         window_target: &EventLoopWindowTarget<()>,
         window_options: &WindowOptions,
         ui: WeakUiHandle<dyn Ui>,
+        owner: Option<HWND>,
     ) -> Self {
         let mut window_builder = WindowBuilder::new()
             .with_title(window_options.title.clone())
@@ -180,6 +185,11 @@ impl Backend {
             .with_resizable(window_options.resizeable)
             .with_drag_and_drop(true)
             .with_visible(false);
+
+        window_builder = match owner {
+            Some(owner) => window_builder.with_owner_window(owner),
+            None => window_builder,
+        };
 
         window_builder = match window_options.size {
             Some(size) => window_builder.with_inner_size(size),
@@ -215,10 +225,15 @@ impl Backend {
             ui,
             painter,
             redraw_time: None,
+            modal: None,
         };
         backend.run_and_paint();
         backend.window.set_visible(true);
         backend
+    }
+
+    pub fn get_window_handle(&self) -> HWND {
+        self.window.hwnd()
     }
 
     /// Return the window id of the os window.
@@ -317,15 +332,18 @@ impl Backend {
             Some(ui) => ui.borrow_mut().take_events(),
             // If the Ui has been dropped then this window should also be closed.
             None => {
-                let mut events = Vec::new();
-                events.push(UiEvent::Close);
-                events
+                vec![UiEvent::Close]
             }
         }
     }
+    pub fn set_modal(&mut self, modal: Option<WindowId>) {
+        self.modal = modal;
+        self.window.set_enable(modal.is_none());
+    }
 }
 
-/// Options for how a window should be created.
+/// Options for how a window should be created
+#[derive(Clone)]
 pub struct WindowOptions {
     /// The title of the window.
     pub title: String,
@@ -358,6 +376,14 @@ pub struct WindowOptions {
     /// Whether the window is resizeable or not.
     /// Default true.
     pub resizeable: bool,
+
+    /// True if this window should behave like a modal window.
+    ///
+    /// The parent window will become disabled for all input and move focus
+    /// to this window. The parent window can only be interacted with again once
+    /// this window closes.
+    /// Default false.
+    pub modal: bool,
 }
 
 impl Default for WindowOptions {
@@ -372,6 +398,7 @@ impl Default for WindowOptions {
             min_size: None,
             max_size: None,
             resizeable: true,
+            modal: false,
         }
     }
 }

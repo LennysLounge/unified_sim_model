@@ -1,5 +1,5 @@
 use std::collections::{
-    hash_map::{Iter, IterMut, Values, ValuesMut},
+    hash_map::{Iter, IterMut},
     HashMap,
 };
 use std::hash::Hash;
@@ -46,7 +46,7 @@ where
             }
             // Remove all children from map
             for child_id in node.children.iter() {
-                self.map.remove(&child_id);
+                self.map.remove(child_id);
             }
         }
     }
@@ -60,35 +60,43 @@ where
         }
     }
 
-    pub fn iter(&self) -> Iter<K, Node<K, V>> {
+    /// An iterator visiting all nodes in the tree.
+    pub fn nodes(&self) -> Iter<K, Node<K, V>> {
         self.map.iter()
     }
-
-    pub fn iter_mut(&mut self) -> IterMut<K, Node<K, V>> {
+    /// An iterator visiting all nodes in the tree with a mutable reference.
+    pub fn nodes_mut(&mut self) -> IterMut<K, Node<K, V>> {
         self.map.iter_mut()
     }
 
-    pub fn values(&self) -> Values<K, Node<K, V>> {
-        self.map.values()
+    // An iterator visiting all values stored in the tree.
+    pub fn values(&self) -> impl Iterator<Item = &V> + '_ {
+        self.map.values().map(|node| &node.value)
     }
-    pub fn values_mut(&mut self) -> ValuesMut<K, Node<K, V>> {
-        self.map.values_mut()
+    // An iterator visiting all values stored in the tree with a mutable reference.
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> + '_ {
+        self.map.values_mut().map(|node| &mut node.value)
     }
 
+    /// Return a reference to the value for a given node id.
     pub fn get(&self, id: &K) -> Option<&V> {
         self.map.get(id).map(|node| &node.value)
     }
+    /// Return a mutable reference to the value for a given node id.s
     pub fn get_mut(&mut self, id: &K) -> Option<&mut V> {
         self.map.get_mut(id).map(|node| &mut node.value)
     }
 
+    /// Return a reference to the node for the given node id.
     pub fn get_node(&self, id: &K) -> Option<&Node<K, V>> {
         self.map.get(id)
     }
+    /// Return a mutable reference to the node for the given node id.
     pub fn get_node_mut(&mut self, id: &K) -> Option<&mut Node<K, V>> {
         self.map.get_mut(id)
     }
 
+    /// Return `true` if there are no nodes in the tree.
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }

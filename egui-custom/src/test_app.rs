@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use egui_custom::window::{Ui, UiHandle, Windower};
+use egui_custom::window::{Ui, UiHandle, WindowOptions, Windower};
 use tracing::info;
 
 #[derive(Clone)]
@@ -39,7 +39,13 @@ impl Ui for TestApp {
                 info!("Button clicked, {}", self.age);
             }
             if ui.button("Open a new window").clicked() {
-                let new_window = windower.new_window(PopUp { value: 12 });
+                let new_window = windower.new_window(
+                    WindowOptions {
+                        modal: true,
+                        ..Default::default()
+                    },
+                    PopUp { value: 12 },
+                );
                 if let Some(old_window) = self.popup.take() {
                     self.popups.push(old_window);
                 }
@@ -64,13 +70,12 @@ impl Ui for TestApp {
                 ui.separator();
             }
 
-            if !self.popups.is_empty() {
-                if ui
+            if !self.popups.is_empty()
+                && ui
                     .button("Close old windows by dropping their handles")
                     .clicked()
-                {
-                    self.popups.clear();
-                }
+            {
+                self.popups.clear();
             }
             self.age += 1;
         });
