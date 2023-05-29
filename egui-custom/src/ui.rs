@@ -380,10 +380,8 @@ impl Backend {
         let window = window_builder.build(window_target).unwrap();
 
         let mut painter =
-            egui_wgpu::winit::Painter::new(egui_wgpu::WgpuConfiguration::default(), 1, 0, false);
-        unsafe {
-            pollster::block_on(painter.set_window(Some(&window))).unwrap();
-        }
+            egui_wgpu::winit::Painter::new(egui_wgpu::WgpuConfiguration::default(), 1, None, false);
+        pollster::block_on(painter.set_window(Some(&window))).unwrap();
 
         let mut state = egui_winit::State::new(window_target);
         state.set_pixels_per_point(window.scale_factor() as f32);
@@ -436,6 +434,7 @@ impl Backend {
             [1.0, 1.0, 1.0, 1.0],
             &clipped_primitives,
             &textures_delta,
+            false,
         );
 
         // if repaint_after.is_zero() {
