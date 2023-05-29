@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell, RefMut},
     ops::{Deref, DerefMut},
     rc::{Rc, Weak},
     time::{Duration, Instant},
@@ -59,6 +59,16 @@ impl<T: Ui + ?Sized> UiHandle<T> {
             value: Rc::downgrade(&self.value),
         }
     }
+
+    /// Immutably borrow the internal Ui object.
+    pub fn borrow_ui(&self) -> Ref<UiContainer<T>> {
+        (*self.value).borrow()
+    }
+
+    /// Mutably borrow the internal Ui object.
+    pub fn borrow_ui_mut(&self) -> RefMut<UiContainer<T>> {
+        (*self.value).borrow_mut()
+    }
 }
 
 impl<T: Ui + ?Sized> Clone for UiHandle<T> {
@@ -69,13 +79,13 @@ impl<T: Ui + ?Sized> Clone for UiHandle<T> {
     }
 }
 
-impl<T: Ui + ?Sized> Deref for UiHandle<T> {
-    type Target = RefCell<UiContainer<T>>;
+// impl<T: Ui + ?Sized> Deref for UiHandle<T> {
+//     type Target = RefCell<UiContainer<T>>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         &self.value
+//     }
+// }
 
 /// A weak version of a ui handle. This handle will not keep the ui
 /// from being dropped.
@@ -296,7 +306,7 @@ impl UiWindow {
     /// Return all ui events associated with this window and clear.
     pub fn poll_ui_events(&mut self) -> Vec<UiEvent> {
         match self.ui.upgrade() {
-            Some(ui) => ui.borrow_mut().take_events(),
+            Some(ui) => ui.borrow_ui_mut().take_events(),
             // If the Ui has been dropped then this window should also be closed.
             None => {
                 vec![UiEvent::Close]
@@ -414,7 +424,7 @@ impl Backend {
             textures_delta,
             shapes,
         } = self.context.run(raw_input, |egui_ctx| {
-            ui.borrow_mut().show(egui_ctx);
+            ui.borrow_ui_mut().show(egui_ctx);
         });
 
         self.state

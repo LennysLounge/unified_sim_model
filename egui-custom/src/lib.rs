@@ -61,7 +61,7 @@ impl WindowTree {
         parent_window_id: WindowId,
         ui_handle: UiHandle<dyn Ui>,
     ) {
-        let window_options = ui_handle.borrow().get_window_options();
+        let window_options = ui_handle.borrow_ui().get_window_options();
         // If this window is modal we need to find the window handle of the parent window.
         let owner = match window_options.modal {
             true => self
@@ -95,7 +95,7 @@ impl WindowTree {
     ) {
         let backend = Backend::new(
             window_target,
-            &ui_handle.borrow().get_window_options(),
+            &ui_handle.borrow_ui().get_window_options(),
             None,
         );
         let ui_window = RefCell::new(UiWindow::new(ui_handle, backend));

@@ -69,12 +69,12 @@ impl Ui for TestApp {
 
             if let Some(popup) = &self.popup {
                 if ui.button("Increase value").clicked() {
-                    popup.borrow_mut().increase();
-                    popup.borrow_mut().request_redraw();
+                    popup.borrow_ui_mut().increase();
+                    popup.borrow_ui_mut().request_redraw();
                 }
-                ui.label(format!("The popup has value: {}", popup.borrow().value));
+                ui.label(format!("The popup has value: {}", popup.borrow_ui().value));
                 if ui.button("Close window").clicked() {
-                    popup.borrow_mut().close();
+                    popup.borrow_ui_mut().close();
                 }
                 ui.separator();
             }

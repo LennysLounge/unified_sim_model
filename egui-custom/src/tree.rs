@@ -4,12 +4,16 @@ use std::collections::{
 };
 use std::hash::Hash;
 
+/// A node in the tree.
+/// Each node has its associated value `V`, its optional parent node
+/// and a list of child nodes.
 pub struct Node<K, V> {
     pub value: V,
     pub parent: Option<K>,
     pub children: Vec<K>,
 }
-
+/// A tree like data structure that uses a hash map internaly to store a set of nodes.
+/// A node is identified by their node id `K`
 pub struct Tree<K, V> {
     map: HashMap<K, Node<K, V>>,
 }
