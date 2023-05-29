@@ -15,7 +15,7 @@ fn main() {
         .expect("Should be able to set global subscriber");
 
     info!("Connecting to game");
-    let acc_adapter = AccAdapter::new().expect("Cannot connect to game");
+    let acc_adapter = AccAdapter::new();
 
     loop {
         if acc_adapter.join_handle.is_finished() {

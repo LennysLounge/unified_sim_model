@@ -27,6 +27,7 @@ pub type Result<T> = result::Result<T, ConnectionError>;
 
 #[derive(Debug)]
 pub enum ConnectionError {
+    IoError(std::io::Error),
     CannotSend(std::io::Error),
     CannotReceive(std::io::Error),
     CannotParse(IncompleteTypeError),
@@ -39,6 +40,7 @@ pub enum ConnectionError {
 impl Display for ConnectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ConnectionError::IoError(e) => write!(f, "Io error: {}", e),
             ConnectionError::CannotSend(e) => write!(f, "Error writing to udp socket: {}", e),
             ConnectionError::CannotReceive(e) => write!(f, "Error receiving data: {}", e),
             ConnectionError::CannotParse(e) => write!(f, "Cannot parse message: {}", e),
@@ -66,18 +68,12 @@ pub struct AccAdapter {
 }
 
 impl AccAdapter {
-    pub fn new() -> result::Result<AccAdapter, std::io::Error> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
-        socket.connect("127.0.0.1:9000")?;
-        socket
-            .set_read_timeout(Some(Duration::from_millis(2000)))
-            .expect("Read timeout duration should be larger than 0");
+    pub fn new() -> AccAdapter {
         let model = Arc::new(RwLock::new(Model::default()));
-
-        Ok(AccAdapter {
-            join_handle: AccConnection::spawn(socket, model.clone()),
+        AccAdapter {
+            join_handle: AccConnection::spawn(model.clone()),
             model,
-        })
+        }
     }
 }
 
@@ -90,18 +86,25 @@ struct AccConnection {
 }
 
 impl AccConnection {
-    fn spawn(socket: UdpSocket, model: Arc<RwLock<Model>>) -> JoinHandle<Result<()>> {
+    fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<()>> {
         thread::Builder::new()
             .name("Acc connection".into())
             .spawn(move || {
-                let mut connection = Self::new(socket, model);
+                let mut connection = Self::new(model)?;
                 connection.run_connection()
             })
             .expect("should be able to spawn thread")
     }
 
-    fn new(socket: UdpSocket, model: Arc<RwLock<Model>>) -> Self {
-        Self {
+    fn new(model: Arc<RwLock<Model>>) -> Result<Self> {
+        let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| ConnectionError::IoError(e))?;
+        socket
+            .connect("127.0.0.1:9000")
+            .map_err(|e| ConnectionError::IoError(e))?;
+        socket
+            .set_read_timeout(Some(Duration::from_millis(2000)))
+            .expect("Read timeout duration should be larger than 0");
+        Ok(Self {
             socket: AccSocket {
                 socket,
                 connected: false,
@@ -112,7 +115,7 @@ impl AccConnection {
             base_proc: BaseProcessor::default(),
             connection_proc: ConnectionProcessor::default(),
             lap_proc: LapProcessor::default(),
-        }
+        })
     }
 
     fn run_connection(&mut self) -> Result<()> {
