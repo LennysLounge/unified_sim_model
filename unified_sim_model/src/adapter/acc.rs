@@ -19,14 +19,14 @@ use self::{
     processors::{base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor},
 };
 
-pub mod data;
+mod data;
 mod processors;
 
 /// A specialized result for Connection errors.
-pub type Result<T> = result::Result<T, ConnectionError>;
+type Result<T> = result::Result<T, super::ConnectionError>;
 
 #[derive(Debug)]
-pub enum ConnectionError {
+pub enum AccConnectionError {
     IoError(std::io::Error),
     CannotSend(std::io::Error),
     CannotReceive(std::io::Error),
@@ -37,47 +37,34 @@ pub enum ConnectionError {
     Other(String),
 }
 
-impl Display for ConnectionError {
+impl Display for AccConnectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConnectionError::IoError(e) => write!(f, "Io error: {}", e),
-            ConnectionError::CannotSend(e) => write!(f, "Error writing to udp socket: {}", e),
-            ConnectionError::CannotReceive(e) => write!(f, "Error receiving data: {}", e),
-            ConnectionError::CannotParse(e) => write!(f, "Cannot parse message: {}", e),
-            ConnectionError::TimedOut => write!(f, "Connection to game timed out"),
-            ConnectionError::SocketUnavailable => write!(f, "Game connection is not available"),
-            ConnectionError::ConnectionRefused { message } => {
+            AccConnectionError::IoError(e) => write!(f, "Io error: {}", e),
+            AccConnectionError::CannotSend(e) => write!(f, "Error writing to udp socket: {}", e),
+            AccConnectionError::CannotReceive(e) => write!(f, "Error receiving data: {}", e),
+            AccConnectionError::CannotParse(e) => write!(f, "Cannot parse message: {}", e),
+            AccConnectionError::TimedOut => write!(f, "Connection to game timed out"),
+            AccConnectionError::SocketUnavailable => write!(f, "Game connection is not available"),
+            AccConnectionError::ConnectionRefused { message } => {
                 write!(f, "Game refused the connection. Reason: {}", message)
             }
-            ConnectionError::Other(message) => {
+            AccConnectionError::Other(message) => {
                 write!(f, "Connection encountered an error: {}", message)
             }
         }
     }
 }
 
-impl Error for ConnectionError {}
+impl Error for AccConnectionError {}
 
-/// An adapter for Assetto corsa competizione.
-pub struct AccAdapter {
-    /// The join handle to close the connection thread to the game.
-    pub join_handle: JoinHandle<Result<()>>,
-    /// The shared model.
-    pub model: Arc<RwLock<Model>>,
-    // TODO: channel
-}
-
-impl AccAdapter {
-    pub fn new() -> AccAdapter {
-        let model = Arc::new(RwLock::new(Model::default()));
-        AccAdapter {
-            join_handle: AccConnection::spawn(model.clone()),
-            model,
-        }
+impl From<AccConnectionError> for super::ConnectionError {
+    fn from(value: AccConnectionError) -> Self {
+        super::ConnectionError::ACC(value)
     }
 }
 
-struct AccConnection {
+pub struct AccConnection {
     socket: AccSocket,
     model: Arc<RwLock<Model>>,
     base_proc: BaseProcessor,
@@ -86,7 +73,7 @@ struct AccConnection {
 }
 
 impl AccConnection {
-    fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<()>> {
+    pub fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<()>> {
         thread::Builder::new()
             .name("Acc connection".into())
             .spawn(move || {
@@ -97,10 +84,10 @@ impl AccConnection {
     }
 
     fn new(model: Arc<RwLock<Model>>) -> Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| ConnectionError::IoError(e))?;
+        let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AccConnectionError::IoError(e))?;
         socket
             .connect("127.0.0.1:9000")
-            .map_err(|e| ConnectionError::IoError(e))?;
+            .map_err(|e| AccConnectionError::IoError(e))?;
         socket
             .set_read_timeout(Some(Duration::from_millis(2000)))
             .expect("Read timeout duration should be larger than 0");
@@ -135,7 +122,7 @@ impl AccConnection {
             model: self
                 .model
                 .write()
-                .map_err(|_| ConnectionError::Other("Model was poisoned".into()))?,
+                .map_err(|_| AccConnectionError::Other("Model was poisoned".into()))?,
             events: VecDeque::new(),
         };
 
@@ -151,7 +138,6 @@ impl AccConnection {
             context.model.events.push(event);
         }
 
-        //addition processing
         Ok(())
     }
 }
@@ -169,7 +155,7 @@ impl AccSocket {
     fn send(&self, buf: &[u8]) -> Result<()> {
         match self.socket.send(buf) {
             Ok(_) => Ok(()),
-            Err(e) => Err(ConnectionError::CannotSend(e)),
+            Err(e) => Err(AccConnectionError::CannotSend(e).into()),
         }
     }
 
@@ -200,12 +186,12 @@ impl AccSocket {
     fn read_message(&mut self) -> Result<Message> {
         let mut buf = [0u8; 2048];
         self.socket.recv(&mut buf).map_err(|e| match e.kind() {
-            ErrorKind::TimedOut => ConnectionError::TimedOut,
-            ErrorKind::ConnectionReset => ConnectionError::SocketUnavailable,
-            _ => ConnectionError::CannotReceive(e),
+            ErrorKind::TimedOut => AccConnectionError::TimedOut,
+            ErrorKind::ConnectionReset => AccConnectionError::SocketUnavailable,
+            _ => AccConnectionError::CannotReceive(e),
         })?;
 
-        data::read_response(&buf).map_err(ConnectionError::CannotParse)
+        data::read_response(&buf).map_err(|e| AccConnectionError::CannotParse(e).into())
     }
 }
 
@@ -279,10 +265,7 @@ fn process_message(
 ) -> Result<()> {
     use Message::*;
     match message {
-        Unknown(t) => Err(ConnectionError::Other(format!(
-            "Unknown message type: {}",
-            t
-        ))),
+        Unknown(t) => Err(AccConnectionError::Other(format!("Unknown message type: {}", t)).into()),
         RegistrationResult(ref result) => me.registration_result(result, context),
         SessionUpdate(ref update) => me.session_update(update, context),
         RealtimeCarUpdate(ref update) => me.realtime_car_update(update, context),

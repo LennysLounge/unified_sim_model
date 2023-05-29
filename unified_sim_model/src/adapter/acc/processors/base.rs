@@ -1,12 +1,12 @@
 use tracing::{debug, info};
 
 use crate::{
-    acc_adapter::{
+    adapter::acc::{
         data::{
             CarLocation, EntryListCar, RealtimeCarUpdate, RegistrationResult, SessionPhase,
             SessionType, SessionUpdate, TrackData,
         },
-        AccProcessor, AccProcessorContext, ConnectionError, Result,
+        AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
     model::{self, Driver, DriverId, Entry, EntryId, Event, SessionId, Time},
 };
@@ -29,9 +29,10 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Registration result");
         if !result.success {
-            return Err(ConnectionError::ConnectionRefused {
+            return Err(AccConnectionError::ConnectionRefused {
                 message: result.message.clone(),
-            });
+            }
+            .into());
         }
         context.socket.connected = true;
         context.socket.connection_id = result.connection_id;

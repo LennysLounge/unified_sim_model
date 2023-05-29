@@ -1,7 +1,7 @@
 use std::{env, thread, time::Duration};
 
 use tracing::{debug, error, info, Level};
-use unified_sim_model::acc_adapter::AccAdapter;
+use unified_sim_model::adapter::Adapter;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -15,7 +15,7 @@ fn main() {
         .expect("Should be able to set global subscriber");
 
     info!("Connecting to game");
-    let acc_adapter = AccAdapter::new();
+    let acc_adapter = Adapter::new_acc();
 
     loop {
         if acc_adapter.join_handle.is_finished() {
