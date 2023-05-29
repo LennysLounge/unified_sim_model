@@ -1,7 +1,7 @@
 use std::{env, thread, time::Duration};
 
-use tracing::{debug, error, info, Level};
-use unified_sim_model::adapter::Adapter;
+use tracing::{error, info, Level};
+use unified_sim_model::adapter::{Adapter, AdapterAction};
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -42,14 +42,9 @@ fn main() {
         }
         drop(model);
 
-        debug!("Clearing model of events");
-        match acc_adapter.model.write() {
-            Ok(mut model) => model.events.clear(),
-            Err(e) => {
-                error!("Model was poisoned: {:?}", e);
-                break;
-            }
-        };
+        if let Err(e) = acc_adapter.sender.send(AdapterAction::ClearEvents) {
+            error!("Cannot send to adapter: {}", e);
+        }
 
         thread::sleep(Duration::from_millis(1000));
     }

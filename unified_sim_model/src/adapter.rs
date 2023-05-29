@@ -1,7 +1,10 @@
 use std::{
     error::Error,
     fmt::Display,
-    sync::{Arc, RwLock},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, PoisonError, RwLock, RwLockReadGuard,
+    },
     thread::JoinHandle,
 };
 
@@ -30,16 +33,45 @@ pub struct Adapter {
     /// The join handle to close the connection thread to the game.
     pub join_handle: JoinHandle<Result<(), ConnectionError>>,
     /// The shared model.
-    pub model: Arc<RwLock<Model>>,
-    // TODO: channel
+    pub model: ReadOnlyModel,
+    /// Channel to send adapter actions to the adapter.
+    pub sender: Sender<AdapterAction>,
 }
 
 impl Adapter {
     pub fn new_acc() -> Adapter {
         let model = Arc::new(RwLock::new(Model::default()));
+        let (sender, _receiver) = mpsc::channel();
         Adapter {
             join_handle: acc::AccConnection::spawn(model.clone()),
-            model: model,
+            model: ReadOnlyModel::new(model),
+            sender,
         }
     }
+}
+
+/// A readonly view on a model.
+/// To read the model it must first be locked. Locking follows all the same
+/// rules as a `read` method in `RwLock`.
+#[derive(Clone)]
+pub struct ReadOnlyModel {
+    model: Arc<RwLock<Model>>,
+}
+
+impl ReadOnlyModel {
+    /// Creates a new read only model.
+    fn new(model: Arc<RwLock<Model>>) -> Self {
+        Self { model }
+    }
+    /// Locks the underlying `RwLock` and returns a read only view to the model.
+    pub fn read(
+        &self,
+    ) -> Result<RwLockReadGuard<'_, Model>, PoisonError<RwLockReadGuard<'_, Model>>> {
+        self.model.read()
+    }
+}
+
+/// Actions for the adapter to execute.
+pub enum AdapterAction {
+    ClearEvents,
 }
