@@ -119,7 +119,7 @@ impl WindowTree {
 }
 
 /// Run the event loop with a app.
-pub fn run_event_loop<T: Ui + Clone + 'static>(ui: T) {
+pub fn run_event_loop<T: Ui + 'static>(ui: T) {
     let mut window_tree = WindowTree::new();
     let ui_handle = UiHandle::new(ui).to_dyn();
 
