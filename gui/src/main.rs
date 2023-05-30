@@ -76,7 +76,11 @@ impl Dialog for App {
 
 fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
     let mut entries: Vec<&Entry> = entries.values().collect();
-    entries.sort_by(|e1, e2| e1.position.cmp(&e2.position));
+    entries.sort_by(|e1, e2| {
+        let is_connected = e2.connected.cmp(&e1.connected);
+        let position = e1.position.cmp(&e2.position);
+        is_connected.then(position)
+    });
 
     TableBuilder::new(ui)
         .auto_shrink([false, false])
@@ -85,7 +89,8 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
         .column(Column::exact(20.0))
         .column(Column::initial(150.0).clip(true).at_least(20.0))
         .column(Column::initial(150.0).clip(true).at_least(20.0))
-        .column(Column::exact(20.0))
+        .column(Column::exact(40.0))
+        .column(Column::exact(50.0))
         .header(20.0, |mut header| {
             header.col(|ui| {
                 ui.add(egui::Label::new(RichText::new("Pos").strong()).wrap(false));
@@ -98,21 +103,30 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
             });
             header.col(|ui| {
                 ui.with_layout(
-                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
+                        .with_cross_align(egui::Align::Min),
                     |ui| {
                         ui.strong("#");
                     },
                 );
             });
+            header.col(|ui| {
+                ui.add(egui::Label::new(RichText::new("con").strong()).wrap(false));
+            });
         })
         .body(|body| {
-            body.rows(25.0, entries.len(), |i, mut row| {
+            body.rows(20.0, entries.len(), |i, mut row| {
                 let entry = entries[i];
                 row.col(|ui| {
                     ui.with_layout(
                         egui::Layout::centered_and_justified(egui::Direction::TopDown),
                         |ui| {
-                            ui.add(egui::Label::new(format!("{}", entry.position)).wrap(false));
+                            let s = if entry.connected {
+                                format!("{}", entry.position)
+                            } else {
+                                "-".to_string()
+                            };
+                            ui.add(egui::Label::new(s).wrap(false));
                         },
                     );
                 });
@@ -136,6 +150,12 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
                         |ui| {
                             ui.label(format!("#{}", entry.car_number));
                         },
+                    );
+                });
+                row.col(|ui| {
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                        |ui| ui.label(if entry.connected { "true" } else { "false" }),
                     );
                 });
             });
