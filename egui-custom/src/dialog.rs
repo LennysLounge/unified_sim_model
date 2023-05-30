@@ -14,64 +14,64 @@ use winit::{
     window::{Window, WindowBuilder, WindowButtons, WindowId},
 };
 
-/// Interface for an Egui ui inside an os window.
-pub trait Ui {
+/// Interface for an Egui dialog displayed in an os window.
+pub trait Dialog {
     /// Returns the window options for this window.
     fn get_window_options(&self) -> WindowOptions {
         WindowOptions::default()
     }
-    /// Runs the ui code.
+    /// Runs the dialog code.
     fn show(&mut self, ctx: &egui::Context, windower: &mut Windower);
 }
 
-/// A reference to a Ui object running inside a os window.
+/// A reference to a Dialog object running inside a os window.
 ///
-/// The Ui object and the associated os window are destroyed and dropped when
+/// The Dialog object and the associated os window are destroyed and dropped when
 /// all handles to it have been dropped.
 ///
 /// If the window is closed by other means, this handle will continue to
-/// allow access to the Ui object even if the window itself no longer exists.
-pub struct UiHandle<T: Ui + ?Sized> {
-    value: Rc<RefCell<UiContainer<T>>>,
+/// allow access to the Dialog object even if the window itself no longer exists.
+pub struct DialogHandle<T: Dialog + ?Sized> {
+    value: Rc<RefCell<DialogContainer<T>>>,
 }
 
-impl<T: Ui + 'static> UiHandle<T> {
-    /// Create a new ui handle for a Ui object.
-    pub fn new(ui: T) -> UiHandle<T> {
-        UiHandle {
-            value: Rc::new(RefCell::new(UiContainer {
+impl<T: Dialog + 'static> DialogHandle<T> {
+    /// Create a new dialog handle for a dialog object.
+    pub fn new(dialog: T) -> DialogHandle<T> {
+        DialogHandle {
+            value: Rc::new(RefCell::new(DialogContainer {
                 events: Vec::new(),
-                ui,
+                dialog,
             })),
         }
     }
     /// Transform this handle from a concrete type into its trait object type.
-    pub fn to_dyn(self) -> UiHandle<dyn Ui> {
-        let dyn_rc: Rc<RefCell<UiContainer<dyn Ui>>> = self.value;
-        UiHandle { value: dyn_rc }
+    pub fn to_dyn(self) -> DialogHandle<dyn Dialog> {
+        let dyn_rc: Rc<RefCell<DialogContainer<dyn Dialog>>> = self.value;
+        DialogHandle { value: dyn_rc }
     }
 }
 
-impl<T: Ui + ?Sized> UiHandle<T> {
+impl<T: Dialog + ?Sized> DialogHandle<T> {
     /// Return a clone of this Handle as a weak reference.
-    pub fn as_weak(&self) -> WeakUiHandle<T> {
-        WeakUiHandle {
+    pub fn as_weak(&self) -> WeakDialogHandle<T> {
+        WeakDialogHandle {
             value: Rc::downgrade(&self.value),
         }
     }
 
-    /// Immutably borrow the internal Ui object.
-    pub fn borrow_ui(&self) -> Ref<UiContainer<T>> {
+    /// Immutably borrow the internal dialog object.
+    pub fn borrow_dialog(&self) -> Ref<DialogContainer<T>> {
         (*self.value).borrow()
     }
 
-    /// Mutably borrow the internal Ui object.
-    pub fn borrow_ui_mut(&self) -> RefMut<UiContainer<T>> {
+    /// Mutably borrow the internal dialog object.
+    pub fn borrow_dialog_mut(&self) -> RefMut<DialogContainer<T>> {
         (*self.value).borrow_mut()
     }
 }
 
-impl<T: Ui + ?Sized> Clone for UiHandle<T> {
+impl<T: Dialog + ?Sized> Clone for DialogHandle<T> {
     fn clone(&self) -> Self {
         Self {
             value: self.value.clone(),
@@ -79,87 +79,79 @@ impl<T: Ui + ?Sized> Clone for UiHandle<T> {
     }
 }
 
-// impl<T: Ui + ?Sized> Deref for UiHandle<T> {
-//     type Target = RefCell<UiContainer<T>>;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.value
-//     }
-// }
-
-/// A weak version of a ui handle. This handle will not keep the ui
+/// A weak version of a dialog handle. This handle will not keep the dialog
 /// from being dropped.
-pub struct WeakUiHandle<T: Ui + ?Sized> {
-    value: Weak<RefCell<UiContainer<T>>>,
+pub struct WeakDialogHandle<T: Dialog + ?Sized> {
+    value: Weak<RefCell<DialogContainer<T>>>,
 }
 
-impl<T: Ui + ?Sized> WeakUiHandle<T> {
-    /// Upgrade to a UiHandle.
-    pub fn upgrade(&self) -> Option<UiHandle<T>> {
-        self.value.upgrade().map(|rc| UiHandle { value: rc })
+impl<T: Dialog + ?Sized> WeakDialogHandle<T> {
+    /// Upgrade to a DialogHandle.
+    pub fn upgrade(&self) -> Option<DialogHandle<T>> {
+        self.value.upgrade().map(|rc| DialogHandle { value: rc })
     }
 }
 
 /// Allows the creating of windows from inside a egui context.
 pub struct Windower<'a> {
-    events: &'a mut Vec<UiEvent>,
+    events: &'a mut Vec<DialogEvent>,
 }
 
 impl<'a> Windower<'a> {
-    pub fn new_window<T: Ui + 'static>(&mut self, ui: T) -> UiHandle<T> {
-        let ui_handle = UiHandle::new(ui);
+    pub fn new_window<T: Dialog + 'static>(&mut self, dialog: T) -> DialogHandle<T> {
+        let dialog_handle = DialogHandle::new(dialog);
         self.events
-            .push(UiEvent::CreateWindow(ui_handle.clone().to_dyn()));
-        ui_handle
+            .push(DialogEvent::CreateWindow(dialog_handle.clone().to_dyn()));
+        dialog_handle
     }
 }
 
-/// Wrapps around a specific ui object and collects events that
-/// were created for or by the ui.
-pub struct UiContainer<T: Ui + ?Sized> {
-    events: Vec<UiEvent>,
-    ui: T,
+/// Wrapps around a specific dialog object and collects events that
+/// were created for or by the dialog.
+pub struct DialogContainer<T: Dialog + ?Sized> {
+    events: Vec<DialogEvent>,
+    dialog: T,
 }
 
-impl<T: Ui + ?Sized> UiContainer<T> {
+impl<T: Dialog + ?Sized> DialogContainer<T> {
     /// Request a redraw for the window.
     pub fn request_redraw(&mut self) {
-        self.events.push(UiEvent::RequestRedraw);
+        self.events.push(DialogEvent::RequestRedraw);
     }
 
-    /// Close this window. The underlying Ui will remain accessable
+    /// Close this window. The underlying dialog will remain accessable
     /// unitl all handles to it have been dropped.
     pub fn close(&mut self) {
-        self.events.push(UiEvent::Close);
+        self.events.push(DialogEvent::Close);
     }
 
-    /// Show this ui.
+    /// Show this dialog.
     fn show(&mut self, egui_ctx: &Context) {
         let mut windower = Windower {
             events: &mut self.events,
         };
-        self.ui.show(egui_ctx, &mut windower);
+        self.dialog.show(egui_ctx, &mut windower);
     }
 
-    /// Return all current events for this ui and clear the list.
-    fn take_events(&mut self) -> Vec<UiEvent> {
+    /// Return all current events for this dialog and clear the list.
+    fn take_events(&mut self) -> Vec<DialogEvent> {
         let events = self.events.clone();
         self.events.clear();
         events
     }
 }
 
-impl<T: Ui + ?Sized> Deref for UiContainer<T> {
+impl<T: Dialog + ?Sized> Deref for DialogContainer<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &self.ui
+        &self.dialog
     }
 }
 
-impl<T: Ui + ?Sized> DerefMut for UiContainer<T> {
+impl<T: Dialog + ?Sized> DerefMut for DialogContainer<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.ui
+        &mut self.dialog
     }
 }
 
@@ -224,34 +216,34 @@ impl Default for WindowOptions {
     }
 }
 
-/// Events that can be raised on a Ui window.
+/// Events that can be raised on a dialog window.
 #[derive(Clone)]
-pub(crate) enum UiEvent {
-    CreateWindow(UiHandle<dyn Ui>),
+pub(crate) enum DialogEvent {
+    CreateWindow(DialogHandle<dyn Dialog>),
     RequestRedraw,
     Close,
 }
 
-/// An os window that can display a egui Ui.
-pub(crate) struct UiWindow {
-    ui: WeakUiHandle<dyn Ui>,
+/// An os window that can display a dialog.
+pub(crate) struct DialogWindow {
+    dialog: WeakDialogHandle<dyn Dialog>,
     redraw_time: Option<Instant>,
     modal: Option<WindowId>,
     backend: Backend,
 }
 
-impl UiWindow {
+impl DialogWindow {
     /// Create a new os window backend.
-    pub fn new(ui: UiHandle<dyn Ui>, backend: Backend) -> Self {
-        let mut ui_window = UiWindow {
-            ui: ui.as_weak(),
+    pub fn new(dialog: DialogHandle<dyn Dialog>, backend: Backend) -> Self {
+        let mut dialog_window = DialogWindow {
+            dialog: dialog.as_weak(),
             redraw_time: None,
             modal: None,
             backend,
         };
-        ui_window.run_and_paint();
-        ui_window.backend.window.set_visible(true);
-        ui_window
+        dialog_window.run_and_paint();
+        dialog_window.backend.window.set_visible(true);
+        dialog_window
     }
 
     /// Update the windows internal redraw timer and triggers a
@@ -283,15 +275,15 @@ impl UiWindow {
         self.backend.on_window_event(event);
     }
 
-    /// Run the egui ui on this window.
+    /// Run the dialog on this window.
     pub fn run_and_paint(&mut self) {
-        let ui = match self.ui.upgrade() {
-            Some(ui) => ui,
-            // If the Ui has been dropped then this window should be destroyed aswell.
+        let dialog = match self.dialog.upgrade() {
+            Some(dialog) => dialog,
+            // If the dialog has been dropped then this window should be destroyed aswell.
             None => return,
         };
 
-        let repaint_after = self.backend.run_and_paint(ui);
+        let repaint_after = self.backend.run_and_paint(dialog);
 
         if repaint_after.is_zero() {
             // We want to redraw on the next frame so we create a request for right now.
@@ -303,13 +295,13 @@ impl UiWindow {
         }
     }
 
-    /// Return all ui events associated with this window and clear.
-    pub fn poll_ui_events(&mut self) -> Vec<UiEvent> {
-        match self.ui.upgrade() {
-            Some(ui) => ui.borrow_ui_mut().take_events(),
-            // If the Ui has been dropped then this window should also be closed.
+    /// Return all dialog events associated with this window and clear.
+    pub fn poll_events(&mut self) -> Vec<DialogEvent> {
+        match self.dialog.upgrade() {
+            Some(handle) => handle.borrow_dialog_mut().take_events(),
+            // If the dialog has been dropped then this window should also be closed.
             None => {
-                vec![UiEvent::Close]
+                vec![DialogEvent::Close]
             }
         }
     }
@@ -411,8 +403,8 @@ impl Backend {
         }
     }
 
-    /// Run the egui ui on this window.
-    pub fn run_and_paint(&mut self, ui: UiHandle<dyn Ui>) -> Duration {
+    /// Run the egui dialog on this window.
+    pub fn run_and_paint(&mut self, dialog: DialogHandle<dyn Dialog>) -> Duration {
         // Gather input (mouse, touches, keyboard, screen size, etc):
         let raw_input: egui::RawInput = self.state.take_egui_input(&self.window);
 
@@ -422,7 +414,7 @@ impl Backend {
             textures_delta,
             shapes,
         } = self.context.run(raw_input, |egui_ctx| {
-            ui.borrow_ui_mut().show(egui_ctx);
+            dialog.borrow_dialog_mut().show(egui_ctx);
         });
 
         self.state

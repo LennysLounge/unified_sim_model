@@ -1,22 +1,22 @@
+use dialog::{Backend, Dialog, DialogEvent, DialogHandle, DialogWindow};
 use std::{cell::RefCell, time::Instant};
 use tracing::info;
 use tree::Tree;
-use ui::{Backend, Ui, UiEvent, UiHandle, UiWindow};
 use winit::{
     event::WindowEvent,
     event_loop::{EventLoop, EventLoopWindowTarget},
     window::WindowId,
 };
 
+pub mod dialog;
 mod tree;
-pub mod ui;
 
 /// A function that creates a AppWindow.
-pub type AppCreator = Box<dyn Fn() -> Box<dyn Ui>>;
+pub type AppCreator = Box<dyn Fn() -> Box<dyn Dialog>>;
 
 /// A container for a tree of windows.
 struct WindowTree {
-    tree: Tree<WindowId, RefCell<UiWindow>>,
+    tree: Tree<WindowId, RefCell<DialogWindow>>,
 }
 impl WindowTree {
     /// Create a new window tree.
@@ -24,8 +24,8 @@ impl WindowTree {
         Self { tree: Tree::new() }
     }
 
-    /// Iterate over all ui windows in this tree.
-    fn ui_windows(&self) -> impl Iterator<Item = &RefCell<UiWindow>> + '_ {
+    /// Iterate over all dialog windows in this tree.
+    fn dialog_windows(&self) -> impl Iterator<Item = &RefCell<DialogWindow>> + '_ {
         self.tree.values()
     }
 
@@ -49,8 +49,8 @@ impl WindowTree {
         self.tree.is_empty()
     }
 
-    /// Return the ui window for a given window id.
-    fn get(&self, window_id: WindowId) -> Option<&RefCell<UiWindow>> {
+    /// Return the dialog window for a given window id.
+    fn get(&self, window_id: WindowId) -> Option<&RefCell<DialogWindow>> {
         self.tree.get(&window_id)
     }
 
@@ -59,9 +59,9 @@ impl WindowTree {
         &mut self,
         window_target: &EventLoopWindowTarget<()>,
         parent_window_id: WindowId,
-        ui_handle: UiHandle<dyn Ui>,
+        dialog_handle: DialogHandle<dyn Dialog>,
     ) {
-        let window_options = ui_handle.borrow_ui().get_window_options();
+        let window_options = dialog_handle.borrow_dialog().get_window_options();
         // If this window is modal we need to find the window handle of the parent window.
         let owner = match window_options.modal {
             true => self
@@ -72,11 +72,11 @@ impl WindowTree {
         };
 
         let backend = Backend::new(window_target, &window_options, owner);
-        let ui_window = RefCell::new(UiWindow::new(ui_handle, backend));
+        let dialog_window = RefCell::new(DialogWindow::new(dialog_handle, backend));
 
         // add window to tree
-        let id = ui_window.borrow().window_id();
-        self.tree.add_node(id, ui_window);
+        let id = dialog_window.borrow().window_id();
+        self.tree.add_node(id, dialog_window);
         self.tree.add_child_to_parent(id, parent_window_id);
 
         // set the parent modal to the child
@@ -91,26 +91,26 @@ impl WindowTree {
     fn create_root(
         &mut self,
         window_target: &EventLoopWindowTarget<()>,
-        ui_handle: UiHandle<dyn Ui>,
+        dialog_handle: DialogHandle<dyn Dialog>,
     ) {
         let backend = Backend::new(
             window_target,
-            &ui_handle.borrow_ui().get_window_options(),
+            &dialog_handle.borrow_dialog().get_window_options(),
             None,
         );
-        let ui_window = RefCell::new(UiWindow::new(ui_handle, backend));
-        let id = ui_window.borrow().window_id();
-        self.tree.add_node(id, ui_window);
+        let dialog_window = RefCell::new(DialogWindow::new(dialog_handle, backend));
+        let id = dialog_window.borrow().window_id();
+        self.tree.add_node(id, dialog_window);
     }
 
-    /// Collect ui events from all windows and return them as a list
+    /// Collect dialog events from all windows and return them as a list
     /// of tuples with the window id that created the event.
-    fn collect_ui_events(&self) -> Vec<(WindowId, UiEvent)> {
-        // Gather all ui events and the window id that caused them.
-        let mut all_events = Vec::<(WindowId, ui::UiEvent)>::new();
-        for ui_window in self.tree.values() {
-            let id = ui_window.borrow().window_id();
-            for event in ui_window.borrow_mut().poll_ui_events() {
+    fn collect_dialog_events(&self) -> Vec<(WindowId, DialogEvent)> {
+        // Gather all dialog events and the window id that caused them.
+        let mut all_events = Vec::<(WindowId, dialog::DialogEvent)>::new();
+        for dialog_window in self.tree.values() {
+            let id = dialog_window.borrow().window_id();
+            for event in dialog_window.borrow_mut().poll_events() {
                 all_events.push((id, event));
             }
         }
@@ -119,16 +119,16 @@ impl WindowTree {
 }
 
 /// Run the event loop with a app.
-pub fn run_event_loop<T: Ui + 'static>(ui: T) {
+pub fn run_event_loop<T: Dialog + 'static>(dialog: T) {
     let mut window_tree = WindowTree::new();
-    let ui_handle = UiHandle::new(ui).to_dyn();
+    let root_dialog = DialogHandle::new(dialog).to_dyn();
 
     EventLoop::new().run(move |event, window_target, control_flow| {
         use winit::event::Event;
         match event {
             Event::NewEvents(_) => {
-                for ui_window in window_tree.ui_windows() {
-                    ui_window.borrow_mut().update_redraw_timer();
+                for dialog_window in window_tree.dialog_windows() {
+                    dialog_window.borrow_mut().update_redraw_timer();
                 }
             }
 
@@ -158,7 +158,7 @@ pub fn run_event_loop<T: Ui + 'static>(ui: T) {
 
             // Create the apps here.
             Event::Resumed => {
-                window_tree.create_root(window_target, ui_handle.clone());
+                window_tree.create_root(window_target, root_dialog.clone());
             }
 
             Event::MainEventsCleared => {}
@@ -170,23 +170,23 @@ pub fn run_event_loop<T: Ui + 'static>(ui: T) {
                 }
             }
 
-            // At the end of the event cycle poll the generated ui events and
+            // At the end of the event cycle poll the generated dialog events and
             // set the control flow.
             Event::RedrawEventsCleared => {
-                // Gather all ui events and the window id that caused them.
-                let ui_events = window_tree.collect_ui_events();
-                // Handle all ui events.
-                for (src_window_id, event) in ui_events {
+                // Gather all dialog events and the window id that caused them.
+                let dialog_events = window_tree.collect_dialog_events();
+                // Handle all dialog events.
+                for (src_window_id, event) in dialog_events {
                     match event {
-                        ui::UiEvent::CreateWindow(ui_handle) => {
-                            window_tree.create_window(window_target, src_window_id, ui_handle);
+                        dialog::DialogEvent::CreateWindow(dialog_handle) => {
+                            window_tree.create_window(window_target, src_window_id, dialog_handle);
                         }
-                        ui::UiEvent::RequestRedraw => {
-                            if let Some(ui_window) = window_tree.get(src_window_id) {
-                                ui_window.borrow_mut().set_redraw_time(Instant::now());
+                        dialog::DialogEvent::RequestRedraw => {
+                            if let Some(dialog_window) = window_tree.get(src_window_id) {
+                                dialog_window.borrow_mut().set_redraw_time(Instant::now());
                             }
                         }
-                        ui::UiEvent::Close => {
+                        dialog::DialogEvent::Close => {
                             window_tree.close_window(src_window_id);
                         }
                     }
@@ -194,8 +194,8 @@ pub fn run_event_loop<T: Ui + 'static>(ui: T) {
 
                 // Set control flow.
                 let earliest_redraw = window_tree
-                    .ui_windows()
-                    .filter_map(|ui_window| ui_window.borrow().get_redraw_timer())
+                    .dialog_windows()
+                    .filter_map(|dialog_window| dialog_window.borrow().get_redraw_timer())
                     .min();
 
                 if let Some(time) = earliest_redraw {

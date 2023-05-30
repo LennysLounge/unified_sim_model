@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use egui_custom::ui::{Ui, UiHandle, WindowOptions, Windower};
+use egui_custom::dialog::{Dialog, DialogHandle, WindowOptions, Windower};
 use tracing::info;
 use winit::{
     dpi::{PhysicalSize, Size},
@@ -12,8 +12,8 @@ pub struct TestApp {
     pub name: String,
     pub age: u32,
     pub checked: bool,
-    popup: Option<UiHandle<PopUp>>,
-    popups: Vec<UiHandle<PopUp>>,
+    popup: Option<DialogHandle<PopUp>>,
+    popups: Vec<DialogHandle<PopUp>>,
 }
 
 impl Default for TestApp {
@@ -28,7 +28,7 @@ impl Default for TestApp {
     }
 }
 
-impl Ui for TestApp {
+impl Dialog for TestApp {
     fn get_window_options(&self) -> WindowOptions {
         WindowOptions {
             title: "Test window".to_string(),
@@ -69,12 +69,12 @@ impl Ui for TestApp {
 
             if let Some(popup) = &self.popup {
                 if ui.button("Increase value").clicked() {
-                    popup.borrow_ui_mut().increase();
-                    popup.borrow_ui_mut().request_redraw();
+                    popup.borrow_dialog_mut().increase();
+                    popup.borrow_dialog_mut().request_redraw();
                 }
-                ui.label(format!("The popup has value: {}", popup.borrow_ui().value));
+                ui.label(format!("The popup has value: {}", popup.borrow_dialog().value));
                 if ui.button("Close window").clicked() {
-                    popup.borrow_ui_mut().close();
+                    popup.borrow_dialog_mut().close();
                 }
                 ui.separator();
             }
@@ -101,7 +101,7 @@ impl PopUp {
     }
 }
 
-impl Ui for PopUp {
+impl Dialog for PopUp {
     fn show(&mut self, ctx: &egui::Context, _windower: &mut Windower) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.label("I am a new window!");
