@@ -11,6 +11,7 @@ use std::{
 use crate::model::Model;
 
 pub mod acc;
+pub mod dummy;
 
 /// A error with the game connection.
 #[derive(Debug)]
@@ -39,6 +40,16 @@ pub struct Adapter {
 }
 
 impl Adapter {
+    pub fn new_dummy() -> Adapter {
+        let model = Arc::new(RwLock::new(Model::default()));
+        let (sender, _receiver) = mpsc::channel();
+        Adapter {
+            join_handle: acc::AccConnection::spawn(model.clone()),
+            model: ReadOnlyModel::new(model),
+            sender,
+        }
+    }
+
     pub fn new_acc() -> Adapter {
         let model = Arc::new(RwLock::new(Model::default()));
         let (sender, _receiver) = mpsc::channel();
