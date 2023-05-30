@@ -54,6 +54,7 @@ impl AccProcessor for BaseProcessor {
             Some(index) => update.session_index != index,
             None => true,
         };
+        self.current_session_index = Some(update.session_index);
 
         if is_new_session {
             // Fast forward old session
@@ -165,12 +166,12 @@ impl AccProcessor for BaseProcessor {
             Some(s) => s,
         };
 
-        if session.entries.contains_key(&EntryId(car.car_id as i32)) {
+        let entry = map_entry(car);
+        if session.entries.contains_key(&entry.id) {
             return Ok(());
         }
 
         info!("Entry connected: #{}", car.race_number);
-        let entry = map_entry(car);
         context
             .events
             .push_back(model::Event::EntryConnected(entry.id));
