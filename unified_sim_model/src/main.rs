@@ -15,14 +15,14 @@ fn main() {
         .expect("Should be able to set global subscriber");
 
     info!("Connecting to game");
-    let acc_adapter = Adapter::new_acc();
+    let mut adapter = Adapter::new_acc();
 
     loop {
-        if acc_adapter.join_handle.is_finished() {
+        if adapter.is_finished() {
             break;
         }
 
-        let model = match acc_adapter.model.read() {
+        let model = match adapter.model.read() {
             Ok(lock) => lock,
             Err(e) => {
                 error!("Model was poisoned: {:?}", e);
@@ -42,18 +42,14 @@ fn main() {
         }
         drop(model);
 
-        if let Err(e) = acc_adapter.sender.send(AdapterAction::ClearEvents) {
+        if let Err(e) = adapter.sender.send(AdapterAction::ClearEvents) {
             error!("Cannot send to adapter: {}", e);
         }
 
         thread::sleep(Duration::from_millis(1000));
     }
 
-    if let Err(e) = acc_adapter
-        .join_handle
-        .join()
-        .expect("Couldnt join connection thread")
-    {
+    if let Some(Err(e)) = adapter.take_result() {
         info!("Connection failed because: {}", e);
     }
     info!("Connection done");
