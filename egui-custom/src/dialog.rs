@@ -7,7 +7,7 @@ use std::{
 
 use egui::Context;
 use winit::{
-    dpi::Size,
+    dpi::PhysicalSize,
     event::WindowEvent,
     event_loop::EventLoopWindowTarget,
     platform::windows::{WindowBuilderExtWindows, WindowExtWindows, HWND},
@@ -216,6 +216,12 @@ impl Default for WindowOptions {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct Size {
+    pub width: u32,
+    pub height: u32,
+}
+
 /// Events that can be raised on a dialog window.
 #[derive(Clone)]
 pub(crate) enum DialogEvent {
@@ -357,15 +363,30 @@ impl Backend {
         };
 
         window_builder = match window_options.size {
-            Some(size) => window_builder.with_inner_size(size),
+            Some(ref size) => {
+                window_builder.with_inner_size(winit::dpi::Size::Physical(PhysicalSize {
+                    width: size.width,
+                    height: size.height,
+                }))
+            }
             None => window_builder,
         };
         window_builder = match window_options.min_size {
-            Some(size) => window_builder.with_min_inner_size(size),
+            Some(ref size) => {
+                window_builder.with_min_inner_size(winit::dpi::Size::Physical(PhysicalSize {
+                    width: size.width,
+                    height: size.height,
+                }))
+            }
             None => window_builder,
         };
         window_builder = match window_options.max_size {
-            Some(size) => window_builder.with_max_inner_size(size),
+            Some(ref size) => {
+                window_builder.with_max_inner_size(winit::dpi::Size::Physical(PhysicalSize {
+                    width: size.width,
+                    height: size.height,
+                }))
+            }
             None => window_builder,
         };
 
