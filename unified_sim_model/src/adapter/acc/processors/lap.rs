@@ -51,7 +51,7 @@ impl AccProcessor for LapProcessor {
             entry.laps.get(driver.best_lap?)
         }
         let personal_best = current_driver_best_lap(entry)
-            .map_or(false, |best_lap| lap.time < best_lap.time)
+            .is_some_and(|best_lap| lap.time < best_lap.time)
             && !lap.invalid;
         if personal_best {
             if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
@@ -63,8 +63,8 @@ impl AccProcessor for LapProcessor {
         fn entry_best_lap(entry: &Entry) -> Option<&Lap> {
             entry.laps.get(entry.best_lap?)
         }
-        let entry_best = entry_best_lap(entry).map_or(false, |best_lap| lap.time < best_lap.time)
-            && !lap.invalid;
+        let entry_best =
+            entry_best_lap(entry).is_some_and(|best_lap| lap.time < best_lap.time) && !lap.invalid;
         if entry_best {
             entry.best_lap = Some(lap_index);
         }
