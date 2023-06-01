@@ -125,6 +125,7 @@ impl AccProcessor for BaseProcessor {
                 entry.orientation = [update.pitch, update.yaw, update.roll];
                 entry.position = update.position as i32;
                 entry.spline_pos = update.spline_position;
+                entry.lap_count = update.laps as i32;
                 entry.current_lap.time = update.current_lap.laptime_ms.into();
                 entry.current_lap.invalid = update.current_lap.is_invaliud;
                 entry.performance_delta = update.delta.into();

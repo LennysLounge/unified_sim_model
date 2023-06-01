@@ -66,6 +66,7 @@ pub struct Entry {
     pub orientation: [f32; 3],
     pub position: i32,
     pub spline_pos: f32,
+    pub lap_count: i32,
     pub laps: Vec<Lap>,
     pub current_lap: Lap,
     pub best_lap: Option<usize>,

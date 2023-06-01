@@ -97,6 +97,7 @@ impl DummyAdapter {
                     orientation: [0.0, 0.0, 0.0],
                     position: i,
                     spline_pos: 0.1234,
+                    lap_count: 0,
                     laps: Vec::new(),
                     current_lap: Lap {
                         time: Time::from(12_345),
