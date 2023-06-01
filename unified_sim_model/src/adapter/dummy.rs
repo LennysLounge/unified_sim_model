@@ -78,7 +78,7 @@ impl DummyAdapter {
                                     short_name: format!("JW{}", i),
                                     nationality: Nationality::NONE,
                                     driving_time: Time::from(0),
-                                    best_lap: 0,
+                                    best_lap: None,
                                 },
                             );
                         }
@@ -105,7 +105,7 @@ impl DummyAdapter {
                         entry_id: EntryId(i),
                         invalid: i % 2 == 0,
                     },
-                    best_lap: 0,
+                    best_lap: None,
                     performance_delta: Time::from(-1_234),
                     time_behind_leader: Time::from(12_345),
                     in_pits: true,

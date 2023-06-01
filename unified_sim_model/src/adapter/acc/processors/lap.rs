@@ -7,7 +7,7 @@ use crate::{
         data::{LapInfo, RealtimeCarUpdate},
         AccProcessor, AccProcessorContext, Result,
     },
-    model::{event::LapCompleted, DriverId, EntryId, Event, Lap, Time},
+    model::{event::LapCompleted, DriverId, Entry, EntryId, Event, Lap, Time},
 };
 
 #[derive(Debug, Default)]
@@ -41,35 +41,36 @@ impl AccProcessor for LapProcessor {
         };
 
         let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
+        let lap_index = entry.laps.len();
+        entry.laps.push(lap.clone());
         info!("Car #{} completed lap: {}", entry.car_number, lap.time);
 
         // Check personal best for driver
-        let personal_best = match entry.drivers.get_mut(&entry.current_driver) {
-            Some(driver) => match entry.laps.get(driver.best_lap) {
-                Some(best_lap) => {
-                    let lap_is_better = lap.time < best_lap.time;
-                    if lap_is_better {
-                        driver.best_lap = entry.laps.len();
-                    }
-                    lap_is_better
-                }
-                None => true,
-            },
-            None => false,
-        };
-        // Check personal best for entry
-        let entry_best = match entry.laps.get(entry.best_lap) {
-            Some(best_lap) => {
-                let lap_is_better = lap.time < best_lap.time;
-                if lap_is_better {
-                    entry.best_lap = entry.laps.len();
-                }
-                lap_is_better
+        fn current_driver_best_lap(entry: &Entry) -> Option<&Lap> {
+            let driver = entry.drivers.get(&entry.current_driver)?;
+            entry.laps.get(driver.best_lap?)
+        }
+        let personal_best = current_driver_best_lap(entry)
+            .map_or(false, |best_lap| lap.time < best_lap.time)
+            && !lap.invalid;
+        if personal_best {
+            if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
+                driver.best_lap = Some(lap_index);
             }
-            None => true,
-        };
+        }
+
+        // Check personal best for entry
+        fn entry_best_lap(entry: &Entry) -> Option<&Lap> {
+            entry.laps.get(entry.best_lap?)
+        }
+        let entry_best = entry_best_lap(entry).map_or(false, |best_lap| lap.time < best_lap.time)
+            && !lap.invalid;
+        if entry_best {
+            entry.best_lap = Some(lap_index);
+        }
+
         // Check session best.
-        let session_best = lap.time < session.best_lap.time;
+        let session_best = lap.time < session.best_lap.time && !lap.invalid;
         if session_best {
             session.best_lap = lap.clone();
         }
@@ -80,7 +81,6 @@ impl AccProcessor for LapProcessor {
             is_entry_best: entry_best,
             is_driver_best: personal_best,
         }));
-        entry.laps.push(lap);
         Ok(())
     }
 }

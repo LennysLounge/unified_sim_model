@@ -68,7 +68,7 @@ pub struct Entry {
     pub spline_pos: f32,
     pub laps: Vec<Lap>,
     pub current_lap: Lap,
-    pub best_lap: usize,
+    pub best_lap: Option<usize>,
     pub performance_delta: Time,
     pub time_behind_leader: Time,
     pub in_pits: bool,
@@ -91,7 +91,7 @@ pub struct Driver {
     pub short_name: String,
     pub nationality: Nationality,
     pub driving_time: Time,
-    pub best_lap: usize,
+    pub best_lap: Option<usize>,
 }
 
 #[derive(Debug, Clone)]

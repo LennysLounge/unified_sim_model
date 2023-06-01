@@ -196,7 +196,7 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
                     short_name: driver_info.short_name.clone(),
                     nationality: driver_info.nationality.clone(),
                     driving_time: Time::from(0),
-                    best_lap: 0,
+                    best_lap: None,
                 };
                 (id, driver)
             })
