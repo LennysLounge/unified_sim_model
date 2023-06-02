@@ -1,3 +1,5 @@
+use tracing::error;
+
 use crate::model::{Event, Model};
 use std::{
     collections::VecDeque,
@@ -6,7 +8,10 @@ use std::{
     io::ErrorKind,
     net::UdpSocket,
     result,
-    sync::{Arc, RwLock, RwLockWriteGuard},
+    sync::{
+        mpsc::{Receiver, TryRecvError},
+        Arc, RwLock, RwLockWriteGuard,
+    },
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -18,6 +23,8 @@ use self::{
     },
     processors::{base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor},
 };
+
+use super::AdapterAction;
 
 mod data;
 mod processors;
@@ -66,6 +73,7 @@ impl From<AccConnectionError> for super::ConnectionError {
 
 pub struct AccConnection {
     socket: AccSocket,
+    channel: Receiver<AdapterAction>,
     model: Arc<RwLock<Model>>,
     base_proc: BaseProcessor,
     connection_proc: ConnectionProcessor,
@@ -73,17 +81,20 @@ pub struct AccConnection {
 }
 
 impl AccConnection {
-    pub fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<()>> {
+    pub fn spawn(
+        model: Arc<RwLock<Model>>,
+        channel: Receiver<AdapterAction>,
+    ) -> JoinHandle<Result<()>> {
         thread::Builder::new()
             .name("Acc connection".into())
             .spawn(move || {
-                let mut connection = Self::new(model)?;
+                let mut connection = Self::new(model, channel)?;
                 connection.run_connection()
             })
             .expect("should be able to spawn thread")
     }
 
-    fn new(model: Arc<RwLock<Model>>) -> Result<Self> {
+    fn new(model: Arc<RwLock<Model>>, channel: Receiver<AdapterAction>) -> Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AccConnectionError::IoError(e))?;
         socket
             .connect("127.0.0.1:9000")
@@ -98,6 +109,7 @@ impl AccConnection {
                 connection_id: 0,
                 read_only: false,
             },
+            channel,
             model,
             base_proc: BaseProcessor::default(),
             connection_proc: ConnectionProcessor::default(),
@@ -110,6 +122,11 @@ impl AccConnection {
 
         loop {
             // TODO: read channel
+            match self.channel.try_recv() {
+                Ok(action) => match action {},
+                Err(TryRecvError::Empty) => (),
+                Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
+            }
 
             let message = self.socket.read_message()?;
             self.process_message(message)?;

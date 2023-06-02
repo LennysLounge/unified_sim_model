@@ -1,7 +1,7 @@
 use std::{env, thread, time::Duration};
 
 use tracing::{error, info, Level};
-use unified_sim_model::adapter::{Adapter, AdapterAction};
+use unified_sim_model::adapter::Adapter;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -41,10 +41,6 @@ fn main() {
             info!("Event: {:?}", event);
         }
         drop(model);
-
-        if let Err(e) = adapter.sender.send(AdapterAction::ClearEvents) {
-            error!("Cannot send to adapter: {}", e);
-        }
 
         thread::sleep(Duration::from_millis(1000));
     }

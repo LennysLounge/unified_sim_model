@@ -3,7 +3,7 @@ use std::{
     fmt::Display,
     sync::{
         mpsc::{self, Sender},
-        Arc, PoisonError, RwLock, RwLockReadGuard,
+        Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
     thread::JoinHandle,
 };
@@ -54,9 +54,9 @@ impl Adapter {
     /// Create a new assetto corsa competizione adapter.
     pub fn new_acc() -> Adapter {
         let model = Arc::new(RwLock::new(Model::default()));
-        let (sender, _receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::channel();
         Adapter {
-            join_handle: Some(acc::AccConnection::spawn(model.clone())),
+            join_handle: Some(acc::AccConnection::spawn(model.clone(), receiver)),
             model: ReadOnlyModel::new(model),
             sender,
         }
@@ -83,6 +83,13 @@ impl Adapter {
             .take()
             .map(|join_handle| join_handle.join().expect("Should be able to join thread"))
     }
+
+    /// Clears the current events from the model.
+    pub fn clear_events(&mut self) -> Result<(), PoisonError<RwLockWriteGuard<'_, Model>>> {
+        let mut model = self.model.model.write()?;
+        model.events.clear();
+        Ok(())
+    }
 }
 
 /// A readonly view on a model.
@@ -107,6 +114,4 @@ impl ReadOnlyModel {
 }
 
 /// Actions for the adapter to execute.
-pub enum AdapterAction {
-    ClearEvents,
-}
+pub enum AdapterAction {}
