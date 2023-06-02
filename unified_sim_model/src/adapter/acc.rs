@@ -100,7 +100,7 @@ impl AccConnection {
             .connect("127.0.0.1:9000")
             .map_err(|e| AccConnectionError::IoError(e))?;
         socket
-            .set_read_timeout(Some(Duration::from_millis(2000)))
+            .set_read_timeout(Some(Duration::from_millis(200)))
             .expect("Read timeout duration should be larger than 0");
         Ok(Self {
             socket: AccSocket {
@@ -118,7 +118,7 @@ impl AccConnection {
     }
 
     fn run_connection(&mut self) -> Result<()> {
-        self.socket.send_registration_request(1000, "", "")?;
+        self.socket.send_registration_request(100, "", "")?;
 
         loop {
             // TODO: read channel

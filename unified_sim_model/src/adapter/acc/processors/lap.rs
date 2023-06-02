@@ -43,7 +43,6 @@ impl AccProcessor for LapProcessor {
         let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
         let lap_index = entry.laps.len();
         entry.laps.push(lap.clone());
-        info!("Car #{} completed lap: {}", entry.car_number, lap.time);
 
         // Check personal best for driver
         fn current_driver_best_lap(entry: &Entry) -> Option<&Lap> {
@@ -51,7 +50,7 @@ impl AccProcessor for LapProcessor {
             entry.laps.get(driver.best_lap?)
         }
         let personal_best = current_driver_best_lap(entry)
-            .is_some_and(|best_lap| lap.time < best_lap.time)
+            .map_or(true, |best_lap| lap.time < best_lap.time)
             && !lap.invalid;
         if personal_best {
             if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
@@ -64,7 +63,7 @@ impl AccProcessor for LapProcessor {
             entry.laps.get(entry.best_lap?)
         }
         let entry_best =
-            entry_best_lap(entry).is_some_and(|best_lap| lap.time < best_lap.time) && !lap.invalid;
+            entry_best_lap(entry).map_or(true, |best_lap| lap.time < best_lap.time) && !lap.invalid;
         if entry_best {
             entry.best_lap = Some(lap_index);
         }
@@ -74,6 +73,15 @@ impl AccProcessor for LapProcessor {
         if session_best {
             session.best_lap = lap.clone();
         }
+
+        info!(
+            "Car #{} completed lap: {} {}{}{}",
+            entry.car_number,
+            lap.time,
+            if personal_best { "P" } else { "" },
+            if entry_best { "E" } else { "" },
+            if session_best { "S" } else { "" },
+        );
 
         context.events.push_back(Event::LapCompleted(LapCompleted {
             lap: lap.clone(),
