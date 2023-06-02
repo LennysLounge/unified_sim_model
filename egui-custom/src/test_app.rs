@@ -1,11 +1,8 @@
 use std::time::Duration;
 
-use egui_custom::dialog::{Dialog, DialogHandle, WindowOptions, Windower};
+use egui_custom::dialog::{Dialog, DialogHandle, Size, WindowOptions, Windower};
 use tracing::info;
-use winit::{
-    dpi::{PhysicalSize, Size},
-    window::WindowButtons,
-};
+use winit::window::WindowButtons;
 
 #[derive(Clone)]
 pub struct TestApp {
@@ -32,10 +29,10 @@ impl Dialog for TestApp {
     fn get_window_options(&self) -> WindowOptions {
         WindowOptions {
             title: "Test window".to_string(),
-            size: Some(Size::Physical(PhysicalSize {
+            size: Some(Size {
                 width: 340,
                 height: 260,
-            })),
+            }),
             ..Default::default()
         }
     }
@@ -72,7 +69,10 @@ impl Dialog for TestApp {
                     popup.borrow_dialog_mut().increase();
                     popup.borrow_dialog_mut().request_redraw();
                 }
-                ui.label(format!("The popup has value: {}", popup.borrow_dialog().value));
+                ui.label(format!(
+                    "The popup has value: {}",
+                    popup.borrow_dialog().value
+                ));
                 if ui.button("Close window").clicked() {
                     popup.borrow_dialog_mut().close();
                 }
@@ -119,12 +119,12 @@ impl Dialog for PopUp {
     fn get_window_options(&self) -> WindowOptions {
         WindowOptions {
             enabled_buttons: WindowButtons::CLOSE,
-            resizeable: false,
-            size: Some(Size::Physical(PhysicalSize {
+            resizeable: true,
+            size: Some(Size {
                 width: 220,
                 height: 80,
-            })),
-            modal: true,
+            }),
+            modal: false,
             ..Default::default()
         }
     }
