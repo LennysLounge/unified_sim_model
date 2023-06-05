@@ -89,6 +89,10 @@ impl Dialog for TestApp {
             self.age += 1;
         });
     }
+
+    fn on_close(&mut self) {
+        println!("Test app was closed");
+    }
 }
 
 struct PopUp {
@@ -127,5 +131,9 @@ impl Dialog for PopUp {
             modal: false,
             ..Default::default()
         }
+    }
+
+    fn on_close(&mut self) {
+        println!("popup was closed");
     }
 }

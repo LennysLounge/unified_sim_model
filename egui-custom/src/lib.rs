@@ -40,6 +40,9 @@ impl WindowTree {
         {
             parent_window.borrow_mut().set_modal_to(None);
         }
+        // Close dialog
+        let dialog = self.tree.get_mut(&window_id).unwrap();
+        dialog.borrow_mut().close_dialog();
         // Remove window and its children from the tree.
         self.tree.remove(window_id);
     }

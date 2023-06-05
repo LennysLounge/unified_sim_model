@@ -22,6 +22,9 @@ pub trait Dialog {
     }
     /// Runs the dialog code.
     fn show(&mut self, ctx: &egui::Context, windower: &mut Windower);
+
+    /// Runs when the dialog
+    fn on_close(&mut self);
 }
 
 /// A reference to a Dialog object running inside a os window.
@@ -42,6 +45,7 @@ impl<T: Dialog + 'static> DialogHandle<T> {
             value: Rc::new(RefCell::new(DialogContainer {
                 events: Vec::new(),
                 dialog,
+                closed: false,
             })),
         }
     }
@@ -110,6 +114,7 @@ impl<'a> Windower<'a> {
 /// were created for or by the dialog.
 pub struct DialogContainer<T: Dialog + ?Sized> {
     events: Vec<DialogEvent>,
+    closed: bool,
     dialog: T,
 }
 
@@ -122,7 +127,11 @@ impl<T: Dialog + ?Sized> DialogContainer<T> {
     /// Close this window. The underlying dialog will remain accessable
     /// unitl all handles to it have been dropped.
     pub fn close(&mut self) {
-        self.events.push(DialogEvent::Close);
+        if !self.closed {
+            self.dialog.on_close();
+            self.closed = true;
+            self.events.push(DialogEvent::Close);
+        }
     }
 
     /// Show this dialog.
@@ -152,6 +161,14 @@ impl<T: Dialog + ?Sized> Deref for DialogContainer<T> {
 impl<T: Dialog + ?Sized> DerefMut for DialogContainer<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.dialog
+    }
+}
+
+impl<T: Dialog + ?Sized> Drop for DialogContainer<T> {
+    fn drop(&mut self) {
+        if !self.closed {
+            self.dialog.on_close();
+        }
     }
 }
 
@@ -332,6 +349,12 @@ impl DialogWindow {
     pub fn set_modal_to(&mut self, modal: Option<WindowId>) {
         self.modal = modal;
         self.backend.window.set_enable(modal.is_none());
+    }
+
+    pub fn close_dialog(&mut self) {
+        if let Some(dialog) = self.dialog.upgrade() {
+            dialog.borrow_dialog_mut().close();
+        }
     }
 }
 
