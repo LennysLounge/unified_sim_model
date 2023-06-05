@@ -24,7 +24,7 @@ use self::{
     processors::{base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor},
 };
 
-use super::{processors::distance_driven, AdapterAction};
+use super::{processors::distance_driven, AdapterCommand};
 
 mod data;
 mod processors;
@@ -73,7 +73,7 @@ impl From<AccConnectionError> for super::ConnectionError {
 
 pub struct AccConnection {
     socket: AccSocket,
-    channel: Receiver<AdapterAction>,
+    channel: Receiver<AdapterCommand>,
     model: Arc<RwLock<Model>>,
     base_proc: BaseProcessor,
     connection_proc: ConnectionProcessor,
@@ -83,7 +83,7 @@ pub struct AccConnection {
 impl AccConnection {
     pub fn spawn(
         model: Arc<RwLock<Model>>,
-        channel: Receiver<AdapterAction>,
+        channel: Receiver<AdapterCommand>,
     ) -> JoinHandle<Result<()>> {
         thread::Builder::new()
             .name("Acc connection".into())
@@ -94,7 +94,7 @@ impl AccConnection {
             .expect("should be able to spawn thread")
     }
 
-    fn new(model: Arc<RwLock<Model>>, channel: Receiver<AdapterAction>) -> Result<Self> {
+    fn new(model: Arc<RwLock<Model>>, channel: Receiver<AdapterCommand>) -> Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AccConnectionError::IoError(e))?;
         socket
             .connect("127.0.0.1:9000")
@@ -124,7 +124,7 @@ impl AccConnection {
             // TODO: read channel
             match self.channel.try_recv() {
                 Ok(action) => match action {
-                    AdapterAction::Close => {
+                    AdapterCommand::Close => {
                         return self.socket.send_unregister_request();
                     }
                 },

@@ -37,7 +37,7 @@ pub struct Adapter {
     /// The shared model.
     pub model: ReadOnlyModel,
     /// Channel to send adapter actions to the adapter.
-    pub sender: Sender<AdapterAction>,
+    sender: Sender<AdapterCommand>,
 }
 
 impl Adapter {
@@ -87,6 +87,15 @@ impl Adapter {
         model.events.clear();
         Ok(())
     }
+
+    /// Send a adapter command to the game.
+    pub fn send(&mut self, command: AdapterCommand) {
+        if !self.is_finished() {
+            self.sender
+                .send(command)
+                .expect("Should be able to send if the thread is not finished.");
+        }
+    }
 }
 
 /// A readonly view on a model.
@@ -110,8 +119,8 @@ impl ReadOnlyModel {
     }
 }
 
-/// Actions for the adapter to execute.
-pub enum AdapterAction {
+/// Commands for the adapter to execute.
+pub enum AdapterCommand {
     /// Close the adapter and return the thread.
     Close,
 }

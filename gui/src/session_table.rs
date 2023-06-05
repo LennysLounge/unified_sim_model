@@ -50,6 +50,10 @@ impl SessionTable {
             }
         }
     }
+
+    pub fn clear(&mut self) {
+        self.session_tab_tree = egui_dock::Tree::new(Vec::new());
+    }
 }
 
 struct SessionTab {

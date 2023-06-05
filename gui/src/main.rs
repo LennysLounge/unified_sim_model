@@ -6,7 +6,7 @@ use egui_custom::dialog::{Dialog, Size, Windower};
 use session_table::SessionTable;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
-use unified_sim_model::adapter::{Adapter, AdapterAction};
+use unified_sim_model::adapter::{Adapter, AdapterCommand};
 
 mod session_table;
 
@@ -56,24 +56,16 @@ impl Dialog for App {
                 .is_some_and(|adapter| !adapter.is_finished());
             if is_adapter_active {
                 if ui.button("Disconnect").clicked() {
-                    if let Some(ref mut adapter) = self.adapter {
-                        adapter
-                            .sender
-                            .send(AdapterAction::Close)
-                            .expect("Should be able to send");
-                        if let Some(Err(e)) = adapter.take_result() {
-                            warn!("Connection closed: {:?}", e);
-                        } else {
-                            info!("Adapter shut down correctly");
-                        }
-                    }
+                    self.close_adpater();
                 }
             } else {
                 if ui.button("Dummy").clicked() {
                     self.adapter = Some(Adapter::new_dummy());
+                    self.session_table.clear();
                 }
                 if ui.button("Connect").clicked() {
                     self.adapter = Some(Adapter::new_acc());
+                    self.session_table.clear();
                 }
             }
             ui.separator();
@@ -103,17 +95,21 @@ impl Dialog for App {
     }
 
     fn on_close(&mut self) {
+        self.close_adpater();
+    }
+}
+
+impl App {
+    fn close_adpater(&mut self) {
         if let Some(ref mut adapter) = self.adapter {
-            if !adapter.is_finished() {
-                adapter
-                    .sender
-                    .send(AdapterAction::Close)
-                    .expect("Should be able to send");
-                if let Some(Err(e)) = adapter.take_result() {
-                    warn!("Connection closed: {:?}", e);
-                } else {
-                    info!("Adapter shut down correctly");
-                }
+            if adapter.is_finished() {
+                return;
+            }
+            adapter.send(AdapterCommand::Close);
+            if let Some(Err(e)) = adapter.take_result() {
+                warn!("Connection closed: {:?}", e);
+            } else {
+                info!("Adapter shut down correctly");
             }
         }
     }
