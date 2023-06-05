@@ -74,12 +74,8 @@ impl Adapter {
     /// Joins the adapter thread and returns the result.
     ///
     /// The result is only returned the first time this method is called after
-    /// the thread has finished. Calling it before the thread is finished will return
-    /// `None`. Calling it after the result has been taking will also return `None`.
+    /// the thread has finished. Calling it after the result has been taking will also return `None`.
     pub fn take_result(&mut self) -> Option<Result<(), ConnectionError>> {
-        if !self.is_finished() {
-            return None;
-        }
         self.join_handle
             .take()
             .map(|join_handle| join_handle.join().expect("Should be able to join thread"))
@@ -115,4 +111,7 @@ impl ReadOnlyModel {
 }
 
 /// Actions for the adapter to execute.
-pub enum AdapterAction {}
+pub enum AdapterAction {
+    /// Close the adapter and return the thread.
+    Close,
+}

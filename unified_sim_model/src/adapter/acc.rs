@@ -123,7 +123,11 @@ impl AccConnection {
         loop {
             // TODO: read channel
             match self.channel.try_recv() {
-                Ok(action) => match action {},
+                Ok(action) => match action {
+                    AdapterAction::Close => {
+                        return self.socket.send_unregister_request();
+                    }
+                },
                 Err(TryRecvError::Empty) => (),
                 Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
             }
@@ -206,6 +210,11 @@ impl AccSocket {
     /// Send a track data request.
     fn send_track_data_request(&self) -> Result<()> {
         self.send(&data::track_data_request(self.connection_id))
+    }
+
+    /// Send a unregister request.
+    fn send_unregister_request(&self) -> Result<()> {
+        self.send(&data::unregister_request(self.connection_id))
     }
 
     fn read_message(&mut self) -> Result<Message> {

@@ -4,9 +4,9 @@ use egui::Context;
 use egui_custom::dialog::{Dialog, Size, Windower};
 
 use session_table::SessionTable;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
-use unified_sim_model::adapter::Adapter;
+use unified_sim_model::adapter::{Adapter, AdapterAction};
 
 mod session_table;
 
@@ -42,22 +42,30 @@ impl Dialog for App {
     fn show(&mut self, ctx: &Context, _windower: &mut Windower) {
         // Check adapter state.
         if let Some(ref mut adapter) = self.adapter {
-            if let Some(Err(e)) = adapter.take_result() {
-                info!("Connection closed: {:?}", e);
+            if adapter.is_finished() {
+                if let Some(Err(e)) = adapter.take_result() {
+                    info!("Connection closed: {:?}", e);
+                }
             }
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(ref adapter) = self.adapter {
-                if adapter.is_finished() {
-                    if ui.button("Reconnect").clicked() {
-                        info!("TODO: Reconnect adapter");
-                        // TODO: Reconnect adapter.
-                    }
-                } else {
-                    if ui.button("Disconnect").clicked() {
-                        info!("TODO: Disconnect adapter");
-                        // TODO: disconnect adapter.
+            let is_adapter_active = self
+                .adapter
+                .as_ref()
+                .is_some_and(|adapter| !adapter.is_finished());
+            if is_adapter_active {
+                if ui.button("Disconnect").clicked() {
+                    if let Some(ref mut adapter) = self.adapter {
+                        adapter
+                            .sender
+                            .send(AdapterAction::Close)
+                            .expect("Should be able to send");
+                        if let Some(Err(e)) = adapter.take_result() {
+                            warn!("Connection closed: {:?}", e);
+                        } else {
+                            info!("Adapter shut down correctly");
+                        }
                     }
                 }
             } else {
@@ -68,7 +76,6 @@ impl Dialog for App {
                     self.adapter = Some(Adapter::new_acc());
                 }
             }
-
             ui.separator();
 
             if let Some(ref adapter) = self.adapter {
@@ -76,6 +83,7 @@ impl Dialog for App {
             }
         });
 
+        // clear adapter events at the end of the frame.
         if let Some(ref mut adapter) = self.adapter {
             if let Err(e) = adapter.clear_events() {
                 error!("Cannot clear events. Model is poisoned: {}", e);
@@ -91,6 +99,22 @@ impl Dialog for App {
                 height: 720,
             }),
             ..Default::default()
+        }
+    }
+
+    fn on_close(&mut self) {
+        if let Some(ref mut adapter) = self.adapter {
+            if !adapter.is_finished() {
+                adapter
+                    .sender
+                    .send(AdapterAction::Close)
+                    .expect("Should be able to send");
+                if let Some(Err(e)) = adapter.take_result() {
+                    warn!("Connection closed: {:?}", e);
+                } else {
+                    info!("Adapter shut down correctly");
+                }
+            }
         }
     }
 }
