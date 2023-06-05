@@ -12,6 +12,7 @@ use crate::model::Model;
 
 pub mod acc;
 pub mod dummy;
+pub mod processors;
 
 /// A error with the game connection.
 #[derive(Debug)]

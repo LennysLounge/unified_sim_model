@@ -1,6 +1,6 @@
 use tracing::error;
 
-use crate::model::{Event, Model};
+use crate::model::{EntryId, Event, Model};
 use std::{
     collections::VecDeque,
     error::Error,
@@ -24,7 +24,7 @@ use self::{
     processors::{base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor},
 };
 
-use super::AdapterAction;
+use super::{processors::distance_driven, AdapterAction};
 
 mod data;
 mod processors;
@@ -146,6 +146,14 @@ impl AccConnection {
         process_message(&mut self.base_proc, &message, &mut context)?;
         process_message(&mut self.connection_proc, &message, &mut context)?;
         process_message(&mut self.lap_proc, &message, &mut context)?;
+
+        match message {
+            Message::RealtimeCarUpdate(update) => distance_driven::calc_distance_driven(
+                &mut context.model,
+                &EntryId(update.car_id as i32),
+            ),
+            _ => (),
+        }
 
         while !context.events.is_empty() {
             let event = context.events.pop_front().unwrap();

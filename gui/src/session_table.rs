@@ -79,7 +79,10 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
     let mut entries: Vec<&Entry> = entries.values().collect();
     entries.sort_by(|e1, e2| {
         let is_connected = e2.connected.cmp(&e1.connected);
-        let position = e1.position.cmp(&e2.position);
+        let position = e2
+            .distance_driven
+            .partial_cmp(&e1.distance_driven)
+            .unwrap_or(std::cmp::Ordering::Equal);
         is_connected.then(position)
     });
 
@@ -196,7 +199,7 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
                 });
                 row.col(|ui| {
                     right(ui, |ui| {
-                        ui.label(format!("{:.3}", entry.spline_pos));
+                        ui.label(format!("{:.3}", entry.distance_driven));
                     });
                 });
                 row.col(|ui| {

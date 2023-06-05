@@ -77,6 +77,7 @@ pub struct Entry {
     pub speed: f32,
     pub connected: bool,
     pub stint_time: Time,
+    pub distance_driven: f32,
 }
 
 /// An id for a driver.

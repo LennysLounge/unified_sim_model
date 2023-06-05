@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::model::{
-    Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Lap, Model, Nationality, Session,
-    SessionId, SessionPhase, SessionType, Time,
+    Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
+    Session, SessionId, SessionPhase, SessionType, Time,
 };
 
 use super::ConnectionError;
@@ -57,6 +57,7 @@ impl DummyAdapter {
                 invalid: false,
             },
         });
+        model.events.push(Event::SessionChanged(SessionId(0)));
 
         for i in 0..10 {
             let session = model.current_session_mut().unwrap();
@@ -114,6 +115,7 @@ impl DummyAdapter {
                     speed: 128.0,
                     connected: true,
                     stint_time: Time::from(56_789),
+                    distance_driven: i as f32 * 0.345,
                 },
             );
         }
