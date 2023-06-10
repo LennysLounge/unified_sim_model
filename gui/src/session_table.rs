@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::RwLockReadGuard};
 
-use egui::{Align, InnerResponse, RichText, Ui};
-use egui_extras::{Column, TableBuilder};
+use egui::{RichText, Ui};
+use egui_ltable::{Column, Row, Table};
 use unified_sim_model::model::{Entry, EntryId, Event, Model, SessionId};
 
 pub struct SessionTable {
@@ -29,6 +29,7 @@ impl SessionTable {
             .draggable_tabs(false)
             .show_close_buttons(false)
             .style(style)
+            .scroll_area_in_tabs(false)
             .show_inside(ui, &mut TabViewer { model });
     }
 
@@ -90,91 +91,77 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
         is_connected.then(position)
     });
 
-    fn center<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
-        ui.with_layout(
-            egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-            add_contents,
-        )
-    }
-    fn right<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
-        ui.with_layout(
-            egui::Layout::centered_and_justified(egui::Direction::LeftToRight)
-                .with_main_align(Align::Max),
-            add_contents,
-        )
-    }
-
-    TableBuilder::new(ui)
-        .auto_shrink([false, false])
-        .resizable(true)
+    let center = egui::Layout::centered_and_justified(egui::Direction::LeftToRight);
+    let right = egui::Layout::right_to_left(egui::Align::Min);
+    Table::new()
         .striped(true)
-        .cell_layout(egui::Layout::left_to_right(Align::Center))
-        .column(Column::exact(20.0))
-        .column(Column::exact(20.0))
-        .column(Column::initial(150.0).clip(true).at_least(20.0))
-        .column(Column::initial(150.0).clip(true).at_least(20.0))
-        .column(Column::exact(40.0))
-        .column(Column::initial(100.0).clip(true).at_least(20.0))
-        .column(Column::initial(70.0))
-        .column(Column::initial(50.0))
-        .column(Column::initial(50.0))
-        .column(Column::initial(50.0))
-        .column(Column::initial(50.0))
-        .column(Column::initial(50.0))
-        .column(Column::initial(70.0))
-        .header(20.0, |mut header| {
-            header.col(|_| {});
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Pos").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Team name").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Driver").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                center(ui, |ui| {
+        .column(Column::exact(25.0)) // pit
+        .column(Column::exact(35.0).layout(center)) // pos
+        .column(Column::exact(37.0).layout(right)) // #
+        .column(Column::fill(1.0).resizeable(true).min_width(70.0)) // team
+        .column(Column::fill(1.0).resizeable(true).min_width(70.0)) // driver
+        .column(Column::initial(75.0).resizeable(true).min_width(50.0)) // car
+        .column(Column::exact(70.0).layout(right)) // spline pos
+        .column(Column::exact(50.0).layout(right)) // laps
+        .column(Column::exact(70.0).layout(right)) // best lap
+        .column(Column::exact(70.0).layout(right)) // lap
+        .column(Column::exact(70.0).layout(right)) // delta
+        .column(Column::exact(70.0).layout(right)) // to leader
+        .column(Column::exact(70.0).layout(right)) // stint
+        .column_lines(true)
+        .resize_full_height(false)
+        .scroll(true, true)
+        .show(ui, |table| {
+            // Headers
+            table.row(Row::new().height(20.0).fixed(true), |row| {
+                row.cell(|_| {});
+                row.cell(|ui| {
+                    ui.strong("Pos");
+                });
+                row.cell(|ui| {
                     ui.strong("#");
                 });
+                row.cell(|ui| {
+                    ui.strong("Team name");
+                });
+                row.cell(|ui| {
+                    ui.strong("Driver");
+                });
+                row.cell(|ui| {
+                    ui.strong("Car");
+                });
+                row.cell(|ui| {
+                    ui.strong("Spline pos");
+                });
+                row.cell(|ui| {
+                    ui.strong("Laps");
+                });
+                row.cell(|ui| {
+                    ui.strong("Best lap");
+                });
+                row.cell(|ui| {
+                    ui.strong("Lap");
+                });
+                row.cell(|ui| {
+                    ui.strong("Delta");
+                });
+                row.cell(|ui| {
+                    ui.strong("To leader");
+                });
+                row.cell(|ui| {
+                    ui.strong("Stint");
+                });
             });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Car").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Spline Pos").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Laps").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Best lap").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Lap").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Delta").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("to leader").strong()).wrap(false));
-            });
-            header.col(|ui| {
-                ui.add(egui::Label::new(RichText::new("Stint").strong()).wrap(false));
-            });
-        })
-        .body(|body| {
-            body.rows(20.0, entries.len(), |i, mut row| {
-                let entry = entries[i];
-                row.col(|ui| {
-                    center(ui, |ui| {
+
+            // Body
+            for entry in entries.iter() {
+                table.row(Row::new().height(20.0).hover_highlight(true), |row| {
+                    row.cell(|ui| {
                         if entry.in_pits {
                             ui.label("P");
                         }
                     });
-                });
-                row.col(|ui| {
-                    center(ui, |ui| {
+                    row.cell(|ui| {
                         let s = if entry.connected {
                             format!("{}", entry.position)
                         } else {
@@ -182,76 +169,60 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
                         };
                         ui.add(egui::Label::new(s).wrap(false));
                     });
-                });
-                row.col(|ui| {
-                    ui.add(egui::Label::new(&entry.team_name).wrap(false));
-                });
-                row.col(|ui| {
-                    let driver_name = match entry.drivers.get(&entry.current_driver) {
-                        Some(driver) => format!("{} {}", driver.first_name, driver.last_name),
-                        None => "No driver".to_string(),
-                    };
-                    ui.label(driver_name);
-                });
-                row.col(|ui| {
-                    center(ui, |ui| {
-                        ui.label(format!("#{}", entry.car_number));
+                    row.cell(|ui| {
+                        ui.label(format!("{}", entry.car_number));
                     });
-                });
-                row.col(|ui| {
-                    ui.label(entry.car.name);
-                });
-                row.col(|ui| {
-                    right(ui, |ui| {
+                    row.cell(|ui| {
+                        ui.add(egui::Label::new(&entry.team_name).wrap(false));
+                    });
+                    row.cell(|ui| {
+                        let driver_name = match entry.drivers.get(&entry.current_driver) {
+                            Some(driver) => format!("{} {}", driver.first_name, driver.last_name),
+                            None => "No driver".to_string(),
+                        };
+                        ui.label(driver_name);
+                    });
+                    row.cell(|ui| {
+                        ui.label(entry.car.name);
+                    });
+                    row.cell(|ui| {
                         ui.label(format!("{:.3}", entry.distance_driven));
                     });
-                });
-                row.col(|ui| {
-                    right(ui, |ui| {
+                    row.cell(|ui| {
                         ui.label(format!("{}", entry.lap_count));
                     });
-                });
-                row.col(|ui| {
-                    let best_lap = entry
-                        .drivers
-                        .get(&entry.current_driver)
-                        .and_then(|driver| driver.best_lap)
-                        .and_then(|lap_index| entry.laps.get(lap_index))
-                        .map_or("-".to_string(), |lap| lap.time.format());
+                    row.cell(|ui| {
+                        let best_lap = entry
+                            .drivers
+                            .get(&entry.current_driver)
+                            .and_then(|driver| driver.best_lap)
+                            .and_then(|lap_index| entry.laps.get(lap_index))
+                            .map_or("-".to_string(), |lap| lap.time.format());
 
-                    right(ui, |ui| {
                         ui.label(best_lap);
                     });
-                });
-                row.col(|ui| {
-                    let mut lap_time = RichText::new(entry.current_lap.time.format());
-                    if entry.current_lap.invalid {
-                        lap_time = lap_time.color(egui::Color32::RED);
-                    }
+                    row.cell(|ui| {
+                        let mut lap_time = RichText::new(entry.current_lap.time.format());
+                        if entry.current_lap.invalid {
+                            lap_time = lap_time.color(egui::Color32::RED);
+                        }
 
-                    right(ui, |ui| {
                         ui.label(lap_time);
                     });
-                });
-                row.col(|ui| {
-                    let mut delta = RichText::new(entry.performance_delta.format());
-                    if entry.current_lap.invalid {
-                        delta = delta.color(egui::Color32::RED);
-                    }
-                    right(ui, |ui| {
+                    row.cell(|ui| {
+                        let mut delta = RichText::new(entry.performance_delta.format());
+                        if entry.current_lap.invalid {
+                            delta = delta.color(egui::Color32::RED);
+                        }
                         ui.label(delta);
                     });
-                });
-                row.col(|ui| {
-                    right(ui, |ui| {
+                    row.cell(|ui| {
                         ui.label(entry.time_behind_leader.format());
                     });
-                });
-                row.col(|ui| {
-                    right(ui, |ui| {
+                    row.cell(|ui| {
                         ui.label(entry.stint_time.format());
                     });
                 });
-            });
+            }
         });
 }
