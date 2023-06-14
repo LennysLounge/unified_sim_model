@@ -543,7 +543,10 @@ impl Table {
         let mut new_table_state = TableState::default();
         for (i, column) in column_layout.iter().enumerate() {
             let width = if column.first_time && column.definition.is_auto_sized() {
-                println!("Save column {} with content width: {}", i, column.content_width);
+                println!(
+                    "Save column {} with content width: {}",
+                    i, column.content_width
+                );
                 column.content_width
             } else {
                 column.width

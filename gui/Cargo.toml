@@ -12,5 +12,6 @@ egui_dock = "0.6"
 egui-custom = {path="../egui-custom"}
 unified_sim_model = {path="../unified_sim_model"}
 egui_ltable = {path="../egui_ltable"}
+dear_egui = {path="../dear_egui"}
 tracing = "0.1.37"
 tracing-subscriber = {version="0.3.17", features=["env-filter"]}

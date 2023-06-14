@@ -40,6 +40,8 @@ impl App {
 
 impl Dialog for App {
     fn show(&mut self, ctx: &Context, _windower: &mut Windower) {
+        dear_egui::set_theme(ctx, dear_egui::SKY);
+
         // Check adapter state.
         if let Some(ref mut adapter) = self.adapter {
             if adapter.is_finished() {

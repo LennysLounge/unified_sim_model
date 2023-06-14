@@ -51,9 +51,9 @@ impl eframe::App for MyApp {
                                 .resizeable(true),
                         )
                         .column(
-                            Column::initial(100.0)
+                            Column::fill(1.0)
                                 .min_width(50.0)
-                                .max_width(200.0)
+                                //.max_width(200.0)
                                 .resizeable(true)
                                 .layout(Layout::right_to_left(Align::Min).with_main_wrap(false)),
                         )
