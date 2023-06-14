@@ -1,14 +1,14 @@
 use tracing::{debug, info};
 
 use crate::{
-    adapter::acc::{
+    games::acc::{
         data::{
             CarLocation, EntryListCar, RealtimeCarUpdate, RegistrationResult, SessionPhase,
             SessionType, SessionUpdate, TrackData,
         },
         AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
-    model::{self, Driver, DriverId, Entry, EntryId, Event, SessionId, Time},
+    model::{self, Driver, DriverId, Entry, EntryId, Event, SessionId}, time::Time,
 };
 
 /// A processor to transfer game data directly into the model.

@@ -36,12 +36,12 @@ fn main() -> Result<(), eframe::Error> {
 #[derive(PartialEq)]
 enum Theme {
     Sky,
-    Blue,
-    Purple,
-    Pink,
-    Red,
-    C7,
-    C8,
+    Iris,
+    Violet,
+    Raspberry,
+    Cadmium,
+    Acid,
+    Forest,
     Custom,
 }
 
@@ -49,12 +49,12 @@ impl Theme {
     fn color(&self, custom_color: dear_egui::colors::Color) -> dear_egui::colors::Color {
         match self {
             Theme::Sky => dear_egui::colors::SKY,
-            Theme::Blue => dear_egui::colors::BLUE,
-            Theme::Purple => dear_egui::colors::PURPLE,
-            Theme::Pink => dear_egui::colors::PINK,
-            Theme::Red => dear_egui::colors::RED,
-            Theme::C7 => dear_egui::colors::C7,
-            Theme::C8 => dear_egui::colors::C8,
+            Theme::Iris => dear_egui::colors::IRIS,
+            Theme::Violet => dear_egui::colors::VIOLET,
+            Theme::Raspberry => dear_egui::colors::RASPBERRY,
+            Theme::Cadmium => dear_egui::colors::CADMIUM,
+            Theme::Acid => dear_egui::colors::ACID,
+            Theme::Forest => dear_egui::colors::FOREST,
             Theme::Custom => custom_color,
         }
     }
@@ -117,13 +117,13 @@ impl eframe::App for MyApp {
                     };
                     ui.selectable_value(&mut self.theme, theme, label);
                 };
-                tab(Theme::Red, "Red");
-                tab(Theme::C7, "C7");
-                tab(Theme::C8, "C8");
+                tab(Theme::Cadmium, "Cadmium");
+                tab(Theme::Acid, "Acid");
+                tab(Theme::Forest, "Forest");
                 tab(Theme::Sky, "Sky");
-                tab(Theme::Blue, "Blue");
-                tab(Theme::Purple, "Purple");
-                tab(Theme::Pink, "Pink");
+                tab(Theme::Iris, "Iris");
+                tab(Theme::Violet, "Violet");
+                tab(Theme::Raspberry, "Raspberry");
                 tab(Theme::Custom, "Custom");
             });
             //ui.allocate_space(egui::vec2(0.0, -8.0));

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tracing::info;
 
 use crate::{
-    adapter::acc::{
+    games::acc::{
         data::{RealtimeCarUpdate, SessionUpdate},
         AccProcessor, AccProcessorContext, Result,
     },

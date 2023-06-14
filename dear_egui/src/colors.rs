@@ -35,13 +35,13 @@ pub fn from_hsv(h: f32, s: f32, v: f32) -> Color32 {
     )
 }
 
-pub const RED: Color = Color::new(0.0, 0.80);
-pub const C7: Color = Color::new(70.0, 0.60);
-pub const C8: Color = Color::new(160.0, 0.70);
+pub const CADMIUM: Color = Color::new(0.0, 0.80);
+pub const ACID: Color = Color::new(70.0, 0.60);
+pub const FOREST: Color = Color::new(160.0, 0.70);
 pub const SKY: Color = Color::new(212.0, 1.00);
-pub const BLUE: Color = Color::new(240.0, 1.30);
-pub const PURPLE: Color = Color::new(270.0, 0.85);
-pub const PINK: Color = Color::new(310.0, 0.70);
+pub const IRIS: Color = Color::new(240.0, 1.30);
+pub const VIOLET: Color = Color::new(290.0, 0.75);
+pub const RASPBERRY: Color = Color::new(310.0, 0.70);
 
 #[derive(Clone, Copy)]
 pub struct Color {

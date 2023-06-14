@@ -4,19 +4,21 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use crate::model::{
-    Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
-    Session, SessionId, SessionPhase, SessionType, Time,
+use crate::{
+    model::{
+        Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
+        Session, SessionId, SessionPhase, SessionType,
+    },
+    time::Time,
+    AdapterError,
 };
-
-use super::ConnectionError;
 
 pub struct DummyAdapter {
     model: Arc<RwLock<Model>>,
 }
 
 impl DummyAdapter {
-    pub fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<(), ConnectionError>> {
+    pub fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<(), AdapterError>> {
         thread::Builder::new()
             .name("Dummy Adapter".into())
             .spawn(move || {
@@ -26,7 +28,7 @@ impl DummyAdapter {
             .expect("should be able to spawn thread")
     }
 
-    fn run(self) -> Result<(), ConnectionError> {
+    fn run(self) -> Result<(), AdapterError> {
         let mut model = self
             .model
             .write()

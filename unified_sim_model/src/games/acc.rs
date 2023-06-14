@@ -1,6 +1,9 @@
 use tracing::error;
 
-use crate::model::{EntryId, Event, Model};
+use crate::{
+    model::{EntryId, Event, Model},
+    AdapterCommand,
+};
 use std::{
     collections::VecDeque,
     error::Error,
@@ -24,13 +27,13 @@ use self::{
     processors::{base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor},
 };
 
-use super::{processors::distance_driven, AdapterCommand};
+use super::common::distance_driven;
 
 mod data;
 mod processors;
 
 /// A specialized result for Connection errors.
-type Result<T> = result::Result<T, super::ConnectionError>;
+type Result<T> = result::Result<T, crate::AdapterError>;
 
 #[derive(Debug)]
 pub enum AccConnectionError {
@@ -65,9 +68,9 @@ impl Display for AccConnectionError {
 
 impl Error for AccConnectionError {}
 
-impl From<AccConnectionError> for super::ConnectionError {
+impl From<AccConnectionError> for crate::AdapterError {
     fn from(value: AccConnectionError) -> Self {
-        super::ConnectionError::ACC(value)
+        crate::AdapterError::ACC(value)
     }
 }
 

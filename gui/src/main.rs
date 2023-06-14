@@ -6,7 +6,7 @@ use egui_custom::dialog::{Dialog, Size, Windower};
 use session_table::SessionTable;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
-use unified_sim_model::adapter::{Adapter, AdapterCommand};
+use unified_sim_model::{Adapter, AdapterCommand};
 
 mod session_table;
 
@@ -45,7 +45,7 @@ impl Dialog for App {
         // Check adapter state.
         if let Some(ref mut adapter) = self.adapter {
             if adapter.is_finished() {
-                if let Some(Err(e)) = adapter.take_result() {
+                if let Some(Err(e)) = adapter.join() {
                     info!("Connection closed: {:?}", e);
                 }
             }
@@ -108,7 +108,7 @@ impl App {
                 return;
             }
             adapter.send(AdapterCommand::Close);
-            if let Some(Err(e)) = adapter.take_result() {
+            if let Some(Err(e)) = adapter.join() {
                 warn!("Connection closed: {:?}", e);
             } else {
                 info!("Adapter shut down correctly");

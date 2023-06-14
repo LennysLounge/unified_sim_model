@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use tracing::info;
 
 use crate::{
-    adapter::acc::{
+    games::acc::{
         data::{LapInfo, RealtimeCarUpdate},
         AccProcessor, AccProcessorContext, Result,
     },
-    model::{event::LapCompleted, DriverId, Entry, EntryId, Event, Lap, Time},
+    model::{DriverId, Entry, EntryId, Event, Lap, LapCompleted},
+    time::Time,
 };
 
 #[derive(Debug, Default)]
