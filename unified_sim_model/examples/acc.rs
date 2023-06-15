@@ -15,7 +15,7 @@ fn main() {
         .expect("Should be able to set global subscriber");
 
     info!("Connecting to game");
-    let mut adapter = Adapter::new_acc().unwrap();
+    let mut adapter = Adapter::new_acc();
 
     // Wait for an update and loop.
     let mut limit = 0;

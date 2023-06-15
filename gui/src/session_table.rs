@@ -1,8 +1,15 @@
 use std::{collections::HashMap, sync::RwLockReadGuard};
 
-use egui::{RichText, Ui};
+use egui::{RichText, Sense, Ui};
+use egui_custom::dialog::Windower;
 use egui_ltable::{Column, Row, Table};
-use unified_sim_model::model::{Entry, EntryId, Event, Model, SessionId};
+use tracing::info;
+use unified_sim_model::{
+    model::{Entry, EntryId, Event, Model, SessionId},
+    Adapter,
+};
+
+use crate::graph::Graph;
 
 pub struct SessionTable {
     session_tab_tree: egui_dock::Tree<SessionTab>,
@@ -15,7 +22,13 @@ impl SessionTable {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, model: &RwLockReadGuard<'_, Model>) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        model: &RwLockReadGuard<'_, Model>,
+        windower: &mut Windower,
+        adapter: &Adapter,
+    ) {
         self.update_session_tabs(model);
 
         let mut style = egui_dock::Style::from_egui(ui.style().as_ref());
@@ -30,7 +43,14 @@ impl SessionTable {
             .show_close_buttons(false)
             .style(style)
             .scroll_area_in_tabs(false)
-            .show_inside(ui, &mut TabViewer { model });
+            .show_inside(
+                ui,
+                &mut TabViewer {
+                    model,
+                    windower,
+                    adapter,
+                },
+            );
     }
 
     fn update_session_tabs(&mut self, model: &RwLockReadGuard<'_, Model>) {
@@ -62,16 +82,18 @@ struct SessionTab {
     title: String,
 }
 
-struct TabViewer<'a> {
+struct TabViewer<'a, 'b> {
     model: &'a RwLockReadGuard<'a, Model>,
+    windower: &'a mut Windower<'b>,
+    adapter: &'a Adapter,
 }
 
-impl<'a> egui_dock::TabViewer for TabViewer<'a> {
+impl<'a, 'b> egui_dock::TabViewer for TabViewer<'a, 'b> {
     type Tab = SessionTab;
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         if let Some(session) = self.model.sessions.get(&tab.session_id) {
-            display_entries_table(ui, &session.entries);
+            display_entries_table(ui, &session.entries, self.windower, self.adapter);
         }
     }
 
@@ -80,7 +102,12 @@ impl<'a> egui_dock::TabViewer for TabViewer<'a> {
     }
 }
 
-fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
+fn display_entries_table(
+    ui: &mut Ui,
+    entries: &HashMap<EntryId, Entry>,
+    windower: &mut Windower,
+    adapter: &Adapter,
+) {
     let mut entries: Vec<&Entry> = entries.values().collect();
     entries.sort_by(|e1, e2| {
         let is_connected = e2.connected.cmp(&e1.connected);
@@ -98,8 +125,8 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
         .column(Column::exact(25.0)) // pit
         .column(Column::exact(35.0).layout(center)) // pos
         .column(Column::exact(37.0).layout(right)) // #
-        .column(Column::fill(1.0).resizeable(true).min_width(70.0)) // team
-        .column(Column::fill(1.0).resizeable(true).min_width(70.0)) // driver
+        .column(Column::initial(100.0).resizeable(true).min_width(70.0)) // team
+        .column(Column::initial(150.0).resizeable(true).min_width(70.0)) // driver
         .column(Column::initial(75.0).resizeable(true).min_width(50.0)) // car
         .column(Column::exact(70.0).layout(right)) // spline pos
         .column(Column::exact(50.0).layout(right)) // laps
@@ -108,6 +135,7 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
         .column(Column::exact(70.0).layout(right)) // delta
         .column(Column::exact(70.0).layout(right)) // to leader
         .column(Column::exact(70.0).layout(right)) // stint
+        .column(Column::fill(1.0).min_width(0.1))
         .column_lines(true)
         .resize_full_height(false)
         .scroll(true, true)
@@ -151,77 +179,113 @@ fn display_entries_table(ui: &mut Ui, entries: &HashMap<EntryId, Entry>) {
                 row.cell(|ui| {
                     ui.strong("Stint");
                 });
+                row.cell(|_| {});
             });
 
             // Body
-            for entry in entries.iter() {
-                table.row(Row::new().height(20.0).hover_highlight(true), |row| {
-                    row.cell(|ui| {
-                        if entry.in_pits {
-                            ui.label("P");
+            for entry in entries {
+                let response = table.row(
+                    Row::new()
+                        .height(20.0)
+                        .hover_highlight(true)
+                        .sense(Sense::click()),
+                    |row| {
+                        row.cell(|ui| {
+                            if entry.in_pits {
+                                ui.label("P");
+                            }
+                        });
+                        row.cell(|ui| {
+                            let s = if entry.connected {
+                                format!("{}", entry.position)
+                            } else {
+                                "-".to_string()
+                            };
+                            ui.add(egui::Label::new(s).wrap(false));
+                        });
+                        row.cell(|ui| {
+                            ui.label(format!("{}", entry.car_number));
+                        });
+                        row.cell(|ui| {
+                            ui.add(egui::Label::new(&entry.team_name).wrap(false));
+                        });
+                        row.cell(|ui| {
+                            let driver_name = match entry.drivers.get(&entry.current_driver) {
+                                Some(driver) => {
+                                    format!("{} {}", driver.first_name, driver.last_name)
+                                }
+                                None => "No driver".to_string(),
+                            };
+                            ui.label(driver_name);
+                        });
+                        row.cell(|ui| {
+                            ui.label(entry.car.name);
+                        });
+                        let r = row.cell_sense(Sense::click(), |ui| {
+                            ui.label(format!("{:.3}", entry.distance_driven));
+                        });
+                        if let Some(response) = r {
+                            if response.double_clicked() {
+                                info!("Row cell clicked");
+                            }
+                            response.context_menu(|ui| {
+                                if ui.button("Focus").clicked() {
+                                    ui.close_menu();
+                                }
+                                if ui.button("Graph").clicked() {
+                                    let graph = windower.new_window(Graph {
+                                        adapter: (*adapter).clone(),
+                                        handle: None,
+                                    });
+                                    graph.borrow_dialog_mut().handle = Some(graph.clone());
+                                    ui.close_menu();
+                                }
+                            });
                         }
-                    });
-                    row.cell(|ui| {
-                        let s = if entry.connected {
-                            format!("{}", entry.position)
-                        } else {
-                            "-".to_string()
-                        };
-                        ui.add(egui::Label::new(s).wrap(false));
-                    });
-                    row.cell(|ui| {
-                        ui.label(format!("{}", entry.car_number));
-                    });
-                    row.cell(|ui| {
-                        ui.add(egui::Label::new(&entry.team_name).wrap(false));
-                    });
-                    row.cell(|ui| {
-                        let driver_name = match entry.drivers.get(&entry.current_driver) {
-                            Some(driver) => format!("{} {}", driver.first_name, driver.last_name),
-                            None => "No driver".to_string(),
-                        };
-                        ui.label(driver_name);
-                    });
-                    row.cell(|ui| {
-                        ui.label(entry.car.name);
-                    });
-                    row.cell(|ui| {
-                        ui.label(format!("{:.3}", entry.distance_driven));
-                    });
-                    row.cell(|ui| {
-                        ui.label(format!("{}", entry.lap_count));
-                    });
-                    row.cell(|ui| {
-                        let best_lap = entry
-                            .drivers
-                            .get(&entry.current_driver)
-                            .and_then(|driver| driver.best_lap)
-                            .and_then(|lap_index| entry.laps.get(lap_index))
-                            .map_or("-".to_string(), |lap| lap.time.format());
+                        row.cell(|ui| {
+                            ui.label(format!("{}", entry.lap_count));
+                        });
+                        row.cell(|ui| {
+                            let best_lap = entry
+                                .drivers
+                                .get(&entry.current_driver)
+                                .and_then(|driver| driver.best_lap)
+                                .and_then(|lap_index| entry.laps.get(lap_index))
+                                .map_or("-".to_string(), |lap| lap.time.format());
 
-                        ui.label(best_lap);
-                    });
-                    row.cell(|ui| {
-                        let mut lap_time = RichText::new(entry.current_lap.time.format());
-                        if entry.current_lap.invalid {
-                            lap_time = lap_time.color(egui::Color32::RED);
-                        }
+                            ui.label(best_lap);
+                        });
+                        row.cell(|ui| {
+                            let mut lap_time = RichText::new(entry.current_lap.time.format());
+                            if entry.current_lap.invalid {
+                                lap_time = lap_time.color(egui::Color32::RED);
+                            }
 
-                        ui.label(lap_time);
-                    });
-                    row.cell(|ui| {
-                        let mut delta = RichText::new(entry.performance_delta.format());
-                        if entry.current_lap.invalid {
-                            delta = delta.color(egui::Color32::RED);
-                        }
-                        ui.label(delta);
-                    });
-                    row.cell(|ui| {
-                        ui.label(entry.time_behind_leader.format());
-                    });
-                    row.cell(|ui| {
-                        ui.label(entry.stint_time.format());
-                    });
+                            ui.label(lap_time);
+                        });
+                        row.cell(|ui| {
+                            let mut delta = RichText::new(entry.performance_delta.format());
+                            if entry.current_lap.invalid {
+                                delta = delta.color(egui::Color32::RED);
+                            }
+                            ui.label(delta);
+                        });
+                        row.cell(|ui| {
+                            ui.label(entry.time_behind_leader.format());
+                        });
+                        row.cell(|ui| {
+                            ui.label(entry.stint_time.format());
+                        });
+                        row.cell(|_| {});
+                    },
+                );
+                if response.double_clicked() {
+                    info!("Row clicked");
+                }
+                response.context_menu(|ui| {
+                    if ui.button("Focus").clicked() {
+                        ui.close_menu();
+                    }
                 });
             }
         });

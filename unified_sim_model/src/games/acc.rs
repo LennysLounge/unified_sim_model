@@ -1,5 +1,5 @@
 use thiserror::Error;
-use tracing::{error};
+use tracing::error;
 
 use crate::{
     model::{EntryId, Event, Model},
@@ -59,13 +59,7 @@ impl From<AccConnectionError> for crate::AdapterError {
     }
 }
 
-pub struct AccAdapter {
-    socket: AccSocket,
-    base_proc: BaseProcessor,
-    connection_proc: ConnectionProcessor,
-    lap_proc: LapProcessor,
-}
-
+pub struct AccAdapter {}
 impl GameAdapter for AccAdapter {
     fn run(
         &mut self,
@@ -73,7 +67,8 @@ impl GameAdapter for AccAdapter {
         command_rx: mpsc::Receiver<AdapterCommand>,
         update_event: &UpdateEvent,
     ) -> result::Result<(), crate::AdapterError> {
-        self.socket.send_registration_request(100, "", "")?;
+        let mut connection = AccConnection::new()?;
+        connection.socket.send_registration_request(100, "", "")?;
 
         loop {
             match command_rx.try_recv() {
@@ -86,8 +81,8 @@ impl GameAdapter for AccAdapter {
                 Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
             }
 
-            let message = self.socket.read_message()?;
-            self.process_message(&message, &model)?;
+            let message = connection.socket.read_message()?;
+            connection.process_message(&message, &model)?;
 
             // Technically the order of messages put the realtime updates with car information
             // after the session update however we dont have a way to know when all
@@ -98,11 +93,18 @@ impl GameAdapter for AccAdapter {
             }
         }
 
-        self.socket.send_unregister_request()
+        connection.socket.send_unregister_request()
     }
 }
 
-impl AccAdapter {
+pub struct AccConnection {
+    socket: AccSocket,
+    base_proc: BaseProcessor,
+    connection_proc: ConnectionProcessor,
+    lap_proc: LapProcessor,
+}
+
+impl AccConnection {
     pub fn new() -> Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AccConnectionError::IoError(e))?;
         socket

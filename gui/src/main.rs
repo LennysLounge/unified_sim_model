@@ -8,6 +8,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use unified_sim_model::{Adapter, AdapterCommand};
 
+mod graph;
 mod session_table;
 
 fn main() {
@@ -39,7 +40,7 @@ impl App {
 }
 
 impl Dialog for App {
-    fn show(&mut self, ctx: &Context, _windower: &mut Windower) {
+    fn show(&mut self, ctx: &Context, windower: &mut Windower) {
         dear_egui::set_theme(ctx, dear_egui::SKY);
 
         // Check adapter state.
@@ -51,29 +52,37 @@ impl Dialog for App {
             }
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let is_adapter_active = self
-                .adapter
-                .as_ref()
-                .is_some_and(|adapter| !adapter.is_finished());
-            if is_adapter_active {
-                if ui.button("Disconnect").clicked() {
-                    self.close_adpater();
-                }
-            } else {
-                if ui.button("Dummy").clicked() {
-                    self.adapter = Some(Adapter::new_dummy());
-                    self.session_table.clear();
-                }
-                if ui.button("Connect").clicked() {
-                    self.adapter = Some(Adapter::new_acc());
-                    self.session_table.clear();
-                }
-            }
-            ui.separator();
+        egui::TopBottomPanel::top("menu bar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("Connection", |ui| {
+                    let is_adapter_active = self
+                        .adapter
+                        .as_ref()
+                        .is_some_and(|adapter| !adapter.is_finished());
+                    if is_adapter_active {
+                        if ui.button("Disconnect").clicked() {
+                            self.close_adpater();
+                        }
+                    } else {
+                        if ui.button("Dummy").clicked() {
+                            self.adapter = Some(Adapter::new_dummy());
+                            self.session_table.clear();
+                            ui.close_menu();
+                        }
+                        if ui.button("ACC").clicked() {
+                            self.adapter = Some(Adapter::new_acc());
+                            self.session_table.clear();
+                            ui.close_menu();
+                        }
+                    }
+                });
+            });
+        });
 
+        egui::CentralPanel::default().show(ctx, |ui| {
             if let Some(ref adapter) = self.adapter {
-                self.session_table.show(ui, &adapter.model.read().unwrap());
+                self.session_table
+                    .show(ui, &adapter.model.read().unwrap(), windower, adapter);
             }
         });
 

@@ -50,12 +50,18 @@ pub enum AdapterError {
     ACC(acc::AccConnectionError),
 }
 
+/// The result of an adapter after it has finished.
+/// If the adapter had to finish because of an error the error
+/// is reported in the `Err` variant.
+pub type AdapteResult = Result<(), AdapterError>;
+
 /// An adapter to a game.
+#[derive(Clone)]
 pub struct Adapter {
     /// The data model that is shared with the game adapter.
     pub model: ReadOnlyModel,
     /// The join handle to close the connection thread to the game.
-    join_handle: Option<JoinHandle<Result<(), AdapterError>>>,
+    join_handle: Arc<RwLock<Option<JoinHandle<AdapteResult>>>>,
     /// Channel for sending commands to the game.
     command_tx: mpsc::Sender<AdapterCommand>,
     /// An event that is triggered when new data is available.
@@ -70,7 +76,12 @@ impl Adapter {
         let update_event = UpdateEvent::new();
         Self {
             model: ReadOnlyModel::new(model.clone()),
-            join_handle: Some(Self::spawn(game, model, command_rx, update_event.clone())),
+            join_handle: Arc::new(RwLock::new(Some(Self::spawn(
+                game,
+                model,
+                command_rx,
+                update_event.clone(),
+            )))),
             command_tx,
             update_event,
         }
@@ -81,16 +92,18 @@ impl Adapter {
         Self::new(DummyAdapter::new())
     }
 
-    pub fn new_acc() -> Result<Adapter, Box<dyn std::error::Error>> {
-        Ok(Self::new(acc::AccAdapter::new()?))
+    /// Create a new Assetto Corsa Competizione adapter.
+    pub fn new_acc() -> Adapter {
+        Self::new(acc::AccAdapter {})
     }
 
     /// Returns `true` if the adapter has finised its connection to the game
     pub fn is_finished(&self) -> bool {
-        match &self.join_handle {
-            Some(handle) => handle.is_finished(),
-            None => true,
-        }
+        self.join_handle
+            .read()
+            .unwrap()
+            .as_ref()
+            .map_or(true, |handle| handle.is_finished())
     }
 
     /// Joins the adapter thread and returns the result.
@@ -99,6 +112,8 @@ impl Adapter {
     /// the thread has finished. Calling it after the result has been taking will also return `None`.
     pub fn join(&mut self) -> Option<Result<(), AdapterError>> {
         self.join_handle
+            .write()
+            .unwrap()
             .take()
             .map(|join_handle| join_handle.join().expect("Should be able to join thread"))
     }
