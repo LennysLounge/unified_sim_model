@@ -1,38 +1,28 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
-    thread::{self, JoinHandle},
+    sync::{mpsc, Arc, RwLock},
 };
 
 use crate::{
+    broadcast,
     model::{
         Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
         Session, SessionId, SessionPhase, SessionType,
     },
     time::Time,
-    AdapterError,
+    AdapterError, GameAdapter,
 };
 
-pub struct DummyAdapter {
-    model: Arc<RwLock<Model>>,
-}
+pub struct DummyAdapter {}
 
-impl DummyAdapter {
-    pub fn spawn(model: Arc<RwLock<Model>>) -> JoinHandle<Result<(), AdapterError>> {
-        thread::Builder::new()
-            .name("Dummy Adapter".into())
-            .spawn(move || {
-                let adapter = Self { model };
-                adapter.run()
-            })
-            .expect("should be able to spawn thread")
-    }
-
-    fn run(self) -> Result<(), AdapterError> {
-        let mut model = self
-            .model
-            .write()
-            .expect("Should be able to lock for writing");
+impl GameAdapter for DummyAdapter {
+    fn run(
+        &mut self,
+        model: Arc<RwLock<Model>>,
+        _command_rx: mpsc::Receiver<crate::AdapterCommand>,
+        _update_tx: broadcast::Sender<crate::ModelUpdate>,
+    ) -> Result<(), AdapterError> {
+        let mut model = model.write().expect("Should be able to lock for writing");
 
         model.event_name = "Dummy event".to_string();
         model.track_name = "Dummy track".to_string();
@@ -123,5 +113,11 @@ impl DummyAdapter {
         }
 
         Ok(())
+    }
+}
+
+impl DummyAdapter {
+    pub fn new() -> Self {
+        Self {}
     }
 }

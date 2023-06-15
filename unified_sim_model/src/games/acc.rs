@@ -1,21 +1,20 @@
+use thiserror::Error;
 use tracing::error;
 
 use crate::{
+    broadcast,
     model::{EntryId, Event, Model},
-    AdapterCommand,
+    AdapterCommand, GameAdapter,
 };
 use std::{
     collections::VecDeque,
-    error::Error,
-    fmt::Display,
     io::ErrorKind,
     net::UdpSocket,
     result,
     sync::{
-        mpsc::{Receiver, TryRecvError},
+        mpsc::{self, TryRecvError},
         Arc, RwLock, RwLockWriteGuard,
     },
-    thread::{self, JoinHandle},
     time::Duration,
 };
 
@@ -35,38 +34,25 @@ mod processors;
 /// A specialized result for Connection errors.
 type Result<T> = result::Result<T, crate::AdapterError>;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum AccConnectionError {
+    #[error("Io error: {0}")]
     IoError(std::io::Error),
+    #[error("Error writing to udp socket: {0}")]
     CannotSend(std::io::Error),
+    #[error("Error receiving data: {0}")]
     CannotReceive(std::io::Error),
+    #[error("Cannot parse message: {0}")]
     CannotParse(IncompleteTypeError),
+    #[error("Connection to the game timed out")]
     TimedOut,
+    #[error("Game connection is not available")]
     SocketUnavailable,
+    #[error("Game refused the connection. Reson: {message}")]
     ConnectionRefused { message: String },
+    #[error("Connection encountered an error: {0}")]
     Other(String),
 }
-
-impl Display for AccConnectionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AccConnectionError::IoError(e) => write!(f, "Io error: {}", e),
-            AccConnectionError::CannotSend(e) => write!(f, "Error writing to udp socket: {}", e),
-            AccConnectionError::CannotReceive(e) => write!(f, "Error receiving data: {}", e),
-            AccConnectionError::CannotParse(e) => write!(f, "Cannot parse message: {}", e),
-            AccConnectionError::TimedOut => write!(f, "Connection to game timed out"),
-            AccConnectionError::SocketUnavailable => write!(f, "Game connection is not available"),
-            AccConnectionError::ConnectionRefused { message } => {
-                write!(f, "Game refused the connection. Reason: {}", message)
-            }
-            AccConnectionError::Other(message) => {
-                write!(f, "Connection encountered an error: {}", message)
-            }
-        }
-    }
-}
-
-impl Error for AccConnectionError {}
 
 impl From<AccConnectionError> for crate::AdapterError {
     fn from(value: AccConnectionError) -> Self {
@@ -74,30 +60,43 @@ impl From<AccConnectionError> for crate::AdapterError {
     }
 }
 
-pub struct AccConnection {
+pub struct AccAdapter {
     socket: AccSocket,
-    channel: Receiver<AdapterCommand>,
-    model: Arc<RwLock<Model>>,
     base_proc: BaseProcessor,
     connection_proc: ConnectionProcessor,
     lap_proc: LapProcessor,
 }
 
-impl AccConnection {
-    pub fn spawn(
+impl GameAdapter for AccAdapter {
+    fn run(
+        &mut self,
         model: Arc<RwLock<Model>>,
-        channel: Receiver<AdapterCommand>,
-    ) -> JoinHandle<Result<()>> {
-        thread::Builder::new()
-            .name("Acc connection".into())
-            .spawn(move || {
-                let mut connection = Self::new(model, channel)?;
-                connection.run_connection()
-            })
-            .expect("should be able to spawn thread")
-    }
+        command_rx: mpsc::Receiver<AdapterCommand>,
+        _update_tx: broadcast::Sender<crate::ModelUpdate>,
+    ) -> result::Result<(), crate::AdapterError> {
+        self.socket.send_registration_request(100, "", "")?;
 
-    fn new(model: Arc<RwLock<Model>>, channel: Receiver<AdapterCommand>) -> Result<Self> {
+        loop {
+            match command_rx.try_recv() {
+                Ok(action) => match action {
+                    AdapterCommand::Close => {
+                        break;
+                    }
+                },
+                Err(TryRecvError::Empty) => (),
+                Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
+            }
+
+            let message = self.socket.read_message()?;
+            self.process_message(message, &model)?;
+        }
+
+        self.socket.send_unregister_request()
+    }
+}
+
+impl AccAdapter {
+    pub fn new() -> Result<Self> {
         let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AccConnectionError::IoError(e))?;
         socket
             .connect("127.0.0.1:9000")
@@ -112,39 +111,16 @@ impl AccConnection {
                 connection_id: 0,
                 read_only: false,
             },
-            channel,
-            model,
             base_proc: BaseProcessor::default(),
             connection_proc: ConnectionProcessor::default(),
             lap_proc: LapProcessor::default(),
         })
     }
 
-    fn run_connection(&mut self) -> Result<()> {
-        self.socket.send_registration_request(100, "", "")?;
-
-        loop {
-            // TODO: read channel
-            match self.channel.try_recv() {
-                Ok(action) => match action {
-                    AdapterCommand::Close => {
-                        return self.socket.send_unregister_request();
-                    }
-                },
-                Err(TryRecvError::Empty) => (),
-                Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
-            }
-
-            let message = self.socket.read_message()?;
-            self.process_message(message)?;
-        }
-    }
-
-    fn process_message(&mut self, message: Message) -> Result<()> {
+    fn process_message(&mut self, message: Message, model: &Arc<RwLock<Model>>) -> Result<()> {
         let mut context = AccProcessorContext {
             socket: &mut self.socket,
-            model: self
-                .model
+            model: model
                 .write()
                 .map_err(|_| AccConnectionError::Other("Model was poisoned".into()))?,
             events: VecDeque::new(),
