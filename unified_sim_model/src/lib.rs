@@ -3,11 +3,11 @@ use thiserror::Error;
 use tracing::warn;
 
 use std::{
-    sync::{mpsc, Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    sync::{mpsc, Arc, Condvar, Mutex, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard},
     thread::{self, JoinHandle},
+    time::Duration,
 };
 
-pub mod broadcast;
 pub mod games;
 pub mod model;
 pub mod time;
@@ -39,14 +39,14 @@ pub trait GameAdapter {
         &mut self,
         model: Arc<RwLock<Model>>,
         command_rx: mpsc::Receiver<AdapterCommand>,
-        update_tx: broadcast::Sender<ModelUpdate>,
+        update_event: &UpdateEvent,
     ) -> Result<(), AdapterError>;
 }
 
 /// A error with the game adapter.
 #[derive(Debug, Error)]
 pub enum AdapterError {
-    #[error("Acc connection error")]
+    #[error("Acc connection error: {0}")]
     ACC(acc::AccConnectionError),
 }
 
@@ -58,8 +58,8 @@ pub struct Adapter {
     join_handle: Option<JoinHandle<Result<(), AdapterError>>>,
     /// Channel for sending commands to the game.
     command_tx: mpsc::Sender<AdapterCommand>,
-    /// Channel for sending update events to the user.
-    _update_rx: broadcast::Receiver<ModelUpdate>,
+    /// An event that is triggered when new data is available.
+    update_event: UpdateEvent,
 }
 
 impl Adapter {
@@ -67,12 +67,12 @@ impl Adapter {
     pub fn new(game: impl GameAdapter + Send + 'static) -> Self {
         let model = Arc::new(RwLock::new(Model::default()));
         let (command_tx, command_rx) = mpsc::channel();
-        let (update_tx, update_rx) = broadcast::channel();
+        let update_event = UpdateEvent::new();
         Self {
             model: ReadOnlyModel::new(model.clone()),
-            join_handle: Some(Self::spawn(game, model, command_rx, update_tx)),
+            join_handle: Some(Self::spawn(game, model, command_rx, update_event.clone())),
             command_tx,
-            _update_rx: update_rx,
+            update_event,
         }
     }
     /// Create a new dummy adapter.
@@ -84,32 +84,6 @@ impl Adapter {
     pub fn new_acc() -> Result<Adapter, Box<dyn std::error::Error>> {
         Ok(Self::new(acc::AccAdapter::new()?))
     }
-
-    // /// Create a new dummy adapter for testing.
-    // pub fn new_dummy() -> Adapter {
-    //     let model = Arc::new(RwLock::new(Model::default()));
-    //     let (command_tx, _command_rx) = mpsc::channel();
-    //     let (_update_tx, _update_rx) = mpsc::channel();
-    //     Adapter {
-    //         join_handle: Some(dummy::DummyAdapter::spawn(model.clone())),
-    //         model: ReadOnlyModel::new(model),
-    //         command_tx,
-    //         _update_rx,
-    //     }
-    // }
-
-    // /// Create a new assetto corsa competizione adapter.
-    // pub fn new_acc() -> Adapter {
-    //     let model = Arc::new(RwLock::new(Model::default()));
-    //     let (command_tx, command_rx) = mpsc::channel();
-    //     let (_updaet_tx, _update_rx) = mpsc::channel();
-    //     Adapter {
-    //         join_handle: Some(acc::AccConnection::spawn(model.clone(), command_rx)),
-    //         model: ReadOnlyModel::new(model),
-    //         command_tx,
-    //         _update_rx,
-    //     }
-    // }
 
     /// Returns `true` if the adapter has finised its connection to the game
     pub fn is_finished(&self) -> bool {
@@ -135,24 +109,48 @@ impl Adapter {
         model.events.clear();
         Ok(())
     }
+
     /// Send a adapter command to the game.
+    ///
+    /// There is no guarantee that a command is received by the game and that there will
+    /// be a desired effect. It is adapters responsibility to fulfill the command to the
+    /// best of its abilities.
     pub fn send(&mut self, command: AdapterCommand) {
         if !self.is_finished() {
-            self.command_tx
-                .send(command)
-                .expect("Should be able to send if the thread is not finished.");
+            // Since success is not a guarantee of this method we dont need to notify the
+            // user of a failed send.
+            _ = self.command_tx.send(command);
         }
+    }
+
+    /// Block this thread until a new update is available in the model.
+    ///
+    /// Returns a error if the event source is closed before an event is triggered.
+    pub fn wait_for_update(&self) -> Result<(), WaitError> {
+        self.update_event.wait()
+    }
+
+    /// Blocks this thread until a new update is available in the model.
+    ///
+    /// Returns an error if the event source is closed or the timeout expires.
+    pub fn wait_for_update_timeout(&self, duration: Duration) -> Result<(), WaitError> {
+        self.update_event.wait_timeout(duration)
     }
 
     fn spawn(
         mut game: impl GameAdapter + Send + 'static,
         model: Arc<RwLock<Model>>,
         command_rx: mpsc::Receiver<AdapterCommand>,
-        update_tx: broadcast::Sender<ModelUpdate>,
+        update_event: UpdateEvent,
     ) -> JoinHandle<Result<(), AdapterError>> {
+        update_event.enable();
         thread::Builder::new()
             .name("Acc connection".into())
-            .spawn(move || game.run(model, command_rx, update_tx))
+            .spawn(move || {
+                let result = game.run(model, command_rx, &update_event);
+                update_event.disable();
+                result
+            })
             .expect("should be able to spawn thread")
     }
 }
@@ -186,3 +184,111 @@ pub enum AdapterCommand {
 /// Notifies any users of the adapter about changes in the model.
 #[derive(Clone)]
 pub enum ModelUpdate {}
+
+/// An event that is triggered when the model receives an update.
+///
+/// This is a wrapper around a convar.
+#[derive(Clone)]
+pub struct UpdateEvent {
+    pair: Arc<(Mutex<EventState>, Condvar)>,
+}
+
+/// An error that can occur when waiting for an event.
+#[derive(Debug, Error)]
+pub enum WaitError {
+    #[error("Event source is closed")]
+    EventDisabled,
+    #[error("Wait timeout expired")]
+    TimeoutExpired,
+}
+
+struct EventState {
+    enabled: bool,
+    counter: usize,
+}
+
+impl UpdateEvent {
+    fn new() -> Self {
+        Self {
+            pair: Arc::new((
+                Mutex::new(EventState {
+                    enabled: false,
+                    counter: 0,
+                }),
+                Condvar::new(),
+            )),
+        }
+    }
+
+    /// Enable this event.
+    /// When the event is enabled, any call to wait will block until an event has been published.
+    fn enable(&self) {
+        let (state, _) = &*self.pair;
+        state.lock().unwrap().enabled = true;
+    }
+
+    /// Disable this event.
+    /// When the event is disable, any call to wait will return with an error.
+    /// If there are any threads waiting for an event, this will disable the event and
+    /// trigger it once to wake up any threads.
+    fn disable(&self) {
+        let (state, var) = &*self.pair;
+        state.lock().unwrap().enabled = false;
+        var.notify_all();
+    }
+
+    /// Trigger the event.
+    ///
+    /// Only triggers the event if the event is enabled.
+    pub fn trigger(&self) {
+        let (state_mutex, var) = &*self.pair;
+        let mut state = state_mutex.lock().unwrap();
+        if !state.enabled {
+            return;
+        }
+        state.counter += 1;
+        var.notify_all();
+    }
+
+    /// Block and wait for the next event.
+    ///
+    /// This function will error when the event source closes.
+    pub fn wait(&self) -> Result<(), WaitError> {
+        let (state_mutex, var) = &*self.pair;
+        let mut state = state_mutex.lock().unwrap();
+        if !state.enabled {
+            return Err(WaitError::EventDisabled);
+        }
+        let prev_event_count = state.counter;
+        while state.enabled && state.counter == prev_event_count {
+            state = var.wait(state).unwrap();
+        }
+        if !state.enabled {
+            return Err(WaitError::EventDisabled);
+        }
+        Ok(())
+    }
+
+    /// Block and wait for the next event or until the timeout expires.
+    ///
+    /// THis function will error when the event source closes or when the timeout expires.
+    pub fn wait_timeout(&self, duration: Duration) -> Result<(), WaitError> {
+        let (state_mutex, var) = &*self.pair;
+        let mut state = state_mutex.lock().unwrap();
+        if !state.enabled {
+            return Err(WaitError::EventDisabled);
+        }
+        let prev_event_count = state.counter;
+        while state.enabled && state.counter == prev_event_count {
+            let (next_state, result) = var.wait_timeout(state, duration).unwrap();
+            state = next_state;
+            if result.timed_out() {
+                return Err(WaitError::TimeoutExpired);
+            }
+        }
+        if !state.enabled {
+            return Err(WaitError::EventDisabled);
+        }
+        Ok(())
+    }
+}

@@ -1,7 +1,7 @@
-use std::{env, thread, time::Duration};
+use std::env;
 
-use tracing::{error, info, Level};
-use unified_sim_model::adapter::Adapter;
+use tracing::{info, Level};
+use unified_sim_model::{Adapter, AdapterCommand};
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -15,20 +15,12 @@ fn main() {
         .expect("Should be able to set global subscriber");
 
     info!("Connecting to game");
-    let mut adapter = Adapter::new_acc();
+    let mut adapter = Adapter::new_acc().unwrap();
 
-    loop {
-        if adapter.is_finished() {
-            break;
-        }
-
-        let model = match adapter.model.read() {
-            Ok(lock) => lock,
-            Err(e) => {
-                error!("Model was poisoned: {:?}", e);
-                break;
-            }
-        };
+    // Wait for an update and loop.
+    let mut limit = 0;
+    while adapter.wait_for_update().is_ok() {
+        let model = adapter.model.read().unwrap();
 
         if let Some(session) = model.current_session() {
             info!(
@@ -40,13 +32,19 @@ fn main() {
         for event in model.events.iter() {
             info!("Event: {:?}", event);
         }
-        drop(model);
+        std::mem::drop(model);
+        _ = adapter.clear_events();
 
-        thread::sleep(Duration::from_millis(1000));
+        limit += 1;
+        if limit > 100 {
+            adapter.send(AdapterCommand::Close);
+            break;
+        }
     }
 
-    if let Some(Err(e)) = adapter.take_result() {
+    if let Some(Err(e)) = adapter.join() {
         info!("Connection failed because: {}", e);
     }
+
     info!("Connection done");
 }

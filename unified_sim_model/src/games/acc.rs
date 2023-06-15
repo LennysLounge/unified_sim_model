@@ -1,10 +1,9 @@
 use thiserror::Error;
-use tracing::error;
+use tracing::{error};
 
 use crate::{
-    broadcast,
     model::{EntryId, Event, Model},
-    AdapterCommand, GameAdapter,
+    AdapterCommand, GameAdapter, UpdateEvent,
 };
 use std::{
     collections::VecDeque,
@@ -72,7 +71,7 @@ impl GameAdapter for AccAdapter {
         &mut self,
         model: Arc<RwLock<Model>>,
         command_rx: mpsc::Receiver<AdapterCommand>,
-        _update_tx: broadcast::Sender<crate::ModelUpdate>,
+        update_event: &UpdateEvent,
     ) -> result::Result<(), crate::AdapterError> {
         self.socket.send_registration_request(100, "", "")?;
 
@@ -88,7 +87,15 @@ impl GameAdapter for AccAdapter {
             }
 
             let message = self.socket.read_message()?;
-            self.process_message(message, &model)?;
+            self.process_message(&message, &model)?;
+
+            // Technically the order of messages put the realtime updates with car information
+            // after the session update however we dont have a way to know when all
+            // realtime updates have been received to trigger the event.
+            // Instead we trigger the event and accept a delay of one update for car data.
+            if let Message::SessionUpdate(_) = message {
+                update_event.trigger();
+            }
         }
 
         self.socket.send_unregister_request()
@@ -102,7 +109,7 @@ impl AccAdapter {
             .connect("127.0.0.1:9000")
             .map_err(|e| AccConnectionError::IoError(e))?;
         socket
-            .set_read_timeout(Some(Duration::from_millis(200)))
+            .set_read_timeout(Some(Duration::from_millis(500)))
             .expect("Read timeout duration should be larger than 0");
         Ok(Self {
             socket: AccSocket {
@@ -117,7 +124,7 @@ impl AccAdapter {
         })
     }
 
-    fn process_message(&mut self, message: Message, model: &Arc<RwLock<Model>>) -> Result<()> {
+    fn process_message(&mut self, message: &Message, model: &Arc<RwLock<Model>>) -> Result<()> {
         let mut context = AccProcessorContext {
             socket: &mut self.socket,
             model: model

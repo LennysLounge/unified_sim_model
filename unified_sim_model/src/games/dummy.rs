@@ -4,13 +4,12 @@ use std::{
 };
 
 use crate::{
-    broadcast,
     model::{
         Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
         Session, SessionId, SessionPhase, SessionType,
     },
     time::Time,
-    AdapterError, GameAdapter,
+    AdapterError, GameAdapter, UpdateEvent,
 };
 
 pub struct DummyAdapter {}
@@ -20,7 +19,7 @@ impl GameAdapter for DummyAdapter {
         &mut self,
         model: Arc<RwLock<Model>>,
         _command_rx: mpsc::Receiver<crate::AdapterCommand>,
-        _update_tx: broadcast::Sender<crate::ModelUpdate>,
+        _update_event: &UpdateEvent,
     ) -> Result<(), AdapterError> {
         let mut model = model.write().expect("Should be able to lock for writing");
 
