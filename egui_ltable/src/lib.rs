@@ -905,22 +905,34 @@ impl<'a, 'b> RowUi<'a, 'b> {
 
 fn constrain_to(rect: Rect, constraint: Rect) -> Rect {
     Rect::from_min_max(
-        rect.min.at_least(constraint.min),
-        rect.max.at_most(constraint.max),
+        rect.min.clamp(constraint.min, constraint.max),
+        rect.max.clamp(constraint.min, constraint.max),
     )
 }
 
 fn constrain_top_bottom(rect: Rect, constraint: Rect) -> Rect {
     Rect::from_min_max(
-        pos2(rect.min.x, rect.min.y.at_least(constraint.min.y)),
-        pos2(rect.max.x, rect.max.y.at_most(constraint.max.y)),
+        pos2(
+            rect.min.x,
+            rect.min.y.clamp(constraint.min.y, constraint.max.y),
+        ),
+        pos2(
+            rect.max.x,
+            rect.max.y.clamp(constraint.min.y, constraint.max.y),
+        ),
     )
 }
 
 fn constrain_left_right(rect: Rect, constraint: Rect) -> Rect {
     Rect::from_min_max(
-        pos2(rect.min.x.at_least(constraint.min.x), rect.min.y),
-        pos2(rect.max.x.at_most(constraint.max.x), rect.max.y),
+        pos2(
+            rect.min.x.clamp(constraint.min.x, constraint.max.x),
+            rect.min.y,
+        ),
+        pos2(
+            rect.max.x.clamp(constraint.min.x, constraint.max.x),
+            rect.max.y,
+        ),
     )
 }
 
