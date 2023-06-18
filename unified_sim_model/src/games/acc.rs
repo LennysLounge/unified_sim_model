@@ -76,6 +76,9 @@ impl GameAdapter for AccAdapter {
                     AdapterCommand::Close => {
                         break;
                     }
+                    AdapterCommand::FocusOnCar(entry_id) => connection
+                        .socket
+                        .send_change_camera_request(Some(entry_id.0 as i16), None)?,
                 },
                 Err(TryRecvError::Empty) => (),
                 Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
@@ -203,6 +206,16 @@ impl AccSocket {
     /// Send a unregister request.
     fn send_unregister_request(&self) -> Result<()> {
         self.send(&data::unregister_request(self.connection_id))
+    }
+
+    /// Send a change camera request.
+    /// If no camera is given this will only change the currently focused car.
+    fn send_change_camera_request(
+        &self,
+        car_id: Option<i16>,
+        camera: Option<(&str, &str)>,
+    ) -> Result<()> {
+        self.send(&data::focus_request(self.connection_id, car_id, camera))
     }
 
     fn read_message(&mut self) -> Result<Message> {

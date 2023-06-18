@@ -1,4 +1,5 @@
 use games::{acc, dummy::DummyAdapter};
+use model::EntryId;
 use thiserror::Error;
 use tracing::warn;
 
@@ -130,7 +131,7 @@ impl Adapter {
     /// There is no guarantee that a command is received by the game and that there will
     /// be a desired effect. It is adapters responsibility to fulfill the command to the
     /// best of its abilities.
-    pub fn send(&mut self, command: AdapterCommand) {
+    pub fn send(&self, command: AdapterCommand) {
         if !self.is_finished() {
             // Since success is not a guarantee of this method we dont need to notify the
             // user of a failed send.
@@ -195,10 +196,9 @@ impl ReadOnlyModel {
 pub enum AdapterCommand {
     /// Close the adapter and return the thread.
     Close,
+    /// Change the focus to another entry.
+    FocusOnCar(EntryId),
 }
-/// Notifies any users of the adapter about changes in the model.
-#[derive(Clone)]
-pub enum ModelUpdate {}
 
 /// An event that is triggered when the model receives an update.
 ///

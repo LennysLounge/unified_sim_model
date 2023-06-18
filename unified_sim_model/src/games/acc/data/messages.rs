@@ -665,7 +665,7 @@ pub fn hud_page_request(connection_id: i32, page: String) -> Vec<u8> {
 pub fn focus_request(
     connection_id: i32,
     car_id: Option<i16>,
-    camera: Option<(String, String)>,
+    camera: Option<(&str, &str)>,
 ) -> Vec<u8> {
     let mut buf = Vec::<u8>::new();
     buf.push(50);
@@ -678,8 +678,8 @@ pub fn focus_request(
     }
     if let Some((set, camera)) = camera {
         buf.push(1);
-        push_string(&mut buf, &set);
-        push_string(&mut buf, &camera);
+        push_string(&mut buf, set);
+        push_string(&mut buf, camera);
     } else {
         buf.push(0);
     }
