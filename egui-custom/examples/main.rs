@@ -1,8 +1,28 @@
-use std::time::Duration;
+use std::{env, time::Duration};
 
-use egui_custom::dialog::{Dialog, DialogHandle, Size, WindowOptions, Windower};
-use tracing::info;
+use egui_custom::{
+    dialog::{Dialog, DialogHandle, Size, WindowOptions, Windower},
+    run_event_loop,
+};
+use tracing::{info, Level};
 use winit::window::WindowButtons;
+
+fn main() {
+    env::set_var("RUST_BACKTRACE", "1");
+    env::set_var("RUST_LOG", "");
+
+    env_logger::init();
+
+    let subscriber = tracing_subscriber::fmt()
+        .compact()
+        .with_thread_names(true)
+        .with_max_level(Level::DEBUG)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Should be able to set global subscriber");
+
+    run_event_loop(TestApp::default());
+}
 
 #[derive(Clone)]
 pub struct TestApp {

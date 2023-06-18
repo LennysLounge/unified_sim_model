@@ -62,6 +62,7 @@ impl Dialog for App {
                     if is_adapter_active {
                         if ui.button("Disconnect").clicked() {
                             self.close_adpater();
+                            ui.close_menu();
                         }
                     } else {
                         if ui.button("Dummy").clicked() {

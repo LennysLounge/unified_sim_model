@@ -3,20 +3,21 @@ use std::fmt::Display;
 /// A Time value. Represented in milliseconds.
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Time {
-    pub raw: i32,
+    /// The time value as milliseconds.
+    pub ms: i32,
 }
 
 impl From<i32> for Time {
     /// Convert a i32 of milliseconds to Time.
     fn from(value: i32) -> Self {
-        Self { raw: value }
+        Self { ms: value }
     }
 }
 
 impl From<f32> for Time {
     /// Convert f32 of milliseconds to Time.
     fn from(value: f32) -> Self {
-        Self { raw: value as i32 }
+        Self { ms: value as i32 }
     }
 }
 
@@ -34,8 +35,8 @@ impl Time {
     /// assert_eq!(time.format(), "12:34:56.789");
     /// ```
     pub fn format(&self) -> String {
-        let sign = if self.raw < 0 { "-" } else { "" };
-        let mut remaining = self.raw.abs();
+        let sign = if self.ms < 0 { "-" } else { "" };
+        let mut remaining = self.ms.abs();
         let ms = remaining % 1000;
         remaining = (remaining - ms) / 1000;
         let s = remaining % 60;

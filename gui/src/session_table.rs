@@ -122,9 +122,9 @@ fn display_entries_table(
     let right = egui::Layout::right_to_left(egui::Align::Min);
     Table::new()
         .striped(true)
-        .column(Column::exact(25.0)) // pit
-        .column(Column::exact(35.0).layout(center)) // pos
-        .column(Column::exact(37.0).layout(right)) // #
+        .column(Column::exact(25.0).layout(center)) // pit
+        .column(Column::exact(30.0).layout(right)) // pos
+        .column(Column::exact(30.0).layout(right)) // #
         .column(Column::initial(100.0).resizeable(true).min_width(70.0)) // team
         .column(Column::initial(150.0).resizeable(true).min_width(70.0)) // driver
         .column(Column::initial(75.0).resizeable(true).min_width(50.0)) // car
@@ -233,10 +233,8 @@ fn display_entries_table(
                                     ui.close_menu();
                                 }
                                 if ui.button("Graph").clicked() {
-                                    let graph = windower.new_window(Graph {
-                                        adapter: (*adapter).clone(),
-                                        handle: None,
-                                    });
+                                    let graph =
+                                        windower.new_window(Graph::new(adapter.clone(), entry.id));
                                     graph.borrow_dialog_mut().handle = Some(graph.clone());
                                     ui.close_menu();
                                 }
@@ -267,6 +265,8 @@ fn display_entries_table(
                             let mut delta = RichText::new(entry.performance_delta.format());
                             if entry.current_lap.invalid {
                                 delta = delta.color(egui::Color32::RED);
+                            } else if entry.performance_delta.ms < 0 {
+                                delta = delta.color(egui::Color32::GREEN);
                             }
                             ui.label(delta);
                         });
