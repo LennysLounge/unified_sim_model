@@ -1,5 +1,5 @@
 use games::{acc, dummy::DummyAdapter};
-use model::EntryId;
+use model::{Camera, EntryId};
 use thiserror::Error;
 use tracing::warn;
 
@@ -198,6 +198,8 @@ pub enum AdapterCommand {
     Close,
     /// Change the focus to another entry.
     FocusOnCar(EntryId),
+    /// Change the camera.
+    ChangeCamera(Camera),
 }
 
 /// An event that is triggered when the model receives an update.

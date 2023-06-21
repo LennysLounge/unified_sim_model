@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use indexmap::IndexMap;
 
@@ -465,4 +465,27 @@ impl Nationality {
     pub const YEMEN: Self = Self::new("Yemen");
     pub const ZAMBIA: Self = Self::new("Zambia");
     pub const ZIMBABWE: Self = Self::new("Zimbabwe");
+}
+
+/// Set of possible camera views.
+pub enum Camera {
+    /// The first person view of the driver. This is usually the view a
+    /// player would use to drive.
+    FirstPerson,
+    /// A third person chase cam where the camera is elevated behind the car
+    /// and is following it.
+    Chase,
+    /// A camera like you would see in a tv broadcast. This is usually not a single
+    /// camera but a collection of cameras placed around the track pointing at the car.
+    /// The game would automatically switch between these cameras to keep the player
+    /// in view.
+    TV,
+    /// A helicopter view of the focused car.
+    Hellicopter,
+    /// An Camera definition for ACC. This camera is special to ACC and does not
+    /// fit to a general camera definition.
+    Acc {
+        camera_set: Arc<str>,
+        camera: Arc<str>,
+    },
 }
