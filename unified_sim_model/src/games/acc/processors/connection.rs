@@ -45,18 +45,18 @@ impl AccProcessor for ConnectionProcessor {
                 .entries
                 .get_mut(&entry.id)
                 .expect("An entry in the session should also have a connection entry.");
-            match (&is_connected, entry.connected) {
+            match (&is_connected, *entry.connected) {
                 (true, false) => {
-                    info!("Entry reconnected: #{}", entry.car_number);
+                    info!("Entry reconnected: #{}", *entry.car_number);
                     context.events.push_back(Event::EntryReconnected(entry.id));
                 }
                 (false, true) => {
-                    info!("Entry disconnected: #{}", entry.car_number);
+                    info!("Entry disconnected: #{}", *entry.car_number);
                     context.events.push_back(Event::EntryDisconnected(entry.id));
                 }
                 _ => (),
             }
-            entry.connected = *is_connected;
+            entry.connected.set(*is_connected);
             *is_connected = false;
         }
         Ok(())

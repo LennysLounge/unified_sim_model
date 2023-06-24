@@ -112,7 +112,7 @@ fn graph_thread(
             .current_session()
             .and_then(|session| session.entries.get(&entry_id));
         if let Some(entry) = data {
-            if !entry.connected {
+            if !*entry.connected {
                 continue;
             }
             let now = Instant::now();
@@ -122,7 +122,7 @@ fn graph_thread(
                 .expect("The model shouldnt become poisoded");
             graph_model
                 .data
-                .push((now - time_zero, entry.distance_driven));
+                .push((now - time_zero, *entry.distance_driven));
         }
     }
 }

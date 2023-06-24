@@ -2,7 +2,7 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::{
-    model::{EntryId, Event, Model},
+    model::{EntryId, Event, Model, Value},
     AdapterCommand, GameAdapter, UpdateEvent,
 };
 use std::{
@@ -12,7 +12,7 @@ use std::{
     result,
     sync::{
         mpsc::{self, TryRecvError},
-        Arc, RwLock, RwLockWriteGuard,
+        Arc, RwLock,
     },
     time::Duration,
 };
@@ -28,6 +28,7 @@ use self::{
 use super::common::distance_driven;
 
 mod data;
+pub mod model;
 mod processors;
 
 /// A specialized result for Connection errors.
@@ -67,37 +68,29 @@ impl GameAdapter for AccAdapter {
         command_rx: mpsc::Receiver<AdapterCommand>,
         update_event: &UpdateEvent,
     ) -> result::Result<(), crate::AdapterError> {
+        // Setup the model state for this game.
+        if let Ok(mut model) = model.write() {
+            model.event_name = Value::new("Assetto Corsa Competizione".to_string()).with_editable();
+            model.connected = true;
+        }
+
         let mut connection = AccConnection::new()?;
         connection.socket.send_registration_request(100, "", "")?;
 
         loop {
-            match command_rx.try_recv() {
-                Ok(action) => match action {
-                    AdapterCommand::Close => {
-                        break;
-                    }
-                    AdapterCommand::FocusOnCar(entry_id) => connection
-                        .socket
-                        .send_change_camera_request(Some(entry_id.0 as i16), None)?,
-                    AdapterCommand::ChangeCamera(camera) => {
-                        use crate::model::Camera::*;
-                        let camera = match camera {
-                            FirstPerson => todo!(),
-                            Chase => todo!(),
-                            TV => todo!(),
-                            Hellicopter => todo!(),
-                            Acc {
-                                ref camera_set,
-                                ref camera,
-                            } => (&**camera_set, &**camera),
-                        };
-                        connection
-                            .socket
-                            .send_change_camera_request(None, Some(camera))?;
-                    }
-                },
-                Err(TryRecvError::Empty) => (),
-                Err(TryRecvError::Disconnected) => error!("The adapter sender has disappeared"),
+            let should_close = match command_rx.try_recv() {
+                Ok(action) => self.handle_command(&connection, action)?,
+                Err(TryRecvError::Empty) => false,
+                Err(TryRecvError::Disconnected) => {
+                    // This should only happen if all adapters have been dropped.
+                    // In which case it is impossible to interact with this adapter any more.
+                    // To avoid leaking memory we quit.
+                    error!("All adapter handle have been dropped it is impossible to communicate with this game adapter.");
+                    true
+                }
+            };
+            if should_close {
+                break;
             }
 
             let message = connection.socket.read_message()?;
@@ -112,7 +105,41 @@ impl GameAdapter for AccAdapter {
             }
         }
 
-        connection.socket.send_unregister_request()
+        connection.socket.send_unregister_request()?;
+        if let Ok(mut model) = model.write() {
+            model.connected = false;
+        }
+        Ok(())
+    }
+}
+
+impl AccAdapter {
+    fn handle_command(&self, connection: &AccConnection, command: AdapterCommand) -> Result<bool> {
+        match command {
+            AdapterCommand::Close => {
+                return Ok(true);
+            }
+            AdapterCommand::FocusOnCar(entry_id) => connection
+                .socket
+                .send_change_camera_request(Some(entry_id.0 as i16), None)?,
+            AdapterCommand::ChangeCamera(camera) => {
+                use crate::model::Camera::*;
+                let camera = match camera {
+                    FirstPerson => todo!(),
+                    Chase => todo!(),
+                    TV => todo!(),
+                    Hellicopter => todo!(),
+                    Acc {
+                        ref camera_set,
+                        ref camera,
+                    } => (&**camera_set, &**camera),
+                };
+                connection
+                    .socket
+                    .send_change_camera_request(None, Some(camera))?;
+            }
+        };
+        Ok(false)
     }
 }
 
@@ -148,7 +175,7 @@ impl AccConnection {
     fn process_message(&mut self, message: &Message, model: &Arc<RwLock<Model>>) -> Result<()> {
         let mut context = AccProcessorContext {
             socket: &mut self.socket,
-            model: model
+            model: &mut *model
                 .write()
                 .map_err(|_| AccConnectionError::Other("Model was poisoned".into()))?,
             events: VecDeque::new(),
@@ -249,7 +276,7 @@ impl AccSocket {
 /// A context for a processor to work in.
 struct AccProcessorContext<'a> {
     socket: &'a mut AccSocket,
-    model: RwLockWriteGuard<'a, Model>,
+    model: &'a mut Model,
     events: VecDeque<Event>,
 }
 

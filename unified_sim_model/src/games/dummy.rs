@@ -6,7 +6,7 @@ use std::{
 use crate::{
     model::{
         Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
-        Session, SessionId, SessionPhase, SessionType,
+        Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
     },
     time::Time,
     AdapterError, GameAdapter, UpdateEvent,
@@ -23,30 +23,38 @@ impl GameAdapter for DummyAdapter {
     ) -> Result<(), AdapterError> {
         let mut model = model.write().expect("Should be able to lock for writing");
 
-        model.event_name = "Dummy event".to_string();
-        model.track_name = "Dummy track".to_string();
-        model.track_length = 1234;
+        model.event_name.set("Dummy event".to_string());
+
+        // model.track_name = "Dummy track".to_string();
+        // model.track_length = 1234;
 
         model.add_session(Session {
             id: SessionId(0),
             entries: HashMap::new(),
-            session_type: SessionType::Race,
-            session_time: Time::from(1_200_123),
-            time_remaining: Time::from(754_123),
-            laps: 20,
-            laps_remaining: 12,
-            phase: SessionPhase::Active,
-            time_of_day: Time::from(50_846_123),
-            day: Day::Sunday,
-            ambient_temp: 24.0,
-            track_temp: 26.0,
-            best_lap: Lap {
-                time: Time::from(81_1234),
-                splits: vec![Time::from(12_345), Time::from(67_891), Time::from(111_213)],
+            session_type: Value::new(SessionType::Race),
+            session_time: Value::new(Time::from(1_200_123)),
+            time_remaining: Value::new(Time::from(754_123)),
+            laps: Value::new(20),
+            laps_remaining: Value::new(12),
+            phase: Value::new(SessionPhase::Active),
+            time_of_day: Value::new(Time::from(50_846_123)),
+            day: Value::new(Day::Sunday),
+            ambient_temp: Value::new(24.0),
+            track_temp: Value::new(26.0),
+            best_lap: Value::new(Some(Lap {
+                time: Value::new(Time::from(81_1234)),
+                splits: Value::new(vec![
+                    Time::from(12_345),
+                    Time::from(67_891),
+                    Time::from(111_213),
+                ]),
                 driver_id: DriverId::default(),
                 entry_id: EntryId::default(),
-                invalid: false,
-            },
+                invalid: Value::new(false),
+            })),
+            track_name: Value::new("Dummy track".to_string()),
+            track_length: Value::new(1234),
+            game_data: SessionGameData::None,
         });
         model.events.push(Event::SessionChanged(SessionId(0)));
 
@@ -65,48 +73,48 @@ impl GameAdapter for DummyAdapter {
                                 driver_id,
                                 Driver {
                                     id: driver_id,
-                                    first_name: format!("John"),
-                                    last_name: format!("Wayne {}", i),
-                                    short_name: format!("JW{}", i),
-                                    nationality: Nationality::NONE,
-                                    driving_time: Time::from(0),
-                                    best_lap: None,
+                                    first_name: Value::new(format!("John")),
+                                    last_name: Value::new(format!("Wayne {}", i)),
+                                    short_name: Value::new(format!("JW{}", i)),
+                                    nationality: Value::new(Nationality::NONE),
+                                    driving_time: Value::new(Time::from(0)),
+                                    best_lap: Value::new(None),
                                 },
                             );
                         }
                         drivers
                     },
                     current_driver: DriverId(0),
-                    team_name: format!("Team nr.{}", i),
-                    car: Car {
+                    team_name: Value::new(format!("Team nr.{}", i)),
+                    car: Value::new(Car {
                         name: "Car model",
                         manufacturer: "Manufacturer",
                         category: CarCategory { name: "Car Cat" },
-                    },
-                    car_number: i,
-                    nationality: Nationality::NONE,
-                    world_pos: [0.0, 0.0, 0.0],
-                    orientation: [0.0, 0.0, 0.0],
-                    position: i,
-                    spline_pos: 0.1234,
-                    lap_count: 0,
+                    }),
+                    car_number: Value::new(i),
+                    nationality: Value::new(Nationality::NONE),
+                    world_pos: Value::new([0.0, 0.0, 0.0]),
+                    orientation: Value::new([0.0, 0.0, 0.0]),
+                    position: Value::new(i),
+                    spline_pos: Value::new(0.1234),
+                    lap_count: Value::new(0),
                     laps: Vec::new(),
-                    current_lap: Lap {
-                        time: Time::from(12_345),
-                        splits: Vec::new(),
+                    current_lap: Value::new(Lap {
+                        time: Value::new(Time::from(12_345)),
+                        splits: Value::new(Vec::new()),
                         driver_id: DriverId(0),
                         entry_id: EntryId(i),
-                        invalid: i % 2 == 0,
-                    },
-                    best_lap: None,
-                    performance_delta: Time::from(-1_234),
-                    time_behind_leader: Time::from(12_345),
-                    in_pits: true,
-                    gear: 4,
-                    speed: 128.0,
-                    connected: true,
-                    stint_time: Time::from(56_789),
-                    distance_driven: i as f32 * 0.345,
+                        invalid: Value::new(i % 2 == 0),
+                    }),
+                    best_lap: Value::new(None),
+                    performance_delta: Value::new(Time::from(-1_234)),
+                    time_behind_leader: Value::new(Time::from(12_345)),
+                    in_pits: Value::new(true),
+                    gear: Value::new(4),
+                    speed: Value::new(128.0),
+                    connected: Value::new(true),
+                    stint_time: Value::new(Time::from(56_789)),
+                    distance_driven: Value::new(i as f32 * 0.345),
                 },
             );
         }

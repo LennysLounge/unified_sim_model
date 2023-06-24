@@ -48,31 +48,36 @@ impl AccProcessor for LapProcessor {
         // Check personal best for driver
         fn current_driver_best_lap(entry: &Entry) -> Option<&Lap> {
             let driver = entry.drivers.get(&entry.current_driver)?;
-            entry.laps.get(driver.best_lap?)
+            entry.laps.get((*driver.best_lap)?)
         }
         let personal_best = current_driver_best_lap(entry)
             .map_or(true, |best_lap| lap.time < best_lap.time)
-            && !lap.invalid;
+            && !*lap.invalid;
         if personal_best {
             if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
-                driver.best_lap = Some(lap_index);
+                driver.best_lap.set(Some(lap_index));
             }
         }
 
         // Check personal best for entry
         fn entry_best_lap(entry: &Entry) -> Option<&Lap> {
-            entry.laps.get(entry.best_lap?)
+            entry.laps.get((*entry.best_lap)?)
         }
-        let entry_best =
-            entry_best_lap(entry).map_or(true, |best_lap| lap.time < best_lap.time) && !lap.invalid;
+        let entry_best = entry_best_lap(entry).map_or(true, |best_lap| lap.time < best_lap.time)
+            && !*lap.invalid;
         if entry_best {
-            entry.best_lap = Some(lap_index);
+            entry.best_lap.set(Some(lap_index));
         }
 
         // Check session best.
-        let session_best = lap.time < session.best_lap.time && !lap.invalid;
+        let session_best = session
+            .best_lap
+            .as_ref()
+            .as_ref()
+            .map_or(true, |best_lap| lap.time < best_lap.time)
+            && !*lap.invalid;
         if session_best {
-            session.best_lap = lap.clone();
+            session.best_lap.set(Some(lap.clone()));
         }
 
         info!(
@@ -96,14 +101,15 @@ impl AccProcessor for LapProcessor {
 
 fn map_lap(lap_info: &LapInfo, driver_index: DriverId, entry_id: EntryId) -> Lap {
     Lap {
-        time: lap_info.laptime_ms.into(),
+        time: Time::from(lap_info.laptime_ms).into(),
         splits: lap_info
             .splits
             .clone()
             .iter()
             .map(|ms| Time::from(*ms))
-            .collect(),
-        invalid: lap_info.is_invaliud,
+            .collect::<Vec<_>>()
+            .into(),
+        invalid: lap_info.is_invaliud.into(),
         driver_id: driver_index,
         entry_id,
     }

@@ -57,6 +57,12 @@ pub enum AdapterError {
 pub type AdapteResult = Result<(), AdapterError>;
 
 /// An adapter to a game.
+///
+/// The Adapter is the connection point between the game and your code.
+/// When the adapter is the created it opens a new thread with a game specifc connection to
+/// the game. The adapter is then the window to interact with the game connection.
+/// Should all instances of an adapter be dropped or destroyed, the game connection
+/// that is associated with that adapter is also closed.
 #[derive(Clone)]
 pub struct Adapter {
     /// The data model that is shared with the game adapter.

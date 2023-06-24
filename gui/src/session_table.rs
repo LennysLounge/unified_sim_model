@@ -58,7 +58,7 @@ impl SessionTable {
             if let Event::SessionChanged(session_id) = event {
                 let title = format!(
                     "{:?}",
-                    model
+                    *model
                         .sessions
                         .get(session_id)
                         .expect("Session should be availabe after a session change event")
@@ -191,12 +191,12 @@ fn display_entries_table(
                         .sense(Sense::click()),
                     |row| {
                         row.cell(|ui| {
-                            if entry.in_pits {
+                            if *entry.in_pits {
                                 ui.label("P");
                             }
                         });
                         row.cell(|ui| {
-                            let s = if entry.connected {
+                            let s = if *entry.connected {
                                 format!("{}", entry.position)
                             } else {
                                 "-".to_string()
@@ -207,7 +207,7 @@ fn display_entries_table(
                             ui.label(format!("{}", entry.car_number));
                         });
                         row.cell(|ui| {
-                            ui.add(egui::Label::new(&entry.team_name).wrap(false));
+                            ui.add(egui::Label::new(entry.team_name.as_ref()).wrap(false));
                         });
                         row.cell(|ui| {
                             let driver_name = match entry.drivers.get(&entry.current_driver) {
@@ -247,7 +247,7 @@ fn display_entries_table(
                             let best_lap = entry
                                 .drivers
                                 .get(&entry.current_driver)
-                                .and_then(|driver| driver.best_lap)
+                                .and_then(|driver| *driver.best_lap)
                                 .and_then(|lap_index| entry.laps.get(lap_index))
                                 .map_or("-".to_string(), |lap| lap.time.format());
 
@@ -255,7 +255,7 @@ fn display_entries_table(
                         });
                         row.cell(|ui| {
                             let mut lap_time = RichText::new(entry.current_lap.time.format());
-                            if entry.current_lap.invalid {
+                            if *entry.current_lap.invalid {
                                 lap_time = lap_time.color(egui::Color32::RED);
                             }
 
@@ -263,7 +263,7 @@ fn display_entries_table(
                         });
                         row.cell(|ui| {
                             let mut delta = RichText::new(entry.performance_delta.format());
-                            if entry.current_lap.invalid {
+                            if *entry.current_lap.invalid {
                                 delta = delta.color(egui::Color32::RED);
                             } else if entry.performance_delta.ms < 0 {
                                 delta = delta.color(egui::Color32::GREEN);

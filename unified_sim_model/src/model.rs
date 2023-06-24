@@ -1,30 +1,205 @@
-use std::{collections::HashMap, sync::Arc};
+//! The model combines all the available data into a single unified data model.
+//!
+//! The starting point is the [`Model`] where as the base object where all other
+//! data is stored.
+//!
+//! ## Availability:
+//! Not all games provide the same data and some values are not available in a game
+//! at all. Instead of representing this "optionality" of the data with the Option enum
+//! the ['Value'] object is used instead.
+//! The ['Value'] object uses a default value to return if the value is not naturally available
+//! from the game. This is done to keep the code that used the model easier to use.
+//!
+//! Sometimes it is required to know if a specific value is a available from the game
+//! or if a default is used. To do this, the ['Value'] object has some flags to read this information.
+
+use std::{
+    collections::HashMap,
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use indexmap::IndexMap;
 
-use crate::time::Time;
+use crate::{games::acc::model::AccSession, time::Time};
+
+/// A single piece of data in the model that carries extra information about its
+/// availability and editability.
+///
+/// If the value is not available in the connected game then the `available`
+/// flag will be set to false and the wrapped value will be a default value.
+/// Unless otherwise specified, the default value is the default for the type.
+///
+/// If the `editable` flag is set then the value can be edited by the user.
+/// To edit a value, send the appropriate adapter command. The adapter may decide
+/// to overwrite the value set by the user or set the `editable` flag to false at any time.
+///
+/// The specific behavior of the game adapter is documented in the documentation for the value.
+#[derive(Debug, Clone)]
+pub struct Value<T> {
+    value: T,
+    editable: bool,
+    available: bool,
+}
+
+impl<T: Default> Default for Value<T> {
+    /// Create a value with the default for the type.
+    /// `editable` is false.
+    /// `available` is false.
+    fn default() -> Self {
+        Self {
+            value: Default::default(),
+            editable: false,
+            available: false,
+        }
+    }
+}
+
+impl<T> AsRef<T> for Value<T> {
+    /// Return the inner value as a reference.
+    fn as_ref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> Value<T> {
+    /// Create a value with a given inner value and the `available` flag set to true.
+    pub fn new(value: T) -> Self {
+        Self {
+            value,
+            editable: false,
+            available: true,
+        }
+    }
+
+    /// Create a value with a specific default value.
+    pub fn with_default(value: T) -> Self {
+        Self {
+            value,
+            editable: false,
+            available: false,
+        }
+    }
+
+    /// Set the editable flag for the value.
+    pub fn with_editable(mut self) -> Self {
+        self.editable = true;
+        self
+    }
+
+    /// Set the editable flag for this value.
+    pub fn set_editable(&mut self) {
+        self.editable = true;
+    }
+
+    /// Set the inner value to a value provided by the game.
+    /// This sets the `available` flag to true and the `editable` flag to false.
+    ///
+    /// Generally once a value is available from the game it should not be editable anymore.
+    /// For some values it may be desireable to take the game provided value as a suggestion and allow
+    /// the user to overwrite it. In that case use the `edit` method to set the value and continue
+    /// to allow editing.
+    pub fn set(&mut self, new_value: T) {
+        self.value = new_value;
+        self.available = true;
+    }
+
+    /// Set the inner value to a custom value.
+    /// This sets the `available` flag since the value is no longer represented by its default.
+    ///
+    /// This does not change the editability of the value.
+    pub fn edit(&mut self, new_value: T) {
+        self.value = new_value;
+        self.available = true;
+    }
+}
+
+impl<T: Copy> Value<T> {
+    /// Get the inner value as a copy.
+    pub fn as_copy(&self) -> T {
+        self.value
+    }
+}
+
+impl<T: PartialEq> PartialEq<T> for Value<T> {
+    fn eq(&self, other: &T) -> bool {
+        &self.value == other
+    }
+}
+
+impl<T: PartialEq> PartialEq for Value<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl<T: PartialOrd> PartialOrd<T> for Value<T> {
+    fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
+        self.value.partial_cmp(other)
+    }
+}
+
+impl<T: PartialOrd> PartialOrd for Value<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.value.partial_cmp(&other.value)
+    }
+}
+
+impl<T> Deref for Value<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T> DerefMut for Value<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
+impl<T> From<T> for Value<T> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T: Display> Display for Value<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value.fmt(f)
+    }
+}
 
 /// The unified sim model.
+/// Holds all the date availabe from the game.
 #[derive(Debug, Default)]
 pub struct Model {
+    /// Shows if the adapter is currently receiving data from the game.
+    pub connected: bool,
     /// List of sessions that have happend during the event.
     /// Sessions are orderd in the order they occur in the event.
     pub sessions: IndexMap<SessionId, Session>,
-    /// Index of the current active session.
-    pub current_session: SessionId,
-    /// Name of the event.
-    pub event_name: String,
-    /// Name of the track.
-    pub track_name: String,
-    /// Length of the track in meter.
-    pub track_length: i32,
-    /// List of events that have happened since the last update.
+    /// Id of the current active session.
+    /// `None` if there is no active session.
+    pub current_session: Option<SessionId>,
+    /// List of events that have happened during the liftime of the adapter.
     pub events: Vec<Event>,
+    /// Name of the event.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// In Acc there is no event name or server name available. Instead
+    /// the default "Assetto Corsa Competizione" is used. This value is editable during
+    /// the entire duration of the connection.
+    pub event_name: Value<String>,
 }
 
 impl Model {
     /// Add a session to the model.
-    /// Sets the id of the session and returns it.
+    /// Generates a new id for the session and adds it to the model.
+    /// Returns the newly created id.
     pub fn add_session(&mut self, mut session: Session) -> SessionId {
         let id = SessionId(self.sessions.len());
         session.id = id;
@@ -32,53 +207,218 @@ impl Model {
         id
     }
 
+    /// Convenience method to access the current session.
+    /// `None` if there is no current session.
     pub fn current_session(&self) -> Option<&Session> {
-        self.sessions.get(&self.current_session)
+        self.sessions.get(&self.current_session?)
     }
 
+    /// Get the current session mutably.
+    /// `None` if there is no current session.
     pub fn current_session_mut(&mut self) -> Option<&mut Session> {
-        self.sessions.get_mut(&self.current_session)
+        self.sessions.get_mut(&self.current_session?)
     }
 }
 
-#[derive(Debug)]
-pub enum Event {
-    EntryConnected(EntryId),
-    EntryReconnected(EntryId),
-    EntryDisconnected(EntryId),
-    SessionChanged(SessionId),
-    SessionPhaseChanged(SessionId, SessionPhase),
-    LapCompleted(LapCompleted),
-}
-
-#[derive(Debug)]
-pub struct LapCompleted {
-    pub lap: Lap,
-    pub is_session_best: bool,
-    pub is_entry_best: bool,
-    pub is_driver_best: bool,
-}
-
-/// A session id.
+/// The identifier for a session.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SessionId(pub usize);
 
 /// A session.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Session {
+    /// The session id of this session
     pub id: SessionId,
+    /// The collection of entries that are registered to this session.
     pub entries: HashMap<EntryId, Entry>,
-    pub session_type: SessionType,
-    pub session_time: Time,
-    pub time_remaining: Time,
-    pub laps: i32,
-    pub laps_remaining: i32,
-    pub phase: SessionPhase,
-    pub time_of_day: Time,
-    pub day: Day,
-    pub ambient_temp: f32,
-    pub track_temp: f32,
-    pub best_lap: Lap,
+    /// The current session type.
+    pub session_type: Value<SessionType>,
+    /// The current phase of the session.
+    pub phase: Value<SessionPhase>,
+    /// The time limit for this session.
+    ///
+    /// ### Availability:
+    /// If the session is not a timed session then this will not be available.
+    pub session_time: Value<Time>,
+    /// The time remaining in this session.
+    ///
+    /// ### Availability:
+    /// If the session is not a timed session then this will not be available.
+    pub time_remaining: Value<Time>,
+    /// The amount of laps required to finish this session.
+    ///
+    /// ### Availability:
+    /// If the session is not a lapped session then this will not be available.
+    pub laps: Value<i32>,
+    /// The amount of laps remaining to finish this session.
+    ///
+    /// ### Availability:
+    /// If the session is not a lapped session then this will not be available.
+    pub laps_remaining: Value<i32>,
+    /// The current time of day in the game.
+    pub time_of_day: Value<Time>,
+    /// The day of the week in the game.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// The week day of the session is availabe in Acc. It will default to be sunday.
+    /// This value is editable for the entire duration of the event.
+    pub day: Value<Day>,
+    /// The air temperature.
+    pub ambient_temp: Value<f32>,
+    /// The track temperature
+    pub track_temp: Value<f32>,
+    /// The best lap of the session.
+    pub best_lap: Value<Option<Lap>>,
+    /// Name of the track.
+    pub track_name: Value<String>,
+    /// Length of the track in meter.
+    pub track_length: Value<i32>,
+    /// Contains additional data that is game specific.
+    pub game_data: SessionGameData,
+}
+
+/// Game specific session data.
+#[derive(Debug, Default, Clone)]
+pub enum SessionGameData {
+    #[default]
+    None,
+    Acc(AccSession),
+}
+
+/// The identifier for an entry.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EntryId(pub i32);
+
+/// A team entry in the session.
+#[derive(Debug, Default, Clone)]
+pub struct Entry {
+    /// The id for this entry.
+    pub id: EntryId,
+    /// The collection of drivers registered for this entry.
+    pub drivers: HashMap<DriverId, Driver>,
+    /// The currently driving drivier.
+    pub current_driver: DriverId,
+    /// The name of the team.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// Team names are not available.
+    pub team_name: Value<String>,
+    /// The car this entry is driving.
+    pub car: Value<Car>,
+    /// The car number for this entry.
+    pub car_number: Value<i32>,
+    /// The nationality of the entry as a whole.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// TODO: I know that a team doesnt necessairly have a nationality.
+    /// But in the entry list you can specify one i think.
+    pub nationality: Value<Nationality>,
+    /// The position of this car in an x, y, z coordinate system.
+    ///
+    /// ### Availability:
+    /// - ** Assetto Corsa Competizione:**
+    /// The world position is not availabe in ACC.
+    /// TODO: It is possible to approximate the world position using the spline position
+    /// and the track map.
+    pub world_pos: Value<[f32; 3]>,
+    /// The orientation of the car in the pitch, yaw, and roll axis.
+    pub orientation: Value<[f32; 3]>,
+    /// The classification position of this entry.
+    pub position: Value<i32>,
+    /// The spline position around the track from 0 to 1.
+    pub spline_pos: Value<f32>,
+    /// The ammount of laps completed by this entry.
+    pub lap_count: Value<i32>,
+    /// List of all laps completed by this entry.
+    pub laps: Vec<Lap>,
+    /// The current lap time data for this entry.
+    pub current_lap: Value<Lap>,
+    /// The best lap this entry has completed.
+    pub best_lap: Value<Option<usize>>,
+    /// The performance delta compared to the best lap.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// It is a little unclear what the reference lap time for the performance delta is.
+    /// The best guess right now is that it references the best lap of the current stint.
+    pub performance_delta: Value<Time>,
+    /// The time difference from the leader of the session to this entry.
+    /// In a timed session, this is the difference in lap time. Otherwise it is the difference
+    /// in time between the leader reaching a checkpoint and this entry reaching the same checkpoint.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// This value is currently not implemented for ACC.
+    pub time_behind_leader: Value<Time>,
+    /// If the entry is currently in the pitlane or not.
+    pub in_pits: Value<bool>,
+    /// The gear of the entry.
+    pub gear: Value<i32>,
+    /// The current speed of the entry in m/s.
+    pub speed: Value<f32>,
+    /// If the entry is currently connected to the session.
+    pub connected: Value<bool>,
+    /// The current stint time of the entry.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// Stint time is not implemented for ACC yet.
+    pub stint_time: Value<Time>,
+    /// The distance driven by this entry in laps.
+    /// This is simply the lap count + the current lap progress from the spline position.
+    pub distance_driven: Value<f32>,
+}
+
+/// An iddentifier for a driver.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DriverId(pub i32);
+
+/// A Driver in a entry.
+#[derive(Debug, Default, Clone)]
+pub struct Driver {
+    /// The id of the driver.
+    pub id: DriverId,
+    /// The first name of the driver.
+    pub first_name: Value<String>,
+    /// The last name of the driver.
+    pub last_name: Value<String>,
+    /// The short name of the driver.
+    pub short_name: Value<String>,
+    /// Nationality of the driver.
+    pub nationality: Value<Nationality>,
+    /// Total driving time this driver has done in the current session.
+    pub driving_time: Value<Time>,
+    /// The best lap this driver has done.
+    /// This indexes the lap list in the entry of this driver.
+    pub best_lap: Value<Option<usize>>,
+}
+
+/// Data about a single lap.
+#[derive(Debug, Default, Clone)]
+pub struct Lap {
+    /// The lap time of this lap.
+    pub time: Value<Time>,
+    /// The splits of this lap.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// Split times as not availabe for a lap that hasnt finished yet.
+    /// Only completed laps have split times availabe.
+    pub splits: Value<Vec<Time>>,
+    /// If the lap was invalid.
+    pub invalid: Value<bool>,
+    /// Id of the driver that drove this lap.
+    pub driver_id: DriverId,
+    /// Id of the entry that drove this lap.
+    pub entry_id: EntryId,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CarCategory {
+    pub name: &'static str,
 }
 
 /// The type of the session.
@@ -116,7 +456,7 @@ pub enum SessionPhase {
     /// for all drivers to finish the session.
     Ending,
     /// The session is finished. All drivers have finished their session and the
-    /// results of the session are finalised.
+    /// results of the session is finalised.
     Finished,
 }
 
@@ -137,6 +477,24 @@ impl SessionPhase {
     }
 }
 
+#[derive(Debug)]
+pub enum Event {
+    EntryConnected(EntryId),
+    EntryReconnected(EntryId),
+    EntryDisconnected(EntryId),
+    SessionChanged(SessionId),
+    SessionPhaseChanged(SessionId, SessionPhase),
+    LapCompleted(LapCompleted),
+}
+
+#[derive(Debug)]
+pub struct LapCompleted {
+    pub lap: Lap,
+    pub is_session_best: bool,
+    pub is_entry_best: bool,
+    pub is_driver_best: bool,
+}
+
 /// Describes the day a session takes part in.
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum Day {
@@ -150,86 +508,14 @@ pub enum Day {
     Sunday,
 }
 
-/// An id for an entry.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EntryId(pub i32);
-
-/// A team entry in the session.
-#[derive(Debug, Default)]
-pub struct Entry {
-    pub id: EntryId,
-    pub drivers: HashMap<DriverId, Driver>,
-    pub current_driver: DriverId,
-    pub team_name: String,
-    pub car: Car,
-    pub car_number: i32,
-    pub nationality: Nationality,
-    pub world_pos: [f32; 3],
-    pub orientation: [f32; 3],
-    pub position: i32,
-    pub spline_pos: f32,
-    pub lap_count: i32,
-    pub laps: Vec<Lap>,
-    pub current_lap: Lap,
-    pub best_lap: Option<usize>,
-    pub performance_delta: Time,
-    pub time_behind_leader: Time,
-    pub in_pits: bool,
-    pub gear: i32,
-    pub speed: f32,
-    pub connected: bool,
-    pub stint_time: Time,
-    pub distance_driven: f32,
-}
-
-/// An id for a driver.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DriverId(pub i32);
-
-/// A Driver in a team.
-#[derive(Debug, Default)]
-pub struct Driver {
-    pub id: DriverId,
-    pub first_name: String,
-    pub last_name: String,
-    pub short_name: String,
-    pub nationality: Nationality,
-    pub driving_time: Time,
-    pub best_lap: Option<usize>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Lap {
-    pub time: Time,
-    pub splits: Vec<Time>,
-    pub driver_id: DriverId,
-    pub entry_id: EntryId,
-    pub invalid: bool,
-}
-
-impl Default for Lap {
-    fn default() -> Self {
-        Self {
-            time: Time::from(i32::MAX),
-            splits: Default::default(),
-            driver_id: Default::default(),
-            entry_id: Default::default(),
-            invalid: Default::default(),
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct CarCategory {
-    pub name: &'static str,
-}
-
+/// Describes the category of a car.
 impl CarCategory {
     pub const fn new(name: &'static str) -> Self {
         Self { name }
     }
 }
 
+/// A car model.
 #[derive(Debug, Default, Clone)]
 pub struct Car {
     pub name: &'static str,
@@ -251,6 +537,7 @@ impl Car {
     }
 }
 
+/// Nationality.
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct Nationality {
     pub name: &'static str,

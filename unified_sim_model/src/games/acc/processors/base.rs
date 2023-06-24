@@ -8,7 +8,8 @@ use crate::{
         },
         AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
-    model::{self, Driver, DriverId, Entry, EntryId, Event, SessionId}, time::Time,
+    model::{self, Day, Driver, DriverId, Entry, EntryId, Event, Session, Value},
+    time::Time,
 };
 
 /// A processor to transfer game data directly into the model.
@@ -50,35 +51,38 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Session Update");
 
-        let is_new_session = match self.current_session_index {
-            Some(index) => update.session_index != index,
-            None => true,
-        };
+        let is_new_session = self
+            .current_session_index
+            .map_or(true, |index| update.session_index != index);
         self.current_session_index = Some(update.session_index);
 
         if is_new_session {
-            // Fast forward old session
             if let Some(session) = context.model.current_session_mut() {
                 while session.phase != model::SessionPhase::Finished {
                     info!("Session phase fast forwarded to {:?}", session.phase);
-                    session.phase = session.phase.next();
-                    context
-                        .events
-                        .push_back(Event::SessionPhaseChanged(session.id, session.phase));
+                    session.phase.set(session.phase.next());
+                    context.events.push_back(Event::SessionPhaseChanged(
+                        session.id,
+                        session.phase.as_copy(),
+                    ));
                 }
             }
 
             // Make new session
-            let mut session = map_session(update);
-            session.id = SessionId(context.model.sessions.len());
+            let session_type = map_session_type(&update.session_type);
+            let session = Session {
+                session_type: session_type.into(),
+                session_time: Time::from(update.session_time + update.session_end_time).into(),
+                phase: model::SessionPhase::Waiting.into(),
+                day: Value::with_default(Day::Sunday).with_editable(),
+                ..Default::default()
+            };
+            let id = context.model.add_session(session);
+            context.model.current_session = Some(id);
 
             // Create event
-            info!("New {:?} session detected", session.session_type);
-            context.events.push_back(Event::SessionChanged(session.id));
-
-            // Add session to model
-            context.model.current_session = session.id;
-            context.model.sessions.insert(session.id, session);
+            info!("New {:?} session detected", session_type);
+            context.events.push_back(Event::SessionChanged(id));
         }
 
         let session = context
@@ -88,17 +92,22 @@ impl AccProcessor for BaseProcessor {
 
         // Update session data
         let current_phase = map_session_phase(&update.session_phase);
-        while current_phase > session.phase {
-            session.phase = session.phase.next();
+        while current_phase > *session.phase {
+            session.phase.set(session.phase.next());
             info!("Session phase changed to {:?}", session.phase);
-            context
-                .events
-                .push_back(Event::SessionPhaseChanged(session.id, session.phase));
+            context.events.push_back(Event::SessionPhaseChanged(
+                session.id,
+                session.phase.as_copy(),
+            ));
         }
-        session.time_remaining = Time::from(update.session_end_time);
-        session.time_of_day = Time::from(update.time_of_day * 1000.0);
-        session.ambient_temp = update.ambient_temp as f32;
-        session.track_temp = update.track_temp as f32;
+        session
+            .time_remaining
+            .set(Time::from(update.session_end_time));
+        session
+            .time_of_day
+            .set(Time::from(update.time_of_day * 1000.0));
+        session.ambient_temp.set(update.ambient_temp as f32);
+        session.track_temp.set(update.track_temp as f32);
 
         // Reset entry list flag
         self.requested_entry_list = false;
@@ -122,16 +131,26 @@ impl AccProcessor for BaseProcessor {
 
         match current_session.entries.get_mut(&entry_id) {
             Some(entry) => {
-                entry.orientation = [update.pitch, update.yaw, update.roll];
-                entry.position = update.position as i32;
-                entry.spline_pos = update.spline_position;
-                entry.lap_count = update.laps as i32;
-                entry.current_lap.time = update.current_lap.laptime_ms.into();
-                entry.current_lap.invalid = update.current_lap.is_invaliud;
-                entry.performance_delta = update.delta.into();
-                entry.in_pits = update.car_location == CarLocation::Pitlane;
-                entry.gear = update.gear as i32;
-                entry.speed = update.kmh as f32;
+                entry
+                    .orientation
+                    .set([update.pitch, update.yaw, update.roll]);
+                entry.position.set(update.position as i32);
+                entry.spline_pos.set(update.spline_position);
+                entry.lap_count.set(update.laps as i32);
+                entry
+                    .current_lap
+                    .time
+                    .set(update.current_lap.laptime_ms.into());
+                entry
+                    .current_lap
+                    .invalid
+                    .set(update.current_lap.is_invaliud);
+                entry.performance_delta.set(update.delta.into());
+                entry
+                    .in_pits
+                    .set(update.car_location == CarLocation::Pitlane);
+                entry.gear.set(update.gear as i32);
+                entry.speed.set(update.kmh as f32);
             }
             None => {
                 debug!("Realtime update for unknown car id:{}", update.car_id);
@@ -147,8 +166,10 @@ impl AccProcessor for BaseProcessor {
 
     fn track_data(&mut self, track: &TrackData, context: &mut AccProcessorContext) -> Result<()> {
         debug!("Track data");
-        context.model.track_name = track.track_name.clone();
-        context.model.track_length = track.track_meter;
+        if let Some(session) = context.model.current_session_mut() {
+            session.track_name.set(track.track_name.clone());
+            session.track_length.set(track.track_meter);
+        }
         Ok(())
     }
 
@@ -192,31 +213,22 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
                 let id = DriverId(i as i32);
                 let driver = Driver {
                     id,
-                    first_name: driver_info.first_name.clone(),
-                    last_name: driver_info.last_name.clone(),
-                    short_name: driver_info.short_name.clone(),
-                    nationality: driver_info.nationality.clone(),
-                    driving_time: Time::from(0),
-                    best_lap: None,
+                    first_name: driver_info.first_name.clone().into(),
+                    last_name: driver_info.last_name.clone().into(),
+                    short_name: driver_info.short_name.clone().into(),
+                    nationality: driver_info.nationality.clone().into(),
+                    driving_time: Time::from(0).into(),
+                    best_lap: None.into(),
                 };
                 (id, driver)
             })
             .collect(),
         current_driver: DriverId(car.current_driver_index as i32),
-        team_name: car.team_name.clone(),
-        car: car.car_model_type.clone(),
-        car_number: car.race_number,
-        nationality: car.car_nationality.clone(),
-        connected: true,
-        ..Default::default()
-    }
-}
-
-fn map_session(update: &SessionUpdate) -> model::Session {
-    model::Session {
-        session_type: map_session_type(&update.session_type),
-        session_time: Time::from(update.session_time + update.session_end_time),
-        phase: model::SessionPhase::Waiting,
+        team_name: car.team_name.clone().into(),
+        car: car.car_model_type.clone().into(),
+        car_number: car.race_number.into(),
+        nationality: car.car_nationality.clone().into(),
+        connected: true.into(),
         ..Default::default()
     }
 }
