@@ -14,16 +14,15 @@
 //! or if a default is used. To do this, the ['Value'] object has some flags to read this information.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Display,
     ops::{Deref, DerefMut},
-    sync::Arc,
 };
 
 use indexmap::IndexMap;
 
 use crate::{
-    games::acc::model::{AccEntry, AccSession},
+    games::acc::model::{AccCamera, AccEntry, AccSession},
     time::Time,
 };
 
@@ -202,6 +201,10 @@ pub struct Model {
     /// the default "Assetto Corsa Competizione" is used. This value is editable during
     /// the entire duration of the connection.
     pub event_name: Value<String>,
+    /// The currently active camera.
+    pub active_camera: Value<Camera>,
+    /// The set of availabe cameras.
+    pub available_cameras: HashSet<Camera>,
 }
 
 impl Model {
@@ -225,6 +228,11 @@ impl Model {
     /// `None` if there is no current session.
     pub fn current_session_mut(&mut self) -> Option<&mut Session> {
         self.sessions.get_mut(&self.current_session?)
+    }
+
+    /// Returns if the given camera is available.
+    pub fn is_camera_available(&self, camera: &Camera) -> bool {
+        self.available_cameras.contains(camera)
     }
 }
 
@@ -788,9 +796,11 @@ impl Nationality {
 }
 
 /// Set of possible camera views.
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
 pub enum Camera {
     /// The first person view of the driver. This is usually the view a
     /// player would use to drive.
+    #[default]
     FirstPerson,
     /// A third person chase cam where the camera is elevated behind the car
     /// and is following it.
@@ -802,10 +812,14 @@ pub enum Camera {
     TV,
     /// A helicopter view of the focused car.
     Hellicopter,
-    /// An Camera definition for ACC. This camera is special to ACC and does not
-    /// fit to a general camera definition.
-    Acc {
-        camera_set: Arc<str>,
-        camera: Arc<str>,
-    },
+    /// Game specific camera.
+    Game(GameCamera),
+}
+
+/// Game specific camera options.
+#[derive(Debug, Default, Clone, Hash, PartialEq, Eq)]
+pub enum GameCamera {
+    #[default]
+    None,
+    Acc(AccCamera),
 }

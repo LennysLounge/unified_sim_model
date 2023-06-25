@@ -5,8 +5,8 @@ use std::{
 
 use crate::{
     model::{
-        Car, CarCategory, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap, Model,
-        Nationality, Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
+        Camera, Car, CarCategory, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap,
+        Model, Nationality, Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
     },
     time::Time,
     AdapterError, GameAdapter, UpdateEvent,
@@ -24,6 +24,10 @@ impl GameAdapter for DummyAdapter {
         let mut model = model.write().expect("Should be able to lock for writing");
 
         model.event_name.set("Dummy event".to_string());
+        model.active_camera.set(Camera::Hellicopter);
+        model.available_cameras.insert(Camera::Hellicopter);
+        model.available_cameras.insert(Camera::Chase);
+        model.available_cameras.insert(Camera::FirstPerson);
 
         // model.track_name = "Dummy track".to_string();
         // model.track_length = 1234;

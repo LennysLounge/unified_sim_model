@@ -6,12 +6,12 @@ use crate::{
             CarLocation, EntryListCar, RealtimeCarUpdate, RegistrationResult, SessionPhase,
             SessionType, SessionUpdate, TrackData,
         },
-        model::{AccEntry, AccSession},
+        model::{AccCamera, AccEntry, AccSession},
         AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
     model::{
-        self, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap, Nationality,
-        Session, SessionGameData, Value,
+        self, Camera, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, GameCamera, Lap,
+        Nationality, Session, SessionGameData, Value,
     },
     time::Time,
 };
@@ -207,6 +207,80 @@ impl AccProcessor for BaseProcessor {
         if let Some(session) = context.model.current_session_mut() {
             session.track_name.set(track.track_name.clone());
             session.track_length.set(track.track_meter);
+        }
+        let available_cameras = &mut context.model.available_cameras;
+        for (set, cameras) in track.camera_sets.iter() {
+            match set.as_str() {
+                "Helicam" => {
+                    available_cameras.insert(Camera::Hellicopter);
+                }
+                "pitlane" => {
+                    available_cameras.insert(Camera::Game(GameCamera::Acc(AccCamera::Pitlane)));
+                }
+                "set1" => {
+                    available_cameras.insert(Camera::TV);
+                }
+                "set2" => {
+                    available_cameras.insert(Camera::Game(GameCamera::Acc(AccCamera::Tv2)));
+                }
+                "Drivable" => {
+                    for camera in cameras {
+                        match camera.as_str() {
+                            "Chase" => {
+                                available_cameras.insert(Camera::Chase);
+                            }
+                            "FarChase" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::FarChase)));
+                            }
+                            "Bonnet" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Bonnet)));
+                            }
+                            "DashPro" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::DashPro)));
+                            }
+                            "Cockpit" => {
+                                available_cameras.insert(Camera::FirstPerson);
+                            }
+                            "Dash" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Dash)));
+                            }
+                            "Helmet" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Helmet)));
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+                "Onboard" => {
+                    for camera in cameras {
+                        match camera.as_str() {
+                            "Onboard0" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard0)));
+                            }
+                            "Onboard1" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard1)));
+                            }
+                            "Onboard2" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard2)));
+                            }
+                            "Onboard3" => {
+                                available_cameras
+                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard3)));
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+                _ => (),
+            }
         }
         Ok(())
     }

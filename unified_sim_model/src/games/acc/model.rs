@@ -1,6 +1,6 @@
 //! This module includes the additional model data for this adapter.
 
-use crate::model::{EntryGameData, SessionGameData};
+use crate::model::{Camera, EntryGameData, GameCamera, SessionGameData};
 
 use super::{data::CarLocation, AccConnectionError};
 
@@ -125,5 +125,85 @@ impl EntryGameData {
                 "Entry game data is not compatible with the acc adapter".to_owned(),
             )),
         }
+    }
+}
+
+#[derive(Debug, Default, Clone, Hash, PartialEq, Eq)]
+pub enum AccCamera {
+    /// A Helicopter camera.
+    Helicam,
+    /// Pitlane camera.
+    ///
+    /// If the focused car is not in the pitlane, this camera will cycle between
+    /// helicam, Tv1, and Tv2.
+    /// If the focused car is in the pitlane it will cycle between helicam and pitlane.
+    Pitlane,
+    /// A TV like camera that automatically switches the camera to keep the focused car in view.
+    Tv1,
+    /// A more cinematic camera that automatically switches the camera to keep the focused car in view.
+    Tv2,
+    /// A third person chase camera that is flying behind the car.
+    Chase,
+    /// A third person chase camera that is flying further behind the car.
+    FarChase,
+    /// A camera on the bonnet of the car.
+    Bonnet,
+    /// A camera locked to front of the bumper.
+    DashPro,
+    /// The cockpit camera.
+    #[default]
+    Cockpit,
+    /// A camera locked to the dash.
+    Dash,
+    /// A camera inside the helmet.
+    Helmet,
+    /// A camera showing the interior of the car facing forwards.
+    Onboard0,
+    /// A camera facing rearwards showing the driver.
+    Onboard1,
+    /// A camera on the passenger side of the dashboard facing forwards.
+    Onboard2,
+    /// A camaera facing rearwards showing the rear wing of the car.
+    Onboard3,
+}
+
+impl AccCamera {
+    /// Get the camera definition for the camera.
+    fn camera_definition(&self) -> (&'static str, &'static str) {
+        match self {
+            AccCamera::Helicam => ("Helicam", "Helicam"),
+            AccCamera::Pitlane => ("pitlane", "camera"),
+            AccCamera::Tv1 => ("set1", "camera"),
+            AccCamera::Tv2 => ("set2", "camera"),
+            AccCamera::Chase => ("Drivable", "Chase"),
+            AccCamera::FarChase => ("Drivable", "FarChase"),
+            AccCamera::Bonnet => ("Drivable", "Bonnet"),
+            AccCamera::DashPro => ("Drivable", "DashPro"),
+            AccCamera::Cockpit => ("Drivable", "Cockpit"),
+            AccCamera::Dash => ("Drivable", "Dash"),
+            AccCamera::Helmet => ("Drivable", "Helmet"),
+            AccCamera::Onboard0 => ("Onboard", "Onboard0"),
+            AccCamera::Onboard1 => ("Onboard", "Onboard1"),
+            AccCamera::Onboard2 => ("Onboard", "Onboard2"),
+            AccCamera::Onboard3 => ("Onboard", "Onboard3"),
+        }
+    }
+}
+
+impl Camera {
+    /// Get the acc camera definition for this camera setting.
+    /// None if the camera is not supported by acc.
+    pub(crate) fn as_acc_camera_definition(&self) -> Option<(&str, &str)> {
+        let camera = match self {
+            Camera::FirstPerson => Some(AccCamera::Cockpit),
+            Camera::Chase => Some(AccCamera::Chase),
+            Camera::TV => Some(AccCamera::Tv1),
+            Camera::Hellicopter => Some(AccCamera::Helicam),
+            Camera::Game(game) => match game {
+                GameCamera::None => None,
+                GameCamera::Acc(camera) => Some(camera.clone()),
+            },
+        };
+        camera.map(|camera| camera.camera_definition())
     }
 }

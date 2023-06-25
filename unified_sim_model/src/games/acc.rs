@@ -123,20 +123,10 @@ impl AccAdapter {
                 .socket
                 .send_change_camera_request(Some(entry_id.0 as i16), None)?,
             AdapterCommand::ChangeCamera(camera) => {
-                use crate::model::Camera::*;
-                let camera = match camera {
-                    FirstPerson => todo!(),
-                    Chase => todo!(),
-                    TV => todo!(),
-                    Hellicopter => todo!(),
-                    Acc {
-                        ref camera_set,
-                        ref camera,
-                    } => (&**camera_set, &**camera),
-                };
-                connection
-                    .socket
-                    .send_change_camera_request(None, Some(camera))?;
+                let camera = camera.as_acc_camera_definition();
+                if camera.is_some() {
+                    connection.socket.send_change_camera_request(None, camera)?;
+                }
             }
         };
         Ok(false)
