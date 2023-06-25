@@ -32,7 +32,7 @@ impl GameAdapter for DummyAdapter {
         // model.track_name = "Dummy track".to_string();
         // model.track_length = 1234;
 
-        model.add_session(Session {
+        let id = model.add_session(Session {
             id: SessionId(0),
             entries: HashMap::new(),
             session_type: Value::new(SessionType::Race),
@@ -60,6 +60,7 @@ impl GameAdapter for DummyAdapter {
             track_length: Value::new(1234),
             game_data: SessionGameData::None,
         });
+        model.current_session = Some(id);
         model.events.push(Event::SessionChanged(SessionId(0)));
 
         for i in 0..10 {

@@ -3,13 +3,13 @@ use std::env;
 use egui::Context;
 use egui_custom::dialog::{Dialog, Size, Windower};
 
-use session_table::SessionTable;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 use unified_sim_model::{Adapter, AdapterCommand};
 
 mod graph;
 mod session_table;
+mod tab_panel;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -27,15 +27,11 @@ fn main() {
 
 struct App {
     adapter: Option<Adapter>,
-    session_table: SessionTable,
 }
 
 impl App {
     fn new() -> Self {
-        Self {
-            adapter: None,
-            session_table: SessionTable::new(),
-        }
+        Self { adapter: None }
     }
 }
 
@@ -67,12 +63,10 @@ impl Dialog for App {
                     } else {
                         if ui.button("Dummy").clicked() {
                             self.adapter = Some(Adapter::new_dummy());
-                            self.session_table.clear();
                             ui.close_menu();
                         }
                         if ui.button("ACC").clicked() {
                             self.adapter = Some(Adapter::new_acc());
-                            self.session_table.clear();
                             ui.close_menu();
                         }
                     }
@@ -85,7 +79,8 @@ impl Dialog for App {
             let Ok(model) = adapter.model.read() else {return};
 
             ui.label(format!("Event name: {}", model.event_name));
-            self.session_table.show(ui, &model, windower, adapter);
+            //self.session_table.show(ui, &model, windower, adapter);
+            session_table::show_session_tabs(ui, &model, windower, adapter);
         });
 
         // clear adapter events at the end of the frame.
