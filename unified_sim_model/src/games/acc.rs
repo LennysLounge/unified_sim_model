@@ -142,10 +142,10 @@ pub struct AccConnection {
 
 impl AccConnection {
     pub fn new() -> Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| AccConnectionError::IoError(e))?;
+        let socket = UdpSocket::bind("0.0.0.0:0").map_err(AccConnectionError::IoError)?;
         socket
             .connect("127.0.0.1:9000")
-            .map_err(|e| AccConnectionError::IoError(e))?;
+            .map_err(AccConnectionError::IoError)?;
         socket
             .set_read_timeout(Some(Duration::from_millis(500)))
             .expect("Read timeout duration should be larger than 0");
@@ -171,16 +171,12 @@ impl AccConnection {
             events: VecDeque::new(),
         };
 
-        process_message(&mut self.base_proc, &message, &mut context)?;
-        process_message(&mut self.connection_proc, &message, &mut context)?;
-        process_message(&mut self.lap_proc, &message, &mut context)?;
+        process_message(&mut self.base_proc, message, &mut context)?;
+        process_message(&mut self.connection_proc, message, &mut context)?;
+        process_message(&mut self.lap_proc, message, &mut context)?;
 
-        match message {
-            Message::RealtimeCarUpdate(update) => distance_driven::calc_distance_driven(
-                &mut context.model,
-                &EntryId(update.car_id as i32),
-            ),
-            _ => (),
+        if let Message::RealtimeCarUpdate(update) = message {
+            distance_driven::calc_distance_driven(context.model, &EntryId(update.car_id as i32))
         }
 
         while !context.events.is_empty() {

@@ -90,7 +90,7 @@ impl AccProcessor for LapProcessor {
         );
 
         context.events.push_back(Event::LapCompleted(LapCompleted {
-            lap: lap.clone(),
+            lap,
             is_session_best: session_best,
             is_entry_best: entry_best,
             is_driver_best: personal_best,

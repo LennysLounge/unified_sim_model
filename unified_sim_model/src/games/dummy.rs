@@ -12,6 +12,7 @@ use crate::{
     AdapterError, GameAdapter, UpdateEvent,
 };
 
+#[derive(Default)]
 pub struct DummyAdapter {}
 
 impl GameAdapter for DummyAdapter {
@@ -79,7 +80,7 @@ impl GameAdapter for DummyAdapter {
                                 driver_id,
                                 Driver {
                                     id: driver_id,
-                                    first_name: Value::new(format!("John")),
+                                    first_name: Value::new("John".to_string()),
                                     last_name: Value::new(format!("Wayne {}", i)),
                                     short_name: Value::new(format!("JW{}", i)),
                                     nationality: Value::new(Nationality::NONE),
@@ -128,11 +129,5 @@ impl GameAdapter for DummyAdapter {
         }
 
         Ok(())
-    }
-}
-
-impl DummyAdapter {
-    pub fn new() -> Self {
-        Self {}
     }
 }

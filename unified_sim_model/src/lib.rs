@@ -96,7 +96,7 @@ impl Adapter {
     /// Create a new dummy adapter.
     /// The adapter will write some data into the model and immediately finish.
     pub fn new_dummy() -> Adapter {
-        Self::new(DummyAdapter::new())
+        Self::new(DummyAdapter::default())
     }
 
     /// Create a new Assetto Corsa Competizione adapter.

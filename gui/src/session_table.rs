@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use egui::{RichText, Sense, Ui};
 use egui_custom::dialog::Windower;
 use egui_ltable::{Column, Row, Table};
-use tracing::info;
 use unified_sim_model::{
     model::{Entry, EntryId, Model, Session},
     Adapter, AdapterCommand,
