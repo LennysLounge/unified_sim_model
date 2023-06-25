@@ -271,8 +271,18 @@ pub struct Session {
     /// The best lap of the session.
     pub best_lap: Value<Option<Lap>>,
     /// Name of the track.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// After the session changes or when the adapter first connects there might be a short delay before
+    /// the track name is availabe.
     pub track_name: Value<String>,
     /// Length of the track in meter.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// After the session changes or when the adapter first connects there might be a short delay before
+    /// the track length is availabe.
     pub track_length: Value<i32>,
     /// Contains additional data that is game specific.
     pub game_data: SessionGameData,

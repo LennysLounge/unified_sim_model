@@ -81,10 +81,11 @@ impl Dialog for App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            if let Some(ref adapter) = self.adapter {
-                self.session_table
-                    .show(ui, &adapter.model.read().unwrap(), windower, adapter);
-            }
+            let Some(adapter) = self.adapter.as_ref() else {return};
+            let Ok(model) = adapter.model.read() else {return};
+
+            ui.label(format!("Event name: {}", model.event_name));
+            self.session_table.show(ui, &model, windower, adapter);
         });
 
         // clear adapter events at the end of the frame.

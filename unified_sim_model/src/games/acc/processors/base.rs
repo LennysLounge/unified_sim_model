@@ -6,9 +6,10 @@ use crate::{
             CarLocation, EntryListCar, RealtimeCarUpdate, RegistrationResult, SessionPhase,
             SessionType, SessionUpdate, TrackData,
         },
+        model::AccSession,
         AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
-    model::{self, Day, Driver, DriverId, Entry, EntryId, Event, Session, Value},
+    model::{self, Day, Driver, DriverId, Entry, EntryId, Event, Session, SessionGameData, Value},
     time::Time,
 };
 
@@ -16,8 +17,6 @@ use crate::{
 /// Transfers only data that is available without doing any additional processing.
 #[derive(Default, Debug)]
 pub struct BaseProcessor {
-    /// Index of the current session.
-    current_session_index: Option<i16>,
     /// True if a new entry list should be requested.
     requested_entry_list: bool,
 }
@@ -51,10 +50,19 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Session Update");
 
-        let is_new_session = self
-            .current_session_index
-            .map_or(true, |index| update.session_index != index);
-        self.current_session_index = Some(update.session_index);
+        let current_session_index = context
+            .model
+            .current_session()
+            .map(|session| {
+                session
+                    .game_data
+                    .assert_acc()
+                    .map(|data| data.session_index)
+            })
+            .transpose()?;
+
+        let is_new_session =
+            current_session_index.map_or(true, |index| update.session_index != index);
 
         if is_new_session {
             if let Some(session) = context.model.current_session_mut() {
@@ -75,6 +83,8 @@ impl AccProcessor for BaseProcessor {
                 session_time: Time::from(update.session_time + update.session_end_time).into(),
                 phase: model::SessionPhase::Waiting.into(),
                 day: Value::with_default(Day::Sunday).with_editable(),
+                game_data: SessionGameData::Acc(AccSession::default()),
+                best_lap: Value::new(None),
                 ..Default::default()
             };
             let id = context.model.add_session(session);
@@ -83,12 +93,31 @@ impl AccProcessor for BaseProcessor {
             // Create event
             info!("New {:?} session detected", session_type);
             context.events.push_back(Event::SessionChanged(id));
+
+            // Ask for track data.
+            // I dont think that acc can change tracks between sessions right now. In principle
+            // that means we only have to ask for track data once and could use that every time.
+            // For simplicity we just request the track data for every session.
+            context.socket.send_track_data_request()?;
         }
 
         let session = context
             .model
             .current_session_mut()
-            .expect("No Session available. If the list is empty then a new session should have been created");
+            .ok_or(AccConnectionError::Other(
+                "No current session on a session update".to_owned(),
+            ))?;
+
+        // Update game data
+        let game_data = session.game_data.assert_acc_mut()?;
+        game_data.event_index = update.event_index;
+        game_data.session_index = update.session_index;
+        game_data.camera_set = update.active_camera_set.clone();
+        game_data.camera = update.active_camera.clone();
+        game_data.hud_page = update.current_hud_page.clone();
+        game_data.cloud_level = update.cloud_level;
+        game_data.rain_level = update.rain_level;
+        game_data.wetness = update.wetness;
 
         // Update session data
         let current_phase = map_session_phase(&update.session_phase);
@@ -100,18 +129,15 @@ impl AccProcessor for BaseProcessor {
                 session.phase.as_copy(),
             ));
         }
-        session
-            .time_remaining
-            .set(Time::from(update.session_end_time));
+        session.time_remaining.set(update.session_end_time.into());
         session
             .time_of_day
-            .set(Time::from(update.time_of_day * 1000.0));
+            .set((update.time_of_day * 1000.0).into());
         session.ambient_temp.set(update.ambient_temp as f32);
         session.track_temp.set(update.track_temp as f32);
 
         // Reset entry list flag
         self.requested_entry_list = false;
-
         Ok(())
     }
 

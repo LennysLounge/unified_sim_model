@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::RwLockReadGuard};
+use std::{collections::HashMap};
 
 use egui::{RichText, Sense, Ui};
 use egui_custom::dialog::Windower;
@@ -25,23 +25,25 @@ impl SessionTable {
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
-        model: &RwLockReadGuard<'_, Model>,
+        model: &Model,
         windower: &mut Windower,
         adapter: &Adapter,
     ) {
         self.update_session_tabs(model);
 
-        let mut style = egui_dock::Style::from_egui(ui.style().as_ref());
-        style.tabs.rounding = egui::Rounding {
-            nw: 5.0,
-            ne: 5.0,
-            sw: 0.0,
-            se: 0.0,
-        };
         egui_dock::DockArea::new(&mut self.session_tab_tree)
             .draggable_tabs(false)
             .show_close_buttons(false)
-            .style(style)
+            .style({
+                let mut style = egui_dock::Style::from_egui(ui.style().as_ref());
+                style.tabs.rounding = egui::Rounding {
+                    nw: 5.0,
+                    ne: 5.0,
+                    sw: 0.0,
+                    se: 0.0,
+                };
+                style
+            })
             .scroll_area_in_tabs(false)
             .show_inside(
                 ui,
@@ -53,7 +55,7 @@ impl SessionTable {
             );
     }
 
-    fn update_session_tabs(&mut self, model: &RwLockReadGuard<'_, Model>) {
+    fn update_session_tabs(&mut self, model: &Model) {
         for event in model.events.iter() {
             if let Event::SessionChanged(session_id) = event {
                 let title = format!(
@@ -83,7 +85,7 @@ struct SessionTab {
 }
 
 struct TabViewer<'a, 'b> {
-    model: &'a RwLockReadGuard<'a, Model>,
+    model: &'a Model,
     windower: &'a mut Windower<'b>,
     adapter: &'a Adapter,
 }
@@ -93,6 +95,72 @@ impl<'a, 'b> egui_dock::TabViewer for TabViewer<'a, 'b> {
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         if let Some(session) = self.model.sessions.get(&tab.session_id) {
+            egui::Grid::new("session info grid").show(ui, |ui| {
+                ui.label("Track:");
+                ui.label(session.track_name.as_ref());
+                ui.label("Length:");
+                ui.label(format!("{}m", session.track_length));
+                ui.end_row();
+
+                ui.label("Type:");
+                ui.label(format!("{:?}", *session.session_type));
+                ui.label("Phase:");
+                ui.label(format!("{:?}", *session.phase));
+                ui.end_row();
+
+                ui.label("Time:");
+                ui.label(session.session_time.format());
+                ui.label("Remaining:");
+                ui.label(session.time_remaining.format());
+                ui.end_row();
+
+                ui.label("Day:");
+                ui.label(format!("{:?}", *session.day));
+                ui.label("Time of day:");
+                ui.label(session.time_of_day.format());
+                ui.end_row();
+
+                ui.label("Ambient temp:");
+                ui.label(format!("{}", session.ambient_temp));
+                ui.label("Track temp:");
+                ui.label(format!("{}", session.track_temp));
+                ui.end_row();
+
+                ui.label("Best lap:");
+                if let Some(best_lap) = session.best_lap.as_ref() {
+                    ui.label(best_lap.time.format());
+                } else {
+                    ui.label("-");
+                }
+                ui.end_row();
+
+                if let Some(data) = session.game_data.as_acc() {
+                    ui.label("Acc data:");
+                    ui.end_row(); 
+
+                    ui.label("Event index:");
+                    ui.label(format!("{}", data.event_index));
+                    ui.label("Session index:");
+                    ui.label(format!("{}", data.session_index));
+                    ui.end_row();
+
+                    ui.label("Camera set:");
+                    ui.label(&data.camera_set);
+                    ui.label("Camera:");
+                    ui.label(&data.camera);
+                    ui.label("Hud page:");
+                    ui.label(&data.hud_page);
+                    ui.end_row();
+
+                    ui.label("Cloud level:");
+                    ui.label(format!("{}", data.cloud_level));
+                    ui.label("Rain:");
+                    ui.label(format!("{}", data.rain_level));
+                    ui.label("Wetness:");
+                    ui.label(format!("{}", data.wetness));
+                    ui.end_row();
+                }
+            });
             display_entries_table(ui, &session.entries, self.windower, self.adapter);
         }
     }
