@@ -132,6 +132,10 @@ fn display_entries_table(
         is_connected.then(position)
     });
 
+    let focus_on_car = |entry_id| {
+        adapter.send(AdapterCommand::FocusOnCar(entry_id));
+    };
+
     let center = egui::Layout::centered_and_justified(egui::Direction::LeftToRight);
     let right = egui::Layout::right_to_left(egui::Align::Min);
     Table::new()
@@ -241,11 +245,12 @@ fn display_entries_table(
                         });
                         if let Some(response) = r {
                             if response.double_clicked() {
-                                info!("Row cell clicked");
+                                focus_on_car(entry.id);
                             }
                             response.context_menu(|ui| {
                                 if ui.button("Focus").clicked() {
                                     ui.close_menu();
+                                    focus_on_car(entry.id);
                                 }
                                 if ui.button("Graph").clicked() {
                                     let graph =
@@ -295,11 +300,12 @@ fn display_entries_table(
                     },
                 );
                 if response.double_clicked() {
-                    info!("Row clicked");
+                    focus_on_car(entry.id);
                 }
                 response.context_menu(|ui| {
                     if ui.button("Focus").clicked() {
                         ui.close_menu();
+                        focus_on_car(entry.id);
                     }
                 });
             }
