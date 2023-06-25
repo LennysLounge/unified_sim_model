@@ -205,6 +205,8 @@ pub struct Model {
     pub active_camera: Value<Camera>,
     /// The set of availabe cameras.
     pub available_cameras: HashSet<Camera>,
+    /// The currently focused car.
+    pub focused_entry: Option<EntryId>,
 }
 
 impl Model {
@@ -397,6 +399,8 @@ pub struct Entry {
     /// The distance driven by this entry in laps.
     /// This is simply the lap count + the current lap progress from the spline position.
     pub distance_driven: Value<f32>,
+    /// True if this car is the focus of the camera right now.
+    pub focused: bool,
     /// Contains additional data that is game specific.
     pub game_data: EntryGameData,
 }
@@ -798,9 +802,11 @@ impl Nationality {
 /// Set of possible camera views.
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
 pub enum Camera {
+    /// No camera is active.
+    #[default]
+    None,
     /// The first person view of the driver. This is usually the view a
     /// player would use to drive.
-    #[default]
     FirstPerson,
     /// A third person chase cam where the camera is elevated behind the car
     /// and is following it.

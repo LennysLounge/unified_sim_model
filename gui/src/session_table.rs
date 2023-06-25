@@ -6,7 +6,7 @@ use egui_ltable::{Column, Row, Table};
 use tracing::info;
 use unified_sim_model::{
     model::{Entry, EntryId, Model, Session},
-    Adapter,
+    Adapter, AdapterCommand,
 };
 
 use crate::{graph::Graph, tab_panel::TabPanel};
@@ -23,17 +23,28 @@ pub fn show_session_tabs(ui: &mut Ui, model: &Model, windower: &mut Windower, ad
         enum SessionTabs {
             Livetiming,
             SessionInfo,
+            Camera,
         }
         TabPanel::new(ui)
             .with_tab(SessionTabs::Livetiming, "Livetiming")
             .with_tab(SessionTabs::SessionInfo, "Session info")
+            .with_tab(SessionTabs::Camera, "Camera")
             .show(|id, ui| match id {
                 SessionTabs::Livetiming => {
                     display_entries_table(ui, &session.entries, windower, adapter)
                 }
                 SessionTabs::SessionInfo => display_session_info(ui, session),
+                SessionTabs::Camera => display_cameras(ui, model, adapter),
             });
     });
+}
+
+fn display_cameras(ui: &mut Ui, model: &Model, adapter: &Adapter) {
+    for camera in model.available_cameras.iter() {
+        if ui.button(format!("{:?}", camera)).clicked() {
+            adapter.send(AdapterCommand::ChangeCamera(camera.clone()));
+        }
+    }
 }
 
 fn display_session_info(ui: &mut Ui, session: &Session) {
@@ -191,6 +202,7 @@ fn display_entries_table(
                     Row::new()
                         .height(20.0)
                         .hover_highlight(true)
+                        .highlight(entry.focused)
                         .sense(Sense::click()),
                     |row| {
                         row.cell(|ui| {

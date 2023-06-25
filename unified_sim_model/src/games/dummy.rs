@@ -28,6 +28,7 @@ impl GameAdapter for DummyAdapter {
         model.available_cameras.insert(Camera::Hellicopter);
         model.available_cameras.insert(Camera::Chase);
         model.available_cameras.insert(Camera::FirstPerson);
+        model.focused_entry = None;
 
         // model.track_name = "Dummy track".to_string();
         // model.track_length = 1234;
@@ -120,6 +121,7 @@ impl GameAdapter for DummyAdapter {
                     connected: Value::new(true),
                     stint_time: Value::new(Time::from(56_789)),
                     distance_driven: Value::new(i as f32 * 0.345),
+                    focused: false,
                     game_data: EntryGameData::None,
                 },
             );

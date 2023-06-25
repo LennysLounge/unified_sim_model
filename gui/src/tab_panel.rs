@@ -51,6 +51,7 @@ impl<'a, T: Clone + Send + SerializableAny + PartialEq> TabPanel<'a, T> {
                 }
                 if ui.selectable_label(is_selected, tab.1.clone()).clicked() {
                     self.selected_tab = Some(tab.0.clone());
+                    selected_tab_visible = true;
                 };
             }
         });

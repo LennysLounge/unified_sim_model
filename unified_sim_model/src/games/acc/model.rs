@@ -195,6 +195,7 @@ impl Camera {
     /// None if the camera is not supported by acc.
     pub(crate) fn as_acc_camera_definition(&self) -> Option<(&str, &str)> {
         let camera = match self {
+            Camera::None => None,
             Camera::FirstPerson => Some(AccCamera::Cockpit),
             Camera::Chase => Some(AccCamera::Chase),
             Camera::TV => Some(AccCamera::Tv1),

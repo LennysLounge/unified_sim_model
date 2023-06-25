@@ -139,6 +139,19 @@ impl AccProcessor for BaseProcessor {
         session.ambient_temp.set(update.ambient_temp as f32);
         session.track_temp.set(update.track_temp as f32);
 
+        // Set focused car.
+        let focused_entry = EntryId(update.focused_car_id);
+        for entry in session.entries.values_mut() {
+            entry.focused = entry.id == focused_entry;
+        }
+        context.model.focused_entry = session
+            .entries
+            .contains_key(&focused_entry)
+            .then_some(focused_entry);
+        context.model.active_camera = map_camera(&update.active_camera_set, &update.active_camera)
+            .unwrap_or(Camera::None)
+            .into();
+
         // Reset entry list flag
         self.requested_entry_list = false;
         Ok(())
@@ -210,76 +223,10 @@ impl AccProcessor for BaseProcessor {
         }
         let available_cameras = &mut context.model.available_cameras;
         for (set, cameras) in track.camera_sets.iter() {
-            match set.as_str() {
-                "Helicam" => {
-                    available_cameras.insert(Camera::Hellicopter);
+            for camera in cameras.iter() {
+                if let Some(c) = map_camera(set, camera) {
+                    available_cameras.insert(c);
                 }
-                "pitlane" => {
-                    available_cameras.insert(Camera::Game(GameCamera::Acc(AccCamera::Pitlane)));
-                }
-                "set1" => {
-                    available_cameras.insert(Camera::TV);
-                }
-                "set2" => {
-                    available_cameras.insert(Camera::Game(GameCamera::Acc(AccCamera::Tv2)));
-                }
-                "Drivable" => {
-                    for camera in cameras {
-                        match camera.as_str() {
-                            "Chase" => {
-                                available_cameras.insert(Camera::Chase);
-                            }
-                            "FarChase" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::FarChase)));
-                            }
-                            "Bonnet" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Bonnet)));
-                            }
-                            "DashPro" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::DashPro)));
-                            }
-                            "Cockpit" => {
-                                available_cameras.insert(Camera::FirstPerson);
-                            }
-                            "Dash" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Dash)));
-                            }
-                            "Helmet" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Helmet)));
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                "Onboard" => {
-                    for camera in cameras {
-                        match camera.as_str() {
-                            "Onboard0" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard0)));
-                            }
-                            "Onboard1" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard1)));
-                            }
-                            "Onboard2" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard2)));
-                            }
-                            "Onboard3" => {
-                                available_cameras
-                                    .insert(Camera::Game(GameCamera::Acc(AccCamera::Onboard3)));
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-                _ => (),
             }
         }
         Ok(())
@@ -372,5 +319,32 @@ fn map_session_type(value: &SessionType) -> model::SessionType {
         SessionType::HotlapSuperpole => model::SessionType::Practice,
         SessionType::Replay => model::SessionType::None,
         SessionType::None => model::SessionType::None,
+    }
+}
+
+fn map_camera(set: &str, camera: &str) -> Option<Camera> {
+    match set {
+        "Helicam" => Some(Camera::Hellicopter),
+        "pitlane" => Some(Camera::Game(GameCamera::Acc(AccCamera::Pitlane))),
+        "set1" => Some(Camera::TV),
+        "set2" => Some(Camera::Game(GameCamera::Acc(AccCamera::Tv2))),
+        "Drivable" => match camera {
+            "Chase" => Some(Camera::Chase),
+            "FarChase" => Some(Camera::Game(GameCamera::Acc(AccCamera::FarChase))),
+            "Bonnet" => Some(Camera::Game(GameCamera::Acc(AccCamera::Bonnet))),
+            "DashPro" => Some(Camera::Game(GameCamera::Acc(AccCamera::DashPro))),
+            "Cockpit" => Some(Camera::FirstPerson),
+            "Dash" => Some(Camera::Game(GameCamera::Acc(AccCamera::Dash))),
+            "Helmet" => Some(Camera::Game(GameCamera::Acc(AccCamera::Helmet))),
+            _ => None,
+        },
+        "Onboard" => match camera {
+            "Onboard0" => Some(Camera::Game(GameCamera::Acc(AccCamera::Onboard0))),
+            "Onboard1" => Some(Camera::Game(GameCamera::Acc(AccCamera::Onboard1))),
+            "Onboard2" => Some(Camera::Game(GameCamera::Acc(AccCamera::Onboard2))),
+            "Onboard3" => Some(Camera::Game(GameCamera::Acc(AccCamera::Onboard3))),
+            _ => None,
+        },
+        _ => None,
     }
 }
