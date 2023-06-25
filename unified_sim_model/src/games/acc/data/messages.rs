@@ -249,7 +249,7 @@ fn read_realtime_car_update(buf: &mut &[u8]) -> Result<Message, IncompleteTypeEr
     }))
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub enum CarLocation {
     #[default]
     None,

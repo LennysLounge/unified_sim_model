@@ -5,7 +5,7 @@ use tracing::info;
 use crate::{
     games::acc::{
         data::{LapInfo, RealtimeCarUpdate},
-        AccProcessor, AccProcessorContext, Result,
+        AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
     model::{DriverId, Entry, EntryId, Event, Lap, LapCompleted},
     time::Time,
@@ -34,12 +34,11 @@ impl AccProcessor for LapProcessor {
         let session = context
             .model
             .current_session_mut()
-            .expect("There should have been a session update before a realtime update");
+            .ok_or(AccConnectionError::Other(
+                "No current session on a realtime car update".to_owned(),
+            ))?;
 
-        let entry = match session.entries.get_mut(&entry_id) {
-            Some(e) => e,
-            None => return Ok(()),
-        };
+        let Some(entry) = session.entries.get_mut(&entry_id) else {return Ok(())};
 
         let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
         let lap_index = entry.laps.len();
@@ -60,10 +59,11 @@ impl AccProcessor for LapProcessor {
         }
 
         // Check personal best for entry
-        fn entry_best_lap(entry: &Entry) -> Option<&Lap> {
-            entry.laps.get((*entry.best_lap)?)
-        }
-        let entry_best = entry_best_lap(entry).map_or(true, |best_lap| lap.time < best_lap.time)
+        let entry_best = entry
+            .best_lap
+            .as_ref()
+            .and_then(|best_lap| entry.laps.get(best_lap))
+            .map_or(true, |best_lap| lap.time < best_lap.time)
             && !*lap.invalid;
         if entry_best {
             entry.best_lap.set(Some(lap_index));
@@ -99,7 +99,7 @@ impl AccProcessor for LapProcessor {
     }
 }
 
-fn map_lap(lap_info: &LapInfo, driver_index: DriverId, entry_id: EntryId) -> Lap {
+fn map_lap(lap_info: &LapInfo, driver_id: DriverId, entry_id: EntryId) -> Lap {
     Lap {
         time: Time::from(lap_info.laptime_ms).into(),
         splits: lap_info
@@ -110,7 +110,7 @@ fn map_lap(lap_info: &LapInfo, driver_index: DriverId, entry_id: EntryId) -> Lap
             .collect::<Vec<_>>()
             .into(),
         invalid: lap_info.is_invaliud.into(),
-        driver_id: driver_index,
+        driver_id,
         entry_id,
     }
 }

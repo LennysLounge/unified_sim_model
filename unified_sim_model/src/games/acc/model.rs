@@ -1,8 +1,8 @@
 //! This module includes the additional model data for this adapter.
 
-use crate::model::SessionGameData;
+use crate::model::{EntryGameData, SessionGameData};
 
-use super::AccConnectionError;
+use super::{data::CarLocation, AccConnectionError};
 
 /// Contains additional information that is presented by the game.
 ///
@@ -37,14 +37,14 @@ pub struct AccSession {
 }
 
 impl SessionGameData {
-    /// Returns the as the ACC variant.
+    /// Returns the data as the ACC variant.
     pub fn as_acc(&self) -> Option<&AccSession> {
         match self {
             SessionGameData::Acc(data) => Some(data),
             _ => None,
         }
     }
-    /// Returns the as the ACC variant mutably.
+    /// Returns the data as the ACC variant mutably.
     pub fn as_acc_mut(&mut self) -> Option<&mut AccSession> {
         match self {
             SessionGameData::Acc(ref mut data) => Some(data),
@@ -52,7 +52,7 @@ impl SessionGameData {
         }
     }
 
-    /// Returns the as the ACC variant or return an error.
+    /// Returns the data as the ACC variant or return an error.
     pub(crate) fn assert_acc_mut(&mut self) -> Result<&mut AccSession, AccConnectionError> {
         match self {
             SessionGameData::Acc(data) => Ok(data),
@@ -62,12 +62,67 @@ impl SessionGameData {
         }
     }
 
-    /// Returns the as the ACC variant or return an error.
+    /// Returns the data as the ACC variant or return an error.
     pub(crate) fn assert_acc(&self) -> Result<&AccSession, AccConnectionError> {
         match self {
             SessionGameData::Acc(data) => Ok(data),
             _ => Err(AccConnectionError::Other(
                 "Session game data is not compatible with the acc adapter".to_owned(),
+            )),
+        }
+    }
+}
+
+/// Contains additional information that is presented by the game.
+///
+/// These fields may not necessairly be usefull to anyone but they
+/// exist to make all the data from the game available.
+#[derive(Debug, Default, Clone)]
+pub struct AccEntry {
+    /// The ingame id for this car.
+    pub car_id: i16,
+    /// The cup category of the car.
+    pub cup_category: u8,
+    /// The location of the car.
+    pub car_location: CarLocation,
+    /// The position of this car in its cup.
+    pub cup_position: i16,
+    /// TODO: find out what this is exactly.
+    pub track_position: i16,
+}
+
+impl EntryGameData {
+    /// Returns the data as the ACC variant.
+    pub fn as_acc(&self) -> Option<&AccEntry> {
+        match self {
+            EntryGameData::Acc(data) => Some(data),
+            _ => None,
+        }
+    }
+    /// Returns the data as the ACC variant mutably.
+    pub fn as_acc_mut(&mut self) -> Option<&mut AccEntry> {
+        match self {
+            EntryGameData::Acc(ref mut data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// Returns the data as the ACC variant or return an error.
+    pub(crate) fn assert_acc_mut(&mut self) -> Result<&mut AccEntry, AccConnectionError> {
+        match self {
+            EntryGameData::Acc(data) => Ok(data),
+            _ => Err(AccConnectionError::Other(
+                "Entry game data is not compatible with the acc adapter".to_owned(),
+            )),
+        }
+    }
+
+    /// Returns the data as the ACC variant or return an error.
+    pub(crate) fn _assert_acc(&self) -> Result<&AccEntry, AccConnectionError> {
+        match self {
+            EntryGameData::Acc(data) => Ok(data),
+            _ => Err(AccConnectionError::Other(
+                "Entry game data is not compatible with the acc adapter".to_owned(),
             )),
         }
     }

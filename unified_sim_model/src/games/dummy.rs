@@ -5,8 +5,8 @@ use std::{
 
 use crate::{
     model::{
-        Car, CarCategory, Day, Driver, DriverId, Entry, EntryId, Event, Lap, Model, Nationality,
-        Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
+        Car, CarCategory, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap, Model,
+        Nationality, Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
     },
     time::Time,
     AdapterError, GameAdapter, UpdateEvent,
@@ -115,6 +115,7 @@ impl GameAdapter for DummyAdapter {
                     connected: Value::new(true),
                     stint_time: Value::new(Time::from(56_789)),
                     distance_driven: Value::new(i as f32 * 0.345),
+                    game_data: EntryGameData::None,
                 },
             );
         }

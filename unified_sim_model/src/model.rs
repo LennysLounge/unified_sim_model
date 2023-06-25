@@ -22,7 +22,10 @@ use std::{
 
 use indexmap::IndexMap;
 
-use crate::{games::acc::model::AccSession, time::Time};
+use crate::{
+    games::acc::model::{AccEntry, AccSession},
+    time::Time,
+};
 
 /// A single piece of data in the model that carries extra information about its
 /// availability and editability.
@@ -91,6 +94,11 @@ impl<T> Value<T> {
     /// Set the editable flag for this value.
     pub fn set_editable(&mut self) {
         self.editable = true;
+    }
+
+    /// Set the value to be available.
+    pub fn set_available(&mut self) {
+        self.available = true;
     }
 
     /// Set the inner value to a value provided by the game.
@@ -314,6 +322,7 @@ pub struct Entry {
     /// ### Availability:
     /// - **Assetto Corsa Competizione:**
     /// Team names are not available.
+    /// This value can be edited for the entire duration of the connection.
     pub team_name: Value<String>,
     /// The car this entry is driving.
     pub car: Value<Car>,
@@ -323,8 +332,8 @@ pub struct Entry {
     ///
     /// ### Availability:
     /// - **Assetto Corsa Competizione:**
-    /// TODO: I know that a team doesnt necessairly have a nationality.
-    /// But in the entry list you can specify one i think.
+    /// Team nationality is not availabe.
+    /// This value can be edited for the entire duration of the connection.
     pub nationality: Value<Nationality>,
     /// The position of this car in an x, y, z coordinate system.
     ///
@@ -380,6 +389,16 @@ pub struct Entry {
     /// The distance driven by this entry in laps.
     /// This is simply the lap count + the current lap progress from the spline position.
     pub distance_driven: Value<f32>,
+    /// Contains additional data that is game specific.
+    pub game_data: EntryGameData,
+}
+
+/// Game specific entry data.
+#[derive(Debug, Default, Clone)]
+pub enum EntryGameData {
+    #[default]
+    None,
+    Acc(AccEntry),
 }
 
 /// An iddentifier for a driver.
@@ -400,6 +419,10 @@ pub struct Driver {
     /// Nationality of the driver.
     pub nationality: Value<Nationality>,
     /// Total driving time this driver has done in the current session.
+    ///
+    /// ### Availability:
+    /// - **Assetto Corsa Competizione:**
+    /// Driving time is not yet implemented for ACC.
     pub driving_time: Value<Time>,
     /// The best lap this driver has done.
     /// This indexes the lap list in the entry of this driver.

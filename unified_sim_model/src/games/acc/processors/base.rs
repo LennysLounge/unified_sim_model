@@ -6,10 +6,13 @@ use crate::{
             CarLocation, EntryListCar, RealtimeCarUpdate, RegistrationResult, SessionPhase,
             SessionType, SessionUpdate, TrackData,
         },
-        model::AccSession,
+        model::{AccEntry, AccSession},
         AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
-    model::{self, Day, Driver, DriverId, Entry, EntryId, Event, Session, SessionGameData, Value},
+    model::{
+        self, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap, Nationality,
+        Session, SessionGameData, Value,
+    },
     time::Time,
 };
 
@@ -148,45 +151,54 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Realtime Car Update");
 
-        let current_session = context
-            .model
-            .current_session_mut()
-            .expect("There should have been a session update before a realtime update");
-
         let entry_id = EntryId(update.car_id as i32);
 
-        match current_session.entries.get_mut(&entry_id) {
-            Some(entry) => {
-                entry
-                    .orientation
-                    .set([update.pitch, update.yaw, update.roll]);
-                entry.position.set(update.position as i32);
-                entry.spline_pos.set(update.spline_position);
-                entry.lap_count.set(update.laps as i32);
-                entry
-                    .current_lap
-                    .time
-                    .set(update.current_lap.laptime_ms.into());
-                entry
-                    .current_lap
-                    .invalid
-                    .set(update.current_lap.is_invaliud);
-                entry.performance_delta.set(update.delta.into());
-                entry
-                    .in_pits
-                    .set(update.car_location == CarLocation::Pitlane);
-                entry.gear.set(update.gear as i32);
-                entry.speed.set(update.kmh as f32);
+        let session = context
+            .model
+            .current_session_mut()
+            .ok_or(AccConnectionError::Other(
+                "No current session on a realtime car update".to_owned(),
+            ))?;
+
+        let entry = session.entries.get_mut(&entry_id);
+        if entry.is_none() {
+            debug!("Realtime update for unknown car id:{}", update.car_id);
+            if !self.requested_entry_list {
+                debug!("Requesting new entry list");
+                context.socket.send_entry_list_request()?;
+                self.requested_entry_list = true;
             }
-            None => {
-                debug!("Realtime update for unknown car id:{}", update.car_id);
-                if !self.requested_entry_list {
-                    debug!("Requesting new entry list");
-                    context.socket.send_entry_list_request()?;
-                    self.requested_entry_list = true;
-                }
-            }
+            return Ok(());
         }
+
+        let entry = entry.unwrap();
+        entry.current_driver = DriverId(update.driver_id as i32);
+        entry
+            .orientation
+            .set([update.pitch, update.yaw, update.roll]);
+        entry.position.set(update.position as i32);
+        entry.spline_pos.set(update.spline_position);
+        entry.lap_count.set(update.laps as i32);
+        entry.current_lap.set(Lap {
+            time: Time::from(update.current_lap.laptime_ms).into(),
+            splits: Vec::new().into(),
+            invalid: update.current_lap.is_invaliud.into(),
+            driver_id: entry.current_driver,
+            entry_id,
+        });
+        entry.current_lap.set_available();
+        entry.performance_delta.set(update.delta.into());
+        entry
+            .in_pits
+            .set(update.car_location == CarLocation::Pitlane);
+        entry.gear.set(update.gear as i32);
+        entry.speed.set(update.kmh as f32);
+
+        let game_data = entry.game_data.assert_acc_mut()?;
+        game_data.car_location = update.car_location.clone();
+        game_data.cup_position = update.cup_position;
+        game_data.track_position = update.track_position;
+
         Ok(())
     }
 
@@ -206,13 +218,7 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Entry List Car");
 
-        let session = match context.model.current_session_mut() {
-            None => {
-                debug!("No active session");
-                return Ok(());
-            }
-            Some(s) => s,
-        };
+        let Some(session) = context.model.current_session_mut() else {return Ok(())};
 
         let entry = map_entry(car);
         if session.entries.contains_key(&entry.id) {
@@ -230,6 +236,8 @@ impl AccProcessor for BaseProcessor {
 
 fn map_entry(car: &EntryListCar) -> model::Entry {
     Entry {
+        // Entry ids should be unique in a session.
+        // This only works because ids are unique in the game.
         id: EntryId(car.car_id as i32),
         drivers: car
             .drivers
@@ -243,18 +251,24 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
                     last_name: driver_info.last_name.clone().into(),
                     short_name: driver_info.short_name.clone().into(),
                     nationality: driver_info.nationality.clone().into(),
-                    driving_time: Time::from(0).into(),
                     best_lap: None.into(),
+                    ..Default::default()
                 };
                 (id, driver)
             })
             .collect(),
         current_driver: DriverId(car.current_driver_index as i32),
-        team_name: car.team_name.clone().into(),
+        team_name: Value::<String>::default().with_editable(),
         car: car.car_model_type.clone().into(),
         car_number: car.race_number.into(),
-        nationality: car.car_nationality.clone().into(),
+        nationality: Value::<Nationality>::default().with_editable(),
         connected: true.into(),
+        best_lap: None.into(),
+        game_data: EntryGameData::Acc(AccEntry {
+            car_id: car.car_id,
+            cup_category: car.cup_category,
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
