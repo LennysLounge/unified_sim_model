@@ -1,4 +1,4 @@
-use games::{acc, dummy::DummyAdapter};
+use games::{acc, dummy::DummyAdapter, iracing};
 use model::{Camera, EntryId};
 use thiserror::Error;
 use tracing::warn;
@@ -49,6 +49,8 @@ pub trait GameAdapter {
 pub enum AdapterError {
     #[error("Acc connection error: {0}")]
     ACC(acc::AccConnectionError),
+    #[error("IRacing connection error: {0}")]
+    IRacing(iracing::IRacingError),
 }
 
 /// The result of an adapter after it has finished.
@@ -102,6 +104,11 @@ impl Adapter {
     /// Create a new Assetto Corsa Competizione adapter.
     pub fn new_acc() -> Adapter {
         Self::new(acc::AccAdapter {})
+    }
+
+    /// Create a new iRacing adapter.
+    pub fn new_iracing() -> Adapter {
+        Self::new(iracing::IRacingAdapter {})
     }
 
     /// Returns `true` if the adapter has finised its connection to the game
