@@ -380,6 +380,10 @@ pub struct SessionData {
     pub driver_info: DriverInfo,
 }
 
+pub struct SessionInfo{
+    
+}
+
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 #[allow(dead_code)]
 pub struct WeekendInfo {

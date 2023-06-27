@@ -8,7 +8,7 @@ use std::{
 };
 
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 
@@ -44,25 +44,7 @@ impl GameAdapter for IRacingAdapter {
         let mut irsdk = Irsdk::new().map_err(|_| IRacingError::GameNotRunning)?;
 
         loop {
-            let should_close = match command_rx.try_recv() {
-                Ok(command) => match command {
-                    AdapterCommand::Close => break,
-                    AdapterCommand::FocusOnCar(_) => {
-                        log_todo(false, "Focus on car command not implemented yet")
-                    }
-                    AdapterCommand::ChangeCamera(_) => {
-                        log_todo(false, "Change camera command not implemented yet")
-                    }
-                },
-                Err(TryRecvError::Empty) => false,
-                Err(TryRecvError::Disconnected) => {
-                    // This should only happen if all adapters have been dropped.
-                    // In which case it is impossible to interact with this adapter any more.
-                    // To avoid leaking memory we quit.
-                    error!("All adapter handle have been dropped it is impossible to communicate with this game adapter.");
-                    true
-                }
-            };
+            let should_close = Self::handle_commands(&command_rx)?;
             if should_close {
                 break;
             }
@@ -80,10 +62,38 @@ impl GameAdapter for IRacingAdapter {
 }
 
 impl IRacingAdapter {
+    fn handle_commands(receiver: &Receiver<AdapterCommand>) -> Result<bool> {
+        let should_close = match receiver.try_recv() {
+            Ok(command) => match command {
+                AdapterCommand::Close => true,
+                AdapterCommand::FocusOnCar(_) => {
+                    log_todo(false, "Focus on car command not implemented yet")
+                }
+                AdapterCommand::ChangeCamera(_) => {
+                    log_todo(false, "Change camera command not implemented yet")
+                }
+            },
+            Err(TryRecvError::Empty) => false,
+            Err(TryRecvError::Disconnected) => {
+                // This should only happen if all adapters have been dropped.
+                // In which case it is impossible to interact with this adapter any more.
+                // To avoid leaking memory we quit.
+                error!("All adapter handle have been dropped it is impossible to communicate with this game adapter.");
+                true
+            }
+        };
+
+        Ok(should_close)
+    }
+
     fn update_model(data: &Data, model: &Arc<RwLock<Model>>) -> Result<()> {
         let model = model
             .write()
             .map_err(|_| IRacingError::Other("Model was poisoned".into()))?;
+
+        info!("{}", data.session_str);
+        info!("-----------------------------");
+        //info!("Current gear: {:?}", data.gear.value());
 
         Ok(())
     }

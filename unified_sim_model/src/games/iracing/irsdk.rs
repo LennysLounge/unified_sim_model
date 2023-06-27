@@ -44,7 +44,9 @@ pub const MAX_DESC: usize = 64;
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Irsdk {
+    /// Handle to the memory mapped file.
     handle: HANDLE,
+    /// pointer into the memory mapped file.
     view: *const u8,
     /// Tick count of the last update.
     last_tick_count: i32,
@@ -52,11 +54,14 @@ pub struct Irsdk {
 
 impl Irsdk {
     pub fn new() -> Result<Self, Box<dyn Error>> {
-        // SAFETY: Calling a foreign function is unsafe. Nothing else we can do here.
+        // SAFETY: If this function failes it returns `null`; we must check for that case.
         let handle =
             unsafe { OpenFileMappingW(FILE_MAP_READ.0, false, w!("Local\\IRSDKMemMapFileName")) }?;
+        if handle.is_invalid() {
+            return Err(Win32Error::get_last_error().into());
+        }
 
-        // SAFETY: The returned pointer may be null to indicat that the operation has failed
+        // SAFETY: The returned pointer may be null to indicate that the operation has failed
         // and needs to be checked.
         let view = unsafe { MapViewOfFile(handle, FILE_MAP_READ, 0, 0, 0) as *const u8 };
         if view.is_null() {
@@ -74,17 +79,21 @@ impl Irsdk {
         // SAFETY: The pointer has been checked to be not null.
         // A Header struct is plain data and for all fields any bit pattern is a vlaid value.
         // Therefore dereferencing is fine.
+        // `Header` must also be repr C.
         let header = unsafe { &*(self.view as *const Header) };
 
-        let mut newest_buffer_index = 0;
-        for i in 1..header.var_buffer_count {
-            if header.var_buffers[i as usize].tick_count
-                > header.var_buffers[newest_buffer_index].tick_count
-            {
-                newest_buffer_index = i as usize;
+        // Find the newest var buffer.
+        let var_buffer_header = {
+            let mut newest_buffer_index = 0;
+            for i in 1..header.var_buffer_count {
+                if header.var_buffers[i as usize].tick_count
+                    > header.var_buffers[newest_buffer_index].tick_count
+                {
+                    newest_buffer_index = i as usize;
+                }
             }
-        }
-        let var_buffer_header = &header.var_buffers[newest_buffer_index];
+            &header.var_buffers[newest_buffer_index]
+        };
 
         let current_tick_count = var_buffer_header.tick_count;
         let var_buffer = unsafe {
@@ -103,9 +112,8 @@ impl Irsdk {
 
         let var_headers = unsafe {
             slice::from_raw_parts(
-                (self.view as *const u8).offset(header.var_header_offset as isize)
-                    as *const VarHeader,
-                header.var_header_len as usize,
+                self.view.offset(header.var_header_offset as isize) as *const VarHeader,
+                header.var_header_element_count as usize,
             )
             .to_vec()
         };
@@ -132,7 +140,7 @@ pub struct Header {
     /// Ticks per second (60 or 360 etc)
     pub tick_rate: i32,
 
-    // Session  information updates periodicaly
+    // Session information updates periodicaly
     /// Increments when session info changes
     pub session_info_update: i32,
     /// Length in bytes of session info string
@@ -141,9 +149,9 @@ pub struct Header {
     pub session_info_offset: i32,
 
     // Variable headers, updated every tick
-    /// Length of the variable buffer
-    pub var_header_len: i32,
-    /// Offset for the irsdk_var_header[num_vars] array
+    /// Amount of elements in the var header buffer.
+    pub var_header_element_count: i32,
+    /// Offset for the var header arrasy.
     pub var_header_offset: i32,
 
     // Variable buffers, updated every tick
