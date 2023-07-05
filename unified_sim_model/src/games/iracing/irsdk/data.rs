@@ -1,6 +1,6 @@
 use serde::{de::Visitor, Deserialize, Serialize};
 
-use crate::{Angle, Distance, Speed, Temperature};
+use crate::{Angle, Distance, Speed, Temperature, Weight};
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -14,8 +14,16 @@ pub struct Data {
 pub struct SessionData {
     #[serde(rename = "WeekendInfo")]
     pub weekend_info: WeekendInfo,
+    #[serde(rename = "SessionInfo")]
+    pub session_info: SessionInfo,
+    #[serde(rename = "CameraInfo")]
+    pub camera_info: CameraInfo,
+    #[serde(rename = "RadioInfo")]
+    pub radio_info: RadioInfo,
     #[serde(rename = "DriverInfo")]
     pub driver_info: DriverInfo,
+    #[serde(rename = "SplitTimeInfo")]
+    pub split_time_info: SplitTimeInfo,
 }
 
 #[derive(Debug, Deserialize, Default, Clone)]
@@ -80,7 +88,9 @@ pub struct WeekendInfo {
     #[serde(deserialize_with = "rad_deserializer")]
     pub track_wind_dir: Angle,
     #[serde(rename = "TrackRelativeHumidity")]
+    #[serde(deserialize_with = "percent_deserializer")]
     pub track_relative_humidity: f32,
+    #[serde(deserialize_with = "percent_deserializer")]
     #[serde(rename = "TrackFogLevel")]
     pub track_fog_level: f32,
     #[serde(rename = "TrackCleanup")]
@@ -166,8 +176,10 @@ pub struct WeekendOptions {
     #[serde(deserialize_with = "celcius_deserializer")]
     pub weather_temp: Temperature,
     #[serde(rename = "RelativeHumidity")]
+    #[serde(deserialize_with = "percent_deserializer")]
     pub relative_humidity: f32,
     #[serde(rename = "FogLevel")]
+    #[serde(deserialize_with = "percent_deserializer")]
     pub fog_level: f32,
     #[serde(rename = "TimeOfDay")]
     pub time_of_data: String,
@@ -199,41 +211,309 @@ pub struct WeekendOptions {
     pub green_white_checkered_limit: i32,
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct TelemetryOptions {
     #[serde(rename = "TelemetryDiskFile")]
     pub telemetry_disk_file: String,
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
-pub struct SessionInfo {}
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct SessionInfo {
+    #[serde(rename = "Sessions")]
+    pub sessions: Vec<Session>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Session {
+    #[serde(rename = "SessionNum")]
+    pub session_num: i32,
+    #[serde(rename = "SessionLaps")]
+    pub session_laps: String,
+    #[serde(rename = "SessionTime")]
+    pub session_time: String,
+    #[serde(rename = "SessionNumLapsToAvg")]
+    pub session_num_laps_to_avg: i32,
+    #[serde(rename = "SessionType")]
+    pub session_type: String,
+    #[serde(rename = "SessionTrackRubberState")]
+    pub session_track_rubber_state: String,
+    #[serde(rename = "SessionName")]
+    pub session_name: String,
+    #[serde(rename = "SessionSubType")]
+    pub session_sub_type: String,
+    #[serde(rename = "SessionSkipped")]
+    pub session_skipped: i32,
+    #[serde(rename = "SessionRunGroupsUsed")]
+    pub session_run_group_used: i32,
+    #[serde(rename = "SessionEnforceTireCompoundChange")]
+    pub session_enfore_tire_compound_change: i32,
+    #[serde(rename = "ResultsPositions")]
+    pub results_positions: String,
+    #[serde(rename = "ResultsFastestLap")]
+    pub results_fastest_lap: Vec<ResultFastedLap>,
+    #[serde(rename = "ResultsAverageLapTime")]
+    pub results_average_lap_time: f32,
+    #[serde(rename = "ResultsNumCautionFlags")]
+    pub results_num_caution_flags: i32,
+    #[serde(rename = "ResultsNumCautionLaps")]
+    pub results_num_caution_laps: i32,
+    #[serde(rename = "ResultsNumLeadChanges")]
+    pub results_num_lead_changes: i32,
+    #[serde(rename = "ResultsLapsComplete")]
+    pub results_laps_completed: i32,
+    #[serde(rename = "ResultsOfficial")]
+    pub results_official: i32,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct ResultFastedLap {
+    #[serde(rename = "CarIdx")]
+    pub car_idx: i32,
+    #[serde(rename = "FastestLap")]
+    pub fastest_lap: i32,
+    #[serde(rename = "FastestTime")]
+    pub fastest_time: f32,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct CameraInfo {
+    #[serde(rename = "Groups")]
+    pub groups: Vec<CameraGroup>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct CameraGroup {
+    #[serde(rename = "GroupNum")]
+    pub group_num: i32,
+    #[serde(rename = "GroupName")]
+    pub group_name: String,
+    #[serde(rename = "Cameras")]
+    pub cameras: Vec<Camera>,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Camera {
+    #[serde(rename = "CameraNum")]
+    pub camera_num: i32,
+    #[serde(rename = "CameraName")]
+    pub camera_name: String,
+}
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
-pub struct CameraInfo {}
+pub struct RadioInfo {
+    #[serde(rename = "SelectedRadioNum")]
+    pub selected_radio_num: i32,
+    #[serde(rename = "Radios")]
+    pub radios: Vec<Radio>,
+}
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
-pub struct RadioInfo {}
+pub struct Radio {
+    #[serde(rename = "RadioNum")]
+    pub radio_num: i32,
+    #[serde(rename = "HopCount")]
+    pub hop_count: i32,
+    #[serde(rename = "NumFrequencies")]
+    pub num_frequencies: i32,
+    #[serde(rename = "TunedToFrequencyNum")]
+    pub tuned_to_frequency_num: i32,
+    #[serde(rename = "ScanningIsOn")]
+    pub scanning_is_on: i32,
+    #[serde(rename = "Frequencies")]
+    pub frequencies: Vec<RadioFrequency>,
+}
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct RadioFrequency {
+    #[serde(rename = "FrequencyNum")]
+    pub frequency_num: i32,
+    #[serde(rename = "FrequencyName")]
+    pub frequencey_name: String,
+    #[serde(rename = "Priority")]
+    pub priority: i32,
+    #[serde(rename = "CarIdx")]
+    pub car_idx: i32,
+    #[serde(rename = "EntryIdx")]
+    pub entry_idx: i32,
+    #[serde(rename = "ClubID")]
+    pub club_id: i32,
+    #[serde(rename = "CanScan")]
+    pub can_scan: i32,
+    #[serde(rename = "CanSquawk")]
+    pub can_squawk: i32,
+    #[serde(rename = "Muted")]
+    pub muted: i32,
+    #[serde(rename = "IsMutable")]
+    pub is_mutable: i32,
+    #[serde(rename = "IsDeletable")]
+    pub is_deletable: i32,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct DriverInfo {
+    #[serde(rename = "DriverCarIdx")]
+    pub driver_car_idx: i32,
     #[serde(rename = "DriverUserID")]
     pub driver_user_id: i32,
+    #[serde(rename = "PaceCarIdx")]
+    pub pace_car_idx: i32,
+    #[serde(rename = "DriverHeadPosX")]
+    pub driver_head_pos_x: f32,
+    #[serde(rename = "DriverHeadPosY")]
+    pub driver_head_pos_y: f32,
+    #[serde(rename = "DriverHeadPosZ")]
+    pub driver_head_pos_z: f32,
+    #[serde(rename = "DriverCarIsElectric")]
+    pub driver_car_is_electric: i32,
+    #[serde(rename = "DriverCarIdleRPM")]
+    pub driver_car_idle_rpm: f32,
+    #[serde(rename = "DriverCarRedLine")]
+    pub driver_car_red_line: f32,
+    #[serde(rename = "DriverCarEngCylinderCount")]
+    pub driver_car_eng_cylinder_count: i32,
+    #[serde(rename = "DriverCarFuelKgPerLtr")]
+    pub driver_car_fuel_kg_per_ltr: f32,
+    #[serde(rename = "DriverCarFuelMaxLtr")]
+    pub driver_car_fuel_max_ltr: f32,
+    #[serde(rename = "DriverCarMaxFuelPct")]
+    pub driver_car_max_fuel_pct: f32,
+    #[serde(rename = "DriverCarGearNumForward")]
+    pub driver_car_gear_num_forward: i32,
+    #[serde(rename = "DriverCarGearNeutral")]
+    pub driver_car_gear_neutral: i32,
+    #[serde(rename = "DriverCarGearReverse")]
+    pub driver_car_gear_reverse: i32,
+    #[serde(rename = "DriverCarSLFirstRPM")]
+    pub driver_car_sl_first_rpm: f32,
+    #[serde(rename = "DriverCarSLShiftRPM")]
+    pub driver_car_sl_shift_rpm: f32,
+    #[serde(rename = "DriverCarSLLastRPM")]
+    pub driver_car_sl_last_rpm: f32,
+    #[serde(rename = "DriverCarSLBlinkRPM")]
+    pub driver_car_sl_blink_rpm: f32,
+    #[serde(rename = "DriverCarVersion")]
+    pub driver_car_version: String,
+    #[serde(rename = "DriverPitTrkPct")]
+    pub driver_pit_trk_pct: f32,
+    #[serde(rename = "DriverCarEstLapTime")]
+    pub driver_car_est_lap_time: f32,
+    #[serde(rename = "DriverSetupName")]
+    pub driver_setup_name: String,
+    #[serde(rename = "DriverSetupIsModified")]
+    pub driver_setup_is_modified: i32,
+    #[serde(rename = "DriverSetupLoadTypeName")]
+    pub driver_setup_load_type_name: String,
+    #[serde(rename = "DriverSetupPassedTech")]
+    pub driver_setup_passed_tech: i32,
+    #[serde(rename = "DriverIncidentCount")]
+    pub driver_incident_count: i32,
     #[serde(rename = "Drivers")]
     pub drivers: Vec<Driver>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[derive(Debug, Deserialize, Default, Clone)]
 pub struct Driver {
     #[serde(rename = "CarIdx")]
-    pub car_index: i32,
+    pub car_idx: i32,
     #[serde(rename = "UserName")]
     pub user_name: String,
+    #[serde(rename = "AbbrevName")]
+    pub abbrev_name: String,
+    #[serde(rename = "Initials")]
+    pub initials: String,
+    #[serde(rename = "UserID")]
+    pub user_id: i32,
+    #[serde(rename = "TeamID")]
+    pub team_id: i32,
+    #[serde(rename = "TeamName")]
+    pub team_name: String,
+    #[serde(rename = "CarNumber")]
+    pub car_number: String,
+    #[serde(rename = "CarNumberRaw")]
+    pub car_number_raw: String,
+    #[serde(rename = "CarPath")]
+    pub car_path: String,
+    #[serde(rename = "CarClassID")]
+    pub car_class_id: i32,
+    #[serde(rename = "CarID")]
+    pub car_id: i32,
+    #[serde(rename = "CarIsPaceCar")]
+    pub car_is_pace_car: i32,
+    #[serde(rename = "CarIsAI")]
+    pub car_is_ai: i32,
+    #[serde(rename = "CarIsElectric")]
+    pub car_is_electric: i32,
+    #[serde(rename = "CarScreenName")]
+    pub car_screen_name: String,
+    #[serde(rename = "CarScreenNameShort")]
+    pub car_screen_name_short: String,
+    #[serde(rename = "CarClassShortName")]
+    pub car_class_short_name: String,
+    #[serde(rename = "CarClassRelSpeed")]
+    pub car_class_rel_speed: i32,
+    #[serde(rename = "CarClassLicenseLevel")]
+    pub car_class_license_level: i32,
+    #[serde(rename = "CarClassMaxFuelPct")]
+    #[serde(deserialize_with = "percent_deserializer")]
+    pub car_class_max_fuel_pct: f32,
+    #[serde(rename = "CarClassWeightPenalty")]
+    #[serde(deserialize_with = "kg_deserializer")]
+    pub car_class_weight_penalty: Weight,
+    #[serde(rename = "CarClassPowerAdjust")]
+    #[serde(deserialize_with = "percent_deserializer")]
+    pub car_class_power_adjust: f32,
+    #[serde(rename = "CarClassDryTireSetLimit")]
+    #[serde(deserialize_with = "percent_deserializer")]
+    pub car_class_dry_tire_set_limit: f32,
+    #[serde(rename = "CarClassColor")]
+    pub car_class_color: String,
+    #[serde(rename = "CarClassEstLapTime")]
+    pub car_class_est_lap_time: f32,
+    #[serde(rename = "IRating")]
+    pub i_rating: i32,
+    #[serde(rename = "LicLevel")]
+    pub lic_level: i32,
+    #[serde(rename = "LicSubLevel")]
+    pub lic_sub_level: i32,
+    #[serde(rename = "LicString")]
+    pub lic_string: String,
+    #[serde(rename = "LicColor")]
+    pub lic_color: String,
+    #[serde(rename = "IsSpectator")]
+    pub is_spectator: i32,
+    #[serde(rename = "CarDesignStr")]
+    pub car_design_str: String,
+    #[serde(rename = "HelmetDesignStr")]
+    pub helmet_design_str: String,
+    #[serde(rename = "SuitDesignStr")]
+    pub suit_design_str: String,
+    #[serde(rename = "CarNumberDesignStr")]
+    pub car_number_design_str: String,
+    #[serde(rename = "CarSponsor_1")]
+    pub car_sponsor_1: i32,
+    #[serde(rename = "CarSponsor_2")]
+    pub car_sponsor_2: i32,
+    #[serde(rename = "CurDriverIncidentCount")]
+    pub cur_driver_incident_count: i32,
+    #[serde(rename = "TeamIncidentCount")]
+    pub team_incident_count: i32,
 }
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
-pub struct SplitTimeInfo {}
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct SplitTimeInfo {
+    #[serde(rename = "Sectors")]
+    pub sectors: Vec<Sector>,
+}
 
-#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct Sector {
+    #[serde(rename = "SectorNum")]
+    pub sector_num: i32,
+    #[serde(rename = "SectorStartPct")]
+    pub sector_start_pct: f32,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct CarSetup {}
 
 /// A visitor for deserializing values with units as string into a number
@@ -335,12 +615,21 @@ where
         .map(|c| Temperature::from_celcius(c))
 }
 
-// fn unit_value_de<'de, D>(deserializer: D) -> Result<Value, D::Error>
-// where
-//     D: serde::de::Deserializer<'de>,
-// {
-//     deserializer.deserialize_str(UnitVisitor { unit: "dinglebobs" })
-// }
+fn kg_deserializer<'de, D>(deserializer: D) -> Result<Weight, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "kg" })
+        .map(|kg| Weight::from_kg(kg))
+}
+
+fn percent_deserializer<'de, D>(deserializer: D) -> Result<f32, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer.deserialize_str(UnitVisitor { unit: "%" })
+}
 /*
 name: SessionTime, desc: Seconds since session start, unit: s, type: 5, count: 1, count_as_time: false
 name: SessionTick, desc: Current update number, unit: , type: 2, count: 1, count_as_time: false
