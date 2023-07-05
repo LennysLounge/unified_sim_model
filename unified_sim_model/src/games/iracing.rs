@@ -12,7 +12,7 @@ use tracing::{error, info};
 
 use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 
-use self::irsdk::{data::Data, Irsdk};
+use self::irsdk::Irsdk;
 
 mod irsdk;
 
@@ -23,6 +23,8 @@ type Result<T> = std::result::Result<T, crate::AdapterError>;
 pub enum IRacingError {
     #[error("The game is not running")]
     GameNotRunning,
+    #[error("The game disconnected")]
+    Disconnected,
     #[error("The adapter encountered an error: {0}")]
     Other(String),
 }
@@ -37,7 +39,7 @@ pub struct IRacingAdapter {}
 impl GameAdapter for IRacingAdapter {
     fn run(
         &mut self,
-        model: Arc<RwLock<Model>>,
+        _model: Arc<RwLock<Model>>,
         command_rx: Receiver<AdapterCommand>,
         update_event: &UpdateEvent,
     ) -> Result<()> {
@@ -49,8 +51,13 @@ impl GameAdapter for IRacingAdapter {
                 break;
             }
 
-            let data = irsdk.poll();
-            Self::update_model(&data, &model)?;
+            let data = irsdk.poll().map_err(|e| match e {
+                irsdk::PollError::NotConnected => IRacingError::Disconnected,
+            })?;
+
+            info!("laps: {:?}", data.car_idx_lap);
+
+            //Self::update_model(&data, &model)?;
 
             update_event.trigger();
 
@@ -86,15 +93,13 @@ impl IRacingAdapter {
         Ok(should_close)
     }
 
-    fn update_model(data: &Data, model: &Arc<RwLock<Model>>) -> Result<()> {
-        let model = model
-            .write()
-            .map_err(|_| IRacingError::Other("Model was poisoned".into()))?;
+    // fn update_model(data: &Data, model: &Arc<RwLock<Model>>) -> Result<()> {
+    //     let model = model
+    //         .write()
+    //         .map_err(|_| IRacingError::Other("Model was poisoned".into()))?;
 
-        info!("{}", data.session_str);
-        info!("-----------------------------");
-        //info!("Current gear: {:?}", data.gear.value());
+    //     //info!("Current gear: {:?}", data.gear.value());
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }

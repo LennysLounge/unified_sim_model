@@ -1,66 +1,346 @@
-use serde::{Deserialize, Serialize};
+use serde::{de::Visitor, Deserialize, Serialize};
 
-use super::VarHeader;
-use std::{cell::RefCell, rc::Rc};
+use crate::{Angle, Distance, Speed, Temperature};
 
 #[derive(Default, Clone)]
 pub struct Data {
-    buffer: Rc<RefCell<Vec<u8>>>,
-    pub session_str: String,
     pub session_data: SessionData,
-    pub gear: I32,
+    pub gear: i32,
+    pub session_time: f64,
+    pub car_idx_lap: Vec<i32>,
 }
-impl Data {
-    pub fn new(headers: Vec<VarHeader>, buffer: Vec<u8>, session_str_buffer: Vec<u8>) -> Self {
-        let session_str = String::from_utf8_lossy(&session_str_buffer)
-            .trim_matches('\0')
-            .to_string();
-        let mut me = Self {
-            buffer: Rc::new(RefCell::new(buffer)),
-            session_data: serde_yaml::from_str::<SessionData>(&session_str)
-                .unwrap_or(SessionData::default()),
-            session_str: session_str,
-            ..Default::default()
-        };
-        for header in headers {
-            let name = String::from_utf8_lossy(&header.name)
-                .trim_matches(char::from(0))
-                .to_owned();
-            match name.as_str() {
-                "Gear" => me.gear = I32::new(header, me.buffer.clone()),
-                _ => (),
-            }
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct SessionData {
+    #[serde(rename = "WeekendInfo")]
+    pub weekend_info: WeekendInfo,
+    #[serde(rename = "DriverInfo")]
+    pub driver_info: DriverInfo,
+}
+
+#[derive(Debug, Deserialize, Default, Clone)]
+pub struct WeekendInfo {
+    #[serde(rename = "TrackName")]
+    pub track_name: String,
+    #[serde(rename = "TrackID")]
+    pub track_id: i32,
+    #[serde(rename = "TrackLength")]
+    #[serde(deserialize_with = "km_deserializer")]
+    pub track_length: Distance,
+    #[serde(rename = "TrackLengthOfficial")]
+    #[serde(deserialize_with = "km_deserializer")]
+    pub track_length_official: Distance,
+    #[serde(rename = "TrackDisplayName")]
+    pub track_display_name: String,
+    #[serde(rename = "TrackDisplayShortName")]
+    pub track_display_short_name: String,
+    #[serde(rename = "TrackConfigName")]
+    pub track_config_name: String,
+    #[serde(rename = "TrackCity")]
+    pub track_city: String,
+    #[serde(rename = "TrackCountry")]
+    pub track_country: String,
+    #[serde(rename = "TrackAltitude")]
+    #[serde(deserialize_with = "m_deserializer")]
+    pub track_altitude: Distance,
+    #[serde(rename = "TrackLatitude")]
+    #[serde(deserialize_with = "decimal_degrees_deserializer")]
+    pub track_latitude: Angle,
+    #[serde(rename = "TrackLongitude")]
+    #[serde(deserialize_with = "decimal_degrees_deserializer")]
+    pub track_longitude: Angle,
+    #[serde(rename = "TrackNorthOffset")]
+    #[serde(deserialize_with = "rad_deserializer")]
+    pub track_north_offset: Angle,
+    #[serde(rename = "TrackNumTurns")]
+    pub track_num_turns: i32,
+    #[serde(rename = "TrackPitSpeedLimit")]
+    #[serde(deserialize_with = "kph_deserializer")]
+    pub track_pit_speed_limit: Speed,
+    #[serde(rename = "TrackType")]
+    pub track_type: String,
+    #[serde(rename = "TrackDirection")]
+    pub track_direction: String,
+    #[serde(rename = "TrackWeatherType")]
+    pub track_weather_type: String,
+    #[serde(rename = "TrackSkies")]
+    pub track_skies: String,
+    #[serde(rename = "TrackSurfaceTemp")]
+    #[serde(deserialize_with = "celcius_deserializer")]
+    pub track_surface_temp: Temperature,
+    #[serde(rename = "TrackAirTemp")]
+    #[serde(deserialize_with = "celcius_deserializer")]
+    pub track_air_temp: Temperature,
+    #[serde(rename = "TrackAirPressure")]
+    pub track_air_pressure: f32,
+    #[serde(rename = "TrackWindVel")]
+    #[serde(deserialize_with = "ms_deserializer")]
+    pub track_wind_vel: Speed,
+    #[serde(rename = "TrackWindDir")]
+    #[serde(deserialize_with = "rad_deserializer")]
+    pub track_wind_dir: Angle,
+    #[serde(rename = "TrackRelativeHumidity")]
+    pub track_relative_humidity: f32,
+    #[serde(rename = "TrackFogLevel")]
+    pub track_fog_level: f32,
+    #[serde(rename = "TrackCleanup")]
+    pub track_cleanup: i32,
+    #[serde(rename = "TrackDynamicTrack")]
+    pub track_dynamic_track: i32,
+    #[serde(rename = "TrackVersion")]
+    pub track_version: String,
+    #[serde(rename = "SeriesID")]
+    pub series_id: i32,
+    #[serde(rename = "SeasonID")]
+    pub season_id: i32,
+    #[serde(rename = "SessionID")]
+    pub session_id: i32,
+    #[serde(rename = "SubSessionID")]
+    pub sub_session_id: i32,
+    #[serde(rename = "LeagueID")]
+    pub league_id: i32,
+    #[serde(rename = "Official")]
+    pub official: i32,
+    #[serde(rename = "RaceWeek")]
+    pub race_week: i32,
+    #[serde(rename = "EventType")]
+    pub event_type: String,
+    #[serde(rename = "Category")]
+    pub category: String,
+    #[serde(rename = "SimMode")]
+    pub sim_mode: String,
+    #[serde(rename = "TeamRacing")]
+    pub team_racing: i32,
+    #[serde(rename = "MinDrivers")]
+    pub min_drivers: i32,
+    #[serde(rename = "MaxDrivers")]
+    pub max_drivers: i32,
+    #[serde(rename = "DCRuleSet")]
+    pub dc_rule_set: String,
+    #[serde(rename = "QualifierMustStartRace")]
+    pub qualifier_must_start_race: i32,
+    #[serde(rename = "NumCarClasses")]
+    pub num_car_classes: i32,
+    #[serde(rename = "NumCarTypes")]
+    pub num_car_type: i32,
+    #[serde(rename = "HeatRacing")]
+    pub heat_racing: i32,
+    #[serde(rename = "BuildType")]
+    pub build_type: String,
+    #[serde(rename = "BuildTarget")]
+    pub build_target: String,
+    #[serde(rename = "BuildVersion")]
+    pub build_version: String,
+    #[serde(rename = "WeekendOptions")]
+    pub weekend_options: WeekendOptions,
+    #[serde(rename = "TelemetryOptions")]
+    pub telemetry_options: TelemetryOptions,
+}
+
+#[derive(Debug, Default, Clone, Deserialize)]
+pub struct WeekendOptions {
+    #[serde(rename = "NumStarters")]
+    pub num_starters: i32,
+    #[serde(rename = "StartingGrid")]
+    pub starting_grid: String,
+    #[serde(rename = "QualifyScoring")]
+    pub qualify_scoring: String,
+    #[serde(rename = "CourseCautions")]
+    pub course_cautions: String,
+    #[serde(rename = "StandingStart")]
+    pub standing_start: i32,
+    #[serde(rename = "ShortParadeLap")]
+    pub short_parade_lap: i32,
+    #[serde(rename = "Restarts")]
+    pub restarts: String,
+    #[serde(rename = "WeatherType")]
+    pub weather_type: String,
+    #[serde(rename = "Skies")]
+    pub skies: String,
+    #[serde(rename = "WindDirection")]
+    pub wind_direction: String,
+    #[serde(rename = "WindSpeed")]
+    #[serde(deserialize_with = "kmh_deserializer")]
+    pub wind_speed: Speed,
+    #[serde(rename = "WeatherTemp")]
+    #[serde(deserialize_with = "celcius_deserializer")]
+    pub weather_temp: Temperature,
+    #[serde(rename = "RelativeHumidity")]
+    pub relative_humidity: f32,
+    #[serde(rename = "FogLevel")]
+    pub fog_level: f32,
+    #[serde(rename = "TimeOfDay")]
+    pub time_of_data: String,
+    #[serde(rename = "Date")]
+    pub date: String,
+    #[serde(rename = "EarthRotationSpeedupFactor")]
+    pub earth_rotation_speedup_factor: i32,
+    #[serde(rename = "Unofficial")]
+    pub unofficial: i32,
+    #[serde(rename = "CommercialMode")]
+    pub commercial_mode: String,
+    #[serde(rename = "NightMode")]
+    pub night_mode: String,
+    #[serde(rename = "IsFixedSetup")]
+    pub is_fixed_setup: i32,
+    #[serde(rename = "StrictLapsChecking")]
+    pub strict_laps_checking: String,
+    #[serde(rename = "HasOpenRegistration")]
+    pub has_open_registration: i32,
+    #[serde(rename = "HardcoreLevel")]
+    pub hardcore_level: i32,
+    #[serde(rename = "NumJokerLaps")]
+    pub num_joker_laps: i32,
+    #[serde(rename = "IncidentLimit")]
+    pub incident_limit: String,
+    #[serde(rename = "FastRepairsLimit")]
+    pub fast_repairs_limit: String,
+    #[serde(rename = "GreenWhiteCheckeredLimit")]
+    pub green_white_checkered_limit: i32,
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct TelemetryOptions {
+    #[serde(rename = "TelemetryDiskFile")]
+    pub telemetry_disk_file: String,
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct SessionInfo {}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct CameraInfo {}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct RadioInfo {}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct DriverInfo {
+    #[serde(rename = "DriverUserID")]
+    pub driver_user_id: i32,
+    #[serde(rename = "Drivers")]
+    pub drivers: Vec<Driver>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct Driver {
+    #[serde(rename = "CarIdx")]
+    pub car_index: i32,
+    #[serde(rename = "UserName")]
+    pub user_name: String,
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct SplitTimeInfo {}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
+pub struct CarSetup {}
+
+/// A visitor for deserializing values with units as string into a number
+struct UnitVisitor {
+    unit: &'static str,
+}
+impl<'de> Visitor<'de> for UnitVisitor {
+    type Value = f32;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "a value with the unit '{}'", self.unit)
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        if !v.ends_with(self.unit) {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(v),
+                &self,
+            ));
         }
-
-        return me;
+        let value_str = v.trim_end_matches(self.unit).trim_end();
+        Ok(str::parse(value_str.trim()).map_err(|e| serde::de::Error::custom(e))?)
     }
 }
 
-#[derive(Default, Clone)]
-#[allow(dead_code)]
-pub struct I32 {
-    buffer: Option<Rc<RefCell<Vec<u8>>>>,
-    offset: usize,
+fn km_deserializer<'de, D>(deserializer: D) -> Result<Distance, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "km" })
+        .map(|km| Distance::from_kilometers(km))
 }
 
-impl I32 {
-    fn new(header: VarHeader, buffer: Rc<RefCell<Vec<u8>>>) -> Self {
-        return Self {
-            buffer: Some(buffer),
-            offset: header.offset as usize,
-        };
-    }
-    pub fn value(&self) -> Option<i32> {
-        if let Some(buffer) = &self.buffer {
-            if buffer.borrow().len() >= self.offset as usize + 4 {
-                let raw = &buffer.borrow()[self.offset..(self.offset + 4)];
-                return Some(i32::from_be_bytes(raw.try_into().unwrap()));
-            }
-        }
-        return None;
-    }
+fn m_deserializer<'de, D>(deserializer: D) -> Result<Distance, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "m" })
+        .map(|km| Distance::from_kilometers(km))
 }
 
+fn decimal_degrees_deserializer<'de, D>(deserializer: D) -> Result<Angle, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        // For some reason the latitude and longitude have m as their unit.
+        .deserialize_str(UnitVisitor { unit: "m" })
+        .map(|angle| Angle::from_deg(angle))
+}
+
+fn rad_deserializer<'de, D>(deserializer: D) -> Result<Angle, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "rad" })
+        .map(|angle| Angle::from_rad(angle))
+}
+
+fn kph_deserializer<'de, D>(deserializer: D) -> Result<Speed, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "kph" })
+        .map(|kmh| Speed::from_kmh(kmh))
+}
+
+fn kmh_deserializer<'de, D>(deserializer: D) -> Result<Speed, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "km/h" })
+        .map(|kmh| Speed::from_kmh(kmh))
+}
+
+fn ms_deserializer<'de, D>(deserializer: D) -> Result<Speed, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "m/s" })
+        .map(|ms| Speed::from_ms(ms))
+}
+
+fn celcius_deserializer<'de, D>(deserializer: D) -> Result<Temperature, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    deserializer
+        .deserialize_str(UnitVisitor { unit: "C" })
+        .map(|c| Temperature::from_celcius(c))
+}
+
+// fn unit_value_de<'de, D>(deserializer: D) -> Result<Value, D::Error>
+// where
+//     D: serde::de::Deserializer<'de>,
+// {
+//     deserializer.deserialize_str(UnitVisitor { unit: "dinglebobs" })
+// }
 /*
 name: SessionTime, desc: Seconds since session start, unit: s, type: 5, count: 1, count_as_time: false
 name: SessionTick, desc: Current update number, unit: , type: 2, count: 1, count_as_time: false
@@ -370,45 +650,3 @@ name: RFshockDefl_ST, desc: RF shock deflection at 360 Hz, unit: m, type: 4, cou
 name: RFshockVel, desc: RF shock velocity, unit: m/s, type: 4, count: 1, count_as_time: false
 name: RFshockVel_ST, desc: RF shock velocity at 360 Hz, unit: m/s, type: 4, count: 6, count_as_time: true
 */
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[allow(dead_code)]
-pub struct SessionData {
-    #[serde(rename = "WeekendInfo")]
-    pub weekend_info: WeekendInfo,
-    #[serde(rename = "DriverInfo")]
-    pub driver_info: DriverInfo,
-}
-
-pub struct SessionInfo{
-    
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[allow(dead_code)]
-pub struct WeekendInfo {
-    #[serde(rename = "TrackID")]
-    pub track_id: i32,
-    #[serde(rename = "TrackName")]
-    pub track_name: String,
-    #[serde(rename = "TrackLength")]
-    pub track_length: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[allow(dead_code)]
-pub struct DriverInfo {
-    #[serde(rename = "DriverUserID")]
-    pub driver_user_id: i32,
-    #[serde(rename = "Drivers")]
-    pub drivers: Vec<Driver>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
-#[allow(dead_code)]
-pub struct Driver {
-    #[serde(rename = "CarIdx")]
-    pub car_index: i32,
-    #[serde(rename = "UserName")]
-    pub user_name: String,
-}

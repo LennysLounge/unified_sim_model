@@ -1,7 +1,7 @@
 use std::env;
 
 use tracing::{info, Level};
-use unified_sim_model::{Adapter, AdapterCommand};
+use unified_sim_model::Adapter;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -18,7 +18,6 @@ fn main() {
     let mut adapter = Adapter::new_iracing();
 
     // Wait for an update and loop.
-    let mut limit = 0;
     while adapter.wait_for_update().is_ok() {
         let model = adapter.model.read().unwrap();
 
@@ -34,12 +33,6 @@ fn main() {
         }
         std::mem::drop(model);
         _ = adapter.clear_events();
-
-        limit += 1;
-        if limit > 100 {
-            adapter.send(AdapterCommand::Close);
-            break;
-        }
     }
 
     if let Some(Err(e)) = adapter.join() {
