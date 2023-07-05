@@ -11,11 +11,10 @@ use std::{
 
 pub mod games;
 pub mod model;
-pub mod time;
-
-pub use time::Time;
+pub mod types;
 
 use crate::model::Model;
+pub use types::*;
 
 #[allow(dead_code)]
 fn log_todo<T>(v: T, message: &str) -> T {
