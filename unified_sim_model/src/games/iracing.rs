@@ -8,13 +8,13 @@ use std::{
 };
 
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 
 use self::irsdk::Irsdk;
 
-mod irsdk;
+pub mod irsdk;
 
 /// A specialized result for Connection errors.
 type Result<T> = std::result::Result<T, crate::AdapterError>;
@@ -51,11 +51,11 @@ impl GameAdapter for IRacingAdapter {
                 break;
             }
 
-            let data = irsdk.poll().map_err(|e| match e {
+            let _data = irsdk.poll().map_err(|e| match e {
                 irsdk::PollError::NotConnected => IRacingError::Disconnected,
             })?;
 
-            info!("laps: {:?}", data.car_idx_lap);
+            //info!("laps: {:?}", data.car_idx_lap);
 
             //Self::update_model(&data, &model)?;
 
