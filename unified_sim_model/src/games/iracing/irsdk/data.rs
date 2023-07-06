@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, HashMap};
 
+use bitflags::bitflags;
 use serde::{de::Visitor, Deserialize, Serialize};
 use serde_value::Value;
 
-use crate::{Angle, Distance, Pressure, Speed, Temperature, Weight};
+use crate::{Angle, Distance, Pressure, Speed, Temperature, Time, Weight};
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -1301,20 +1302,20 @@ where
 
 #[derive(Default, Clone)]
 pub struct LiveData {
-    pub session_time: Option<f64>, // s
+    pub session_time: Option<Time>,
     pub session_tick: Option<i32>,
     pub session_num: Option<i32>,
-    pub session_state: Option<i32>, // irsdk_SessionState
+    pub session_state: Option<SessionState>,
     pub session_unique_id: Option<i32>,
-    pub session_flags: Option<i32>,      // irsdk_Flags
-    pub session_time_remain: Option<f64>, // s
+    pub session_flags: Option<Flags>,
+    pub session_time_remain: Option<Time>,
     pub session_laps_remain: Option<i32>,
     pub session_laps_remain_ex: Option<i32>,
-    pub session_time_total: Option<f64>, // s
+    pub session_time_total: Option<Time>,
     pub session_laps_total: Option<i32>,
     pub session_joker_laps_remain: Option<i32>,
     pub session_on_joker_lap: Option<u8>,
-    pub session_time_of_day: Option<f32>, // s
+    pub session_time_of_day: Option<Time>,
     pub radio_transmit_car_idx: Option<i32>,
     pub radio_transmit_radio_idx: Option<i32>,
     pub radio_transmit_frequency_idx: Option<i32>,
@@ -1330,124 +1331,155 @@ pub struct LiveData {
     pub replay_frame_num_end: Option<i32>,
     pub is_disk_logging_enabled: Option<u8>,
     pub is_disk_logging_active: Option<u8>,
-    pub frame_rate: Option<f32>,          // fps
-    pub cpu_usage_fg: Option<f32>,         // %
-    pub gpu_usage: Option<f32>,           // %
-    pub chan_avg_latency: Option<f32>,     // s
-    pub chan_latency: Option<f32>,        // s
-    pub chan_quality: Option<f32>,        // %
-    pub chan_partner_quality: Option<f32>, // %
-    pub cpu_usage_bg: Option<f32>,         // %
-    pub chan_clock_skew: Option<f32>,      // s
+    pub frame_rate: Option<f32>,
+    pub cpu_usage_fg: Option<f32>,
+    pub gpu_usage: Option<f32>,
+    pub chan_avg_latency: Option<Time>,
+    pub chan_latency: Option<Time>,
+    pub chan_quality: Option<f32>,
+    pub chan_partner_quality: Option<f32>,
+    pub cpu_usage_bg: Option<f32>,
+    pub chan_clock_skew: Option<Time>,
     pub mem_page_fault_sec: Option<f32>,
     pub mem_soft_page_fault_sec: Option<f32>,
     pub player_car_position: Option<i32>,
     pub player_car_class_position: Option<i32>,
     pub player_car_class: Option<i32>,
-    pub player_track_surface: Option<i32>,         // irsdk_TrkLoc
-    pub player_track_surface_material: Option<i32>, // irsdk_TrkSurf
+    pub player_track_surface: Option<TrkLoc>,
+    pub player_track_surface_material: Option<TrkSurf>,
     pub player_car_idx: Option<i32>,
     pub player_car_team_incident_count: Option<i32>,
     pub player_car_my_incident_count: Option<i32>,
     pub player_car_driver_incident_count: Option<i32>,
-    pub player_car_weight_penalty: Option<f32>, // kg
-    pub player_car_power_adjust: Option<f32>,   // %
+    ///  kg
+    pub player_car_weight_penalty: Option<f32>,
+    pub player_car_power_adjust: Option<f32>,
     pub player_car_dry_tire_set_limit: Option<i32>,
-    pub player_car_tow_time: Option<f32>, // s
+    pub player_car_tow_time: Option<Time>,
     pub player_car_in_pit_stall: Option<u8>,
-    pub player_car_pit_sv_status: Option<i32>, // irsdk_PitSvStatus
+    pub player_car_pit_sv_status: Option<PitSvStatus>,
     pub player_tire_compound: Option<i32>,
     pub player_fast_repairs_used: Option<i32>,
     pub car_idx_lap: Option<Vec<i32>>,
     pub car_idx_lap_completed: Option<Vec<i32>>,
-    pub car_idx_lap_dist_pct: Option<Vec<f32>>,           // %
-    pub car_idx_track_surface: Option<Vec<i32>>,         // irsdk_TrkLoc
-    pub car_idx_track_surface_material: Option<Vec<i32>>, // irsdk_TrkSurf
+    pub car_idx_lap_dist_pct: Option<Vec<f32>>,
+    pub car_idx_track_surface: Option<Vec<TrkLoc>>,
+    pub car_idx_track_surface_material: Option<Vec<TrkSurf>>,
     pub car_idx_on_pit_road: Option<Vec<u8>>,
     pub car_idx_position: Option<Vec<i32>>,
     pub car_idx_class_position: Option<Vec<i32>>,
     pub car_idx_class: Option<Vec<i32>>,
-    pub car_idx_f2_time: Option<Vec<f32>>,      // s
-    pub car_idx_est_time: Option<Vec<f32>>,     // s
-    pub car_idx_last_lap_time: Option<Vec<f32>>, // s
-    pub car_idx_best_lap_time: Option<Vec<f32>>, // s
+    pub car_idx_f2_time: Option<Vec<Time>>,
+    pub car_idx_est_time: Option<Vec<Time>>,
+    pub car_idx_last_lap_time: Option<Vec<Time>>,
+    pub car_idx_best_lap_time: Option<Vec<Time>>,
     pub car_idx_best_lap_num: Option<Vec<i32>>,
     pub car_idx_tire_compound: Option<Vec<i32>>,
     pub car_idx_qual_tire_compound: Option<Vec<i32>>,
     pub car_idx_qual_tire_compound_locked: Option<Vec<u8>>,
     pub car_idx_fast_repairs_used: Option<Vec<i32>>,
-    pub car_idx_session_flags: Option<Vec<i32>>, // irsdk_Flags
-    pub pace_mode: Option<i32>,                // irsdk_PaceMode
+    pub car_idx_session_flags: Option<Vec<Flags>>,
+    pub pace_mode: Option<PaceMode>,
     pub car_idx_pace_line: Option<Vec<i32>>,
     pub car_idx_pace_row: Option<Vec<i32>>,
-    pub car_idx_pace_flags: Option<Vec<i32>>, // irsdk_PaceFlags
+    pub car_idx_pace_flags: Option<Vec<PaceFlags>>,
     pub on_pit_road: Option<u8>,
-    pub car_idx_steer: Option<Vec<f32>>, // rad
-    pub car_idx_rpm: Option<Vec<f32>>,   // revs/min
+    ///  rad
+    pub car_idx_steer: Option<Vec<f32>>,
+    ///  revs/min
+    pub car_idx_rpm: Option<Vec<f32>>,
     pub car_idx_gear: Option<Vec<i32>>,
-    pub steering_wheel_angle: Option<f32>, // rad
-    pub throttle: Option<f32>,           // %
-    pub brake: Option<f32>,              // %
-    pub clutch: Option<f32>,             // %
+    ///  rad
+    pub steering_wheel_angle: Option<f32>,
+    ///  %
+    pub throttle: Option<f32>,
+    ///  %
+    pub brake: Option<f32>,
+    ///  %
+    pub clutch: Option<f32>,
     pub gear: Option<i32>,
-    pub rpm: Option<f32>, // revs/min
+    ///  revs/min
+    pub rpm: Option<f32>,
     pub lap: Option<i32>,
     pub lap_completed: Option<i32>,
-    pub lap_dist: Option<f32>,    // m
-    pub lap_dist_pct: Option<f32>, // %
+    ///  m
+    pub lap_dist: Option<f32>,
+    ///  %
+    pub lap_dist_pct: Option<f32>,
     pub race_laps: Option<i32>,
     pub lap_best_lap: Option<i32>,
-    pub lap_best_lap_time: Option<f32>,    // s
-    pub lap_last_lap_time: Option<f32>,    // s
-    pub lap_current_lap_time: Option<f32>, // s
+    pub lap_best_lap_time: Option<Time>,
+    pub lap_last_lap_time: Option<Time>,
+    pub lap_current_lap_time: Option<Time>,
     pub lap_las_n_lap_seq: Option<i32>,
-    pub lap_last_n_lap_time: Option<f32>, // s
+    pub lap_last_n_lap_time: Option<Time>,
     pub lap_best_n_lap_lap: Option<i32>,
-    pub lap_best_n_lap_time: Option<f32>,      // s
-    pub lap_delta_to_best_lap: Option<f32>,    // s
-    pub lap_delta_to_best_lap_dd: Option<f32>, // s/s
+    pub lap_best_n_lap_time: Option<Time>,
+    pub lap_delta_to_best_lap: Option<Time>,
+    ///  s/s
+    pub lap_delta_to_best_lap_dd: Option<f32>,
     pub lap_delta_to_best_lap_ok: Option<u8>,
-    pub lap_delta_to_optimal_lap: Option<f32>,    // s
-    pub lap_delta_to_optimal_lap_dd: Option<f32>, // s/s
+    pub lap_delta_to_optimal_lap: Option<Time>,
+    ///  s/s
+    pub lap_delta_to_optimal_lap_dd: Option<f32>,
     pub lap_delta_to_optimal_lap_ok: Option<u8>,
-    pub lap_delta_to_session_best_lap: Option<f32>,    // s
-    pub lap_delta_to_session_best_lap_dd: Option<f32>, // s/s
+    pub lap_delta_to_session_best_lap: Option<Time>,
+    ///  s/s
+    pub lap_delta_to_session_best_lap_dd: Option<f32>,
     pub lap_delta_to_session_best_lap_ok: Option<u8>,
-    pub lap_delta_to_session_optimal_lap: Option<f32>,    // s
-    pub lap_delta_to_session_optimal_lap_dd: Option<f32>, // s/s
+    pub lap_delta_to_session_optimal_lap: Option<Time>,
+    ///  s/s
+    pub lap_delta_to_session_optimal_lap_dd: Option<f32>,
     pub lap_delta_to_session_optimal_lap_ok: Option<u8>,
-    pub lap_delta_to_session_lastl_lap: Option<f32>,    // s
-    pub lap_delta_to_session_lastl_lap_dd: Option<f32>, // s/s
+    pub lap_delta_to_session_lastl_lap: Option<Time>,
+    ///  s/s
+    pub lap_delta_to_session_lastl_lap_dd: Option<f32>,
     pub lap_delta_to_session_lastl_lap_ok: Option<u8>,
-    pub speed: Option<f32>,    // m/s
-    pub yaw: Option<f32>,      // rad
-    pub yaw_north: Option<f32>, // rad
-    pub pitch: Option<f32>,    // rad
-    pub roll: Option<f32>,     // rad
+    ///  m/s
+    pub speed: Option<f32>,
+    ///  rad
+    pub yaw: Option<f32>,
+    ///  rad
+    pub yaw_north: Option<f32>,
+    ///  rad
+    pub pitch: Option<f32>,
+    ///  rad
+    pub roll: Option<f32>,
     pub enter_exit_reset: Option<i32>,
-    pub track_temp: Option<f32>,     // C
-    pub track_temp_crew: Option<f32>, // C
-    pub air_temp: Option<f32>,       // C
+    ///  C
+    pub track_temp: Option<f32>,
+    ///  C
+    pub track_temp_crew: Option<f32>,
+    ///  C
+    pub air_temp: Option<f32>,
     pub weather_type: Option<i32>,
     pub skies: Option<i32>,
-    pub air_density: Option<f32>,       // kg/m^3
-    pub air_pressure: Option<f32>,      // Hg
-    pub wind_vel: Option<f32>,          // m/s
-    pub wind_dir: Option<f32>,          // rad
-    pub relative_humidity: Option<f32>, // %
-    pub fog_level: Option<f32>,         // %
-    pub solar_altitude: Option<f32>,    // rad
-    pub solar_azimuth: Option<f32>,     // rad
+    ///  kg/m^3
+    pub air_density: Option<f32>,
+    ///  Hg
+    pub air_pressure: Option<f32>,
+    ///  m/s
+    pub wind_vel: Option<f32>,
+    ///  rad
+    pub wind_dir: Option<f32>,
+    ///  %
+    pub relative_humidity: Option<f32>,
+    ///  %
+    pub fog_level: Option<f32>,
+    ///  rad
+    pub solar_altitude: Option<f32>,
+    ///  rad
+    pub solar_azimuth: Option<f32>,
     pub dc_lap_status: Option<i32>,
     pub dc_drivers_so_far: Option<i32>,
     pub ok_to_reload_textures: Option<u8>,
     pub load_num_textures: Option<u8>,
-    pub car_left_right: Option<i32>, // irsdk_CarLeftRight
+    pub car_left_right: Option<CarLeftRight>,
     pub pits_open: Option<u8>,
     pub vid_cap_enabled: Option<u8>,
     pub vid_cap_active: Option<u8>,
-    pub pit_repair_left: Option<f32>,    // s
-    pub pit_opt_repair_left: Option<f32>, // s
+    pub pit_repair_left: Option<Time>,
+    pub pit_opt_repair_left: Option<Time>,
     pub pitstop_active: Option<u8>,
     pub fast_repair_used: Option<i32>,
     pub fast_repair_available: Option<i32>,
@@ -1472,449 +1504,517 @@ pub struct LiveData {
     pub cam_car_idx: Option<i32>,
     pub cam_camera_number: Option<i32>,
     pub cam_group_number: Option<i32>,
-    pub cam_camera_state: Option<i32>, // irsdk_CameraState
+    pub cam_camera_state: Option<CameraState>,
     pub is_on_track_car: Option<u8>,
     pub is_in_garage: Option<u8>,
-    pub steering_wheel_angle_max: Option<f32>, // rad
-    pub shift_power_pct: Option<f32>,         // %
-    pub shift_grind_rpm: Option<f32>,         // RPM
-    pub throttle_raw: Option<f32>,           // %
-    pub brake_raw: Option<f32>,              // %
-    pub clutch_raw: Option<f32>,             // %
-    pub handbrake_raw: Option<f32>,          // %
+    ///  rad
+    pub steering_wheel_angle_max: Option<f32>,
+    pub shift_power_pct: Option<f32>,
+    ///  RPM
+    pub shift_grind_rpm: Option<f32>,
+    pub throttle_raw: Option<f32>,
+    pub brake_raw: Option<f32>,
+    pub clutch_raw: Option<f32>,
+    pub handbrake_raw: Option<f32>,
     pub brake_ab_sactive: Option<u8>,
-    pub engine_warnings: Option<i32>, // irsdk_EngineWarnings
-    pub fuel_level_pct: Option<f32>,   // %
-    pub pit_sv_flags: Option<i32>,     // irsdk_PitSvFlags
-    pub pit_sv_lfp: Option<f32>,       // kPa
-    pub pit_sv_rfp: Option<f32>,       // kPa
-    pub pit_sv_lrp: Option<f32>,       // kPa
-    pub pit_sv_rrp: Option<f32>,       // kPa
-    pub pit_sv_fuel: Option<f32>,      // l or kWh
+    pub engine_warnings: Option<EngineWarnings>,
+    pub fuel_level_pct: Option<f32>,
+    pub pit_sv_flags: Option<PitSvFlags>,
+    ///  kPa
+    pub pit_sv_lfp: Option<f32>,
+    ///  kPa
+    pub pit_sv_rfp: Option<f32>,
+    ///  kPa
+    pub pit_sv_lrp: Option<f32>,
+    ///  kPa
+    pub pit_sv_rrp: Option<f32>,
+    ///  l or kWh
+    pub pit_sv_fuel: Option<f32>,
     pub pit_sv_tire_compound: Option<i32>,
     pub car_idx_p2p_status: Option<Vec<u8>>,
     pub car_idx_p2p_count: Option<Vec<i32>>,
-    pub steering_wheel_pct_torque: Option<f32>,          // %
-    pub steering_wheel_pct_torque_sign: Option<f32>,      // %
-    pub steering_wheel_pct_torque_sign_stops: Option<f32>, // %
-    pub steering_wheel_pct_smoothing: Option<f32>,       // %
-    pub steering_wheel_pct_damper: Option<f32>,          // %
-    pub steering_wheel_limiter: Option<f32>,            // %
-    pub steering_wheel_max_force_nm: Option<f32>,         // N*m
-    pub steering_wheel_peak_force_nm: Option<f32>,        // N*m
+    pub steering_wheel_pct_torque: Option<f32>,
+    pub steering_wheel_pct_torque_sign: Option<f32>,
+    pub steering_wheel_pct_torque_sign_stops: Option<f32>,
+    pub steering_wheel_pct_smoothing: Option<f32>,
+    pub steering_wheel_pct_damper: Option<f32>,
+    pub steering_wheel_limiter: Option<f32>,
+    ///  N*m
+    pub steering_wheel_max_force_nm: Option<f32>,
+    ///  N*m
+    pub steering_wheel_peak_force_nm: Option<f32>,
     pub steering_wheel_use_linear: Option<u8>,
-    pub shift_indicator_pct: Option<f32>, // %
+    pub shift_indicator_pct: Option<f32>,
     pub replay_play_speed: Option<i32>,
     pub replay_play_slow_motion: Option<u8>,
-    pub replay_session_time: Option<f64>, // s
+    pub replay_session_time: Option<Time>,
     pub replay_session_num: Option<i32>,
-    pub tire_lf_rumble_pitch: Option<f32>, // Hz
-    pub tire_rf_rumble_pitch: Option<f32>, // Hz
-    pub tire_lr_rumble_pitch: Option<f32>, // Hz
-    pub tire_rr_rumble_pitch: Option<f32>, // Hz
+    ///  Hz
+    pub tire_lf_rumble_pitch: Option<f32>,
+    ///  Hz
+    pub tire_rf_rumble_pitch: Option<f32>,
+    ///  Hz
+    pub tire_lr_rumble_pitch: Option<f32>,
+    ///  Hz
+    pub tire_rr_rumble_pitch: Option<f32>,
     pub is_garage_visible: Option<u8>,
-    pub steering_wheel_torque_st: Option<f32>, // N*m
-    pub steering_wheel_torque: Option<f32>,    // N*m
-    pub velocity_z_st: Option<f32>,           // m/s at 360 Hz
-    pub velocity_y_st: Option<f32>,           // m/s at 360 Hz
-    pub velocity_x_st: Option<f32>,           // m/s at 360 Hz
-    pub velocity_z: Option<f32>,              // m/s
-    pub velocity_y: Option<f32>,              // m/s
-    pub velocity_x: Option<f32>,              // m/s
-    pub yaw_rate_st: Option<f32>,             // rad/s
-    pub pitch_rate_st: Option<f32>,           // rad/s
-    pub roll_rate_st: Option<f32>,            // rad/s
-    pub yaw_rate: Option<f32>,                // rad/s
-    pub pitch_rate: Option<f32>,              // rad/s
-    pub roll_rate: Option<f32>,               // rad/s
-    pub vert_accel_st: Option<f32>,           // m/s^2
-    pub lat_accel_st: Option<f32>,            // m/s^2
-    pub long_accel_st: Option<f32>,           // m/s^2
-    pub vert_accel: Option<f32>,              // m/s^2
-    pub lat_accel: Option<f32>,               // m/s^2
-    pub long_accel: Option<f32>,              // m/s^2
+    ///  N*m
+    pub steering_wheel_torque_st: Option<f32>,
+    ///  N*m
+    pub steering_wheel_torque: Option<f32>,
+    ///  m/s at 360 Hz
+    pub velocity_z_st: Option<f32>,
+    ///  m/s at 360 Hz
+    pub velocity_y_st: Option<f32>,
+    ///  m/s at 360 Hz
+    pub velocity_x_st: Option<f32>,
+    ///  m/s
+    pub velocity_z: Option<f32>,
+    ///  m/s
+    pub velocity_y: Option<f32>,
+    ///  m/s
+    pub velocity_x: Option<f32>,
+    ///  rad/s
+    pub yaw_rate_st: Option<f32>,
+    ///  rad/s
+    pub pitch_rate_st: Option<f32>,
+    ///  rad/s
+    pub roll_rate_st: Option<f32>,
+    ///  rad/s
+    pub yaw_rate: Option<f32>,
+    ///  rad/s
+    pub pitch_rate: Option<f32>,
+    ///  rad/s
+    pub roll_rate: Option<f32>,
+    ///  m/s^2
+    pub vert_accel_st: Option<f32>,
+    ///  m/s^2
+    pub lat_accel_st: Option<f32>,
+    ///  m/s^2
+    pub long_accel_st: Option<f32>,
+    ///  m/s^2
+    pub vert_accel: Option<f32>,
+    ///  m/s^2
+    pub lat_accel: Option<f32>,
+    ///  m/s^2
+    pub long_accel: Option<f32>,
     pub dc_starter: Option<u8>,
     pub dc_dash_page: Option<f32>,
     pub dc_tear_off_visor: Option<u8>,
     pub dp_tire_change: Option<f32>,
     pub dp_fuel_fill: Option<f32>,
-    pub dp_fuel_add_kg: Option<f32>, // kg
+    ///  kg
+    pub dp_fuel_add_kg: Option<f32>,
     pub dp_fast_repair: Option<f32>,
     pub dc_brake_bias: Option<f32>,
-    pub dp_lf_tire_cold_press: Option<f32>, // Pa
-    pub dp_rf_tire_cold_press: Option<f32>, // Pa
-    pub dp_lr_tire_cold_press: Option<f32>, // Pa
-    pub dp_rr_tire_cold_press: Option<f32>, // Pa
-    pub r_fbrake_line_press: Option<f32>,  // bar
-    pub r_fcold_pressure: Option<f32>,    // kPa
-    pub r_ftemp_cl: Option<f32>,          // C
-    pub r_ftemp_cm: Option<f32>,          // C
-    pub r_ftemp_cr: Option<f32>,          // C
-    pub r_fwear_l: Option<f32>,           // %
-    pub r_fwear_m: Option<f32>,           // %
-    pub r_fwear_r: Option<f32>,           // %
-    pub l_fbrake_line_press: Option<f32>,  // bar
-    pub l_fcold_pressure: Option<f32>,    // kPa
-    pub l_ftemp_cl: Option<f32>,          // C
-    pub l_ftemp_cm: Option<f32>,          // C
-    pub l_ftemp_cr: Option<f32>,          // C
-    pub l_fwear_l: Option<f32>,           // %
-    pub l_fwear_m: Option<f32>,           // %
-    pub l_fwear_r: Option<f32>,           // %
-    pub fuel_use_per_hour: Option<f32>,    // kg/h
-    pub voltage: Option<f32>,           // V
-    pub water_temp: Option<f32>,         // C
-    pub water_level: Option<f32>,        // l
-    pub fuel_press: Option<f32>,         // bar
-    pub oil_temp: Option<f32>,           // C
-    pub oil_press: Option<f32>,          // bar
-    pub oil_level: Option<f32>,          // l
-    pub manifold_press: Option<f32>,     // bar
-    pub fuel_level: Option<f32>,         // l
-    pub engine0_rpm: Option<f32>,       // revs/min
-    pub r_rbrake_line_press: Option<f32>,  // bar
-    pub r_rcold_pressure: Option<f32>,    // kPa
-    pub r_rtemp_cl: Option<f32>,          // C
-    pub r_rtemp_cm: Option<f32>,          // C
-    pub r_rtemp_cr: Option<f32>,          // C
-    pub r_rwear_l: Option<f32>,           // %
-    pub r_rwear_m: Option<f32>,           // %
-    pub r_rwear_r: Option<f32>,           // %
-    pub l_rbrake_line_press: Option<f32>,  // bar
-    pub l_rcold_pressure: Option<f32>,    // kPa
-    pub l_rtemp_cl: Option<f32>,          // C
-    pub l_rtemp_cm: Option<f32>,          // C
-    pub l_rtemp_cr: Option<f32>,          // C
-    pub l_rwear_l: Option<f32>,           // %
-    pub l_rwear_m: Option<f32>,           // %
-    pub l_rwear_r: Option<f32>,           // %
-    pub c_rshock_defl: Option<f32>,       // m
-    pub c_rshock_defl_st: Option<f32>,    // m
-    pub c_rshock_vel: Option<f32>,        // m/s
-    pub c_rshock_vel_st: Option<f32>,     // m/s
-    pub l_rshock_defl: Option<f32>,       // m
-    pub l_rshock_defl_st: Option<f32>,    // m
-    pub l_rshock_vel: Option<f32>,        // m/s
-    pub l_rshock_vel_st: Option<f32>,     // m/s
-    pub r_rshock_defl: Option<f32>,       // m
-    pub r_rshock_defl_st: Option<f32>,    // m
-    pub r_rshock_vel: Option<f32>,        // m/s
-    pub r_rshock_vel_st: Option<f32>,     // m/s
-    pub l_fshock_defl: Option<f32>,       // m
-    pub l_fshock_defl_st: Option<f32>,    // m
-    pub l_fshock_vel: Option<f32>,        // m/s
-    pub l_fshock_vel_st: Option<f32>,     // m/s
-    pub r_fshock_defl: Option<f32>,       // m
-    pub r_fshock_defl_st: Option<f32>,    // m
-    pub r_fshock_vel: Option<f32>,        // m/s
-    pub r_fshock_vel_st: Option<f32>,     // m/s
+    ///  Pa
+    pub dp_lf_tire_cold_press: Option<f32>,
+    ///  Pa
+    pub dp_rf_tire_cold_press: Option<f32>,
+    ///  Pa
+    pub dp_lr_tire_cold_press: Option<f32>,
+    ///  Pa
+    pub dp_rr_tire_cold_press: Option<f32>,
+    ///  bar
+    pub r_fbrake_line_press: Option<f32>,
+    ///  kPa
+    pub r_fcold_pressure: Option<f32>,
+    ///  C
+    pub r_ftemp_cl: Option<f32>,
+    ///  C
+    pub r_ftemp_cm: Option<f32>,
+    ///  C
+    pub r_ftemp_cr: Option<f32>,
+    pub r_fwear_l: Option<f32>,
+    pub r_fwear_m: Option<f32>,
+    pub r_fwear_r: Option<f32>,
+    ///  bar
+    pub l_fbrake_line_press: Option<f32>,
+    ///  kPa
+    pub l_fcold_pressure: Option<f32>,
+    ///  C
+    pub l_ftemp_cl: Option<f32>,
+    ///  C
+    pub l_ftemp_cm: Option<f32>,
+    ///  C
+    pub l_ftemp_cr: Option<f32>,
+    pub l_fwear_l: Option<f32>,
+    pub l_fwear_m: Option<f32>,
+    pub l_fwear_r: Option<f32>,
+    ///  kg/h
+    pub fuel_use_per_hour: Option<f32>,
+    ///  V
+    pub voltage: Option<f32>,
+    ///  C
+    pub water_temp: Option<f32>,
+    ///  l
+    pub water_level: Option<f32>,
+    ///  bar
+    pub fuel_press: Option<f32>,
+    ///  C
+    pub oil_temp: Option<f32>,
+    ///  bar
+    pub oil_press: Option<f32>,
+    ///  l
+    pub oil_level: Option<f32>,
+    ///  bar
+    pub manifold_press: Option<f32>,
+    ///  l
+    pub fuel_level: Option<f32>,
+    ///  revs/min
+    pub engine0_rpm: Option<f32>,
+    ///  bar
+    pub r_rbrake_line_press: Option<f32>,
+    ///  kPa
+    pub r_rcold_pressure: Option<f32>,
+    ///  C
+    pub r_rtemp_cl: Option<f32>,
+    ///  C
+    pub r_rtemp_cm: Option<f32>,
+    ///  C
+    pub r_rtemp_cr: Option<f32>,
+    pub r_rwear_l: Option<f32>,
+    pub r_rwear_m: Option<f32>,
+    pub r_rwear_r: Option<f32>,
+    ///  bar
+    pub l_rbrake_line_press: Option<f32>,
+    ///  kPa
+    pub l_rcold_pressure: Option<f32>,
+    ///  C
+    pub l_rtemp_cl: Option<f32>,
+    ///  C
+    pub l_rtemp_cm: Option<f32>,
+    ///  C
+    pub l_rtemp_cr: Option<f32>,
+    pub l_rwear_l: Option<f32>,
+    pub l_rwear_m: Option<f32>,
+    pub l_rwear_r: Option<f32>,
+    ///  m
+    pub c_rshock_defl: Option<f32>,
+    ///  m
+    pub c_rshock_defl_st: Option<f32>,
+    ///  m/s
+    pub c_rshock_vel: Option<f32>,
+    ///  m/s
+    pub c_rshock_vel_st: Option<f32>,
+    ///  m
+    pub l_rshock_defl: Option<f32>,
+    ///  m
+    pub l_rshock_defl_st: Option<f32>,
+    ///  m/s
+    pub l_rshock_vel: Option<f32>,
+    ///  m/s
+    pub l_rshock_vel_st: Option<f32>,
+    ///  m
+    pub r_rshock_defl: Option<f32>,
+    ///  m
+    pub r_rshock_defl_st: Option<f32>,
+    ///  m/s
+    pub r_rshock_vel: Option<f32>,
+    ///  m/s
+    pub r_rshock_vel_st: Option<f32>,
+    ///  m
+    pub l_fshock_defl: Option<f32>,
+    ///  m
+    pub l_fshock_defl_st: Option<f32>,
+    ///  m/s
+    pub l_fshock_vel: Option<f32>,
+    ///  m/s
+    pub l_fshock_vel_st: Option<f32>,
+    ///  m
+    pub r_fshock_defl: Option<f32>,
+    ///  m
+    pub r_fshock_defl_st: Option<f32>,
+    ///  m/s
+    pub r_fshock_vel: Option<f32>,
+    ///  m/s
+    pub r_fshock_vel_st: Option<f32>,
 }
-/*
-name: SessionTime, desc: Seconds since session start, unit: s, type: 5, count: 1, count_as_time: false
-name: SessionTick, desc: Current update number, unit: , type: 2, count: 1, count_as_time: false
-name: SessionNum, desc: Session number, unit: , type: 2, count: 1, count_as_time: false
-name: SessionState, desc: Session state, unit: irsdk_SessionState, type: 2, count: 1, count_as_time: false
-name: SessionUniqueID, desc: Session ID, unit: , type: 2, count: 1, count_as_time: false
-name: SessionFlags, desc: Session flags, unit: irsdk_Flags, type: 3, count: 1, count_as_time: false
-name: SessionTimeRemain, desc: Seconds left till session ends, unit: s, type: 5, count: 1, count_as_time: false
-name: SessionLapsRemain, desc: Old laps left till session ends use SessionLapsRemainEx, unit: , type: 2, count: 1, count_as_time: false
-name: SessionLapsRemainEx, desc: New improved laps left till session ends, unit: , type: 2, count: 1, count_as_time: false
-name: SessionTimeTotal, desc: Total number of seconds in session, unit: s, type: 5, count: 1, count_as_time: false
-name: SessionLapsTotal, desc: Total number of laps in session, unit: , type: 2, count: 1, count_as_time: false
-name: SessionJokerLapsRemain, desc: Joker laps remaining to be taken, unit: , type: 2, count: 1, count_as_time: false
-name: SessionOnJokerLap, desc: Player is currently completing a joker lap, unit: , type: 1, count: 1, count_as_time: false
-name: SessionTimeOfDay, desc: Time of day in seconds, unit: s, type: 4, count: 1, count_as_time: false
-name: RadioTransmitCarIdx, desc: The car index of the current person speaking on the radio, unit: , type: 2, count: 1, count_as_time: false
-name: RadioTransmitRadioIdx, desc: The radio index of the current person speaking on the radio, unit: , type: 2, count: 1, count_as_time: false
-name: RadioTransmitFrequencyIdx, desc: The frequency index of the current person speaking on the radio, unit: , type: 2, count: 1, count_as_time: false
-name: DisplayUnits, desc: Default units for the user interface 0 = english 1 = metric, unit: , type: 2, count: 1, count_as_time: false
-name: DriverMarker, desc: Driver activated flag, unit: , type: 1, count: 1, count_as_time: false
-name: PushToTalk, desc: Push to talk button state, unit: , type: 1, count: 1, count_as_time: false
-name: PushToPass, desc: Push to pass button state, unit: , type: 1, count: 1, count_as_time: false
-name: ManualBoost, desc: Hybrid manual boost state, unit: , type: 1, count: 1, count_as_time: false
-name: ManualNoBoost, desc: Hybrid manual no boost state, unit: , type: 1, count: 1, count_as_time: false
-name: IsOnTrack, desc: 1=Car on track physics running with player in car, unit: , type: 1, count: 1, count_as_time: false
-name: IsReplayPlaying, desc: 0=replay not playing  1=replay playing, unit: , type: 1, count: 1, count_as_time: false
-name: ReplayFrameNum, desc: Integer replay frame number (60 per second), unit: , type: 2, count: 1, count_as_time: false
-name: ReplayFrameNumEnd, desc: Integer replay frame number from end of tape, unit: , type: 2, count: 1, count_as_time: false
-name: IsDiskLoggingEnabled, desc: 0=disk based telemetry turned off  1=turned on, unit: , type: 1, count: 1, count_as_time: false
-name: IsDiskLoggingActive, desc: 0=disk based telemetry file not being written  1=being written, unit: , type: 1, count: 1, count_as_time: false
-name: FrameRate, desc: Average frames per second, unit: fps, type: 4, count: 1, count_as_time: false
-name: CpuUsageFG, desc: Percent of available tim fg thread took with a 1 sec avg, unit: %, type: 4, count: 1, count_as_time: false
-name: GpuUsage, desc: Percent of available tim gpu took with a 1 sec avg, unit: %, type: 4, count: 1, count_as_time: false
-name: ChanAvgLatency, desc: Communications average latency, unit: s, type: 4, count: 1, count_as_time: false
-name: ChanLatency, desc: Communications latency, unit: s, type: 4, count: 1, count_as_time: false
-name: ChanQuality, desc: Communications quality, unit: %, type: 4, count: 1, count_as_time: false
-name: ChanPartnerQuality, desc: Partner communications quality, unit: %, type: 4, count: 1, count_as_time: false
-name: CpuUsageBG, desc: Percent of available tim bg thread took with a 1 sec avg, unit: %, type: 4, count: 1, count_as_time: false
-name: ChanClockSkew, desc: Communications server clock skew, unit: s, type: 4, count: 1, count_as_time: false
-name: MemPageFaultSec, desc: Memory page faults per second, unit: , type: 4, count: 1, count_as_time: false
-name: MemSoftPageFaultSec, desc: Memory soft page faults per second, unit: , type: 4, count: 1, count_as_time: false
-name: PlayerCarPosition, desc: Players position in race, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarClassPosition, desc: Players class position in race, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarClass, desc: Player car class id, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerTrackSurface, desc: Players car track surface type, unit: irsdk_TrkLoc, type: 2, count: 1, count_as_time: false
-name: PlayerTrackSurfaceMaterial, desc: Players car track surface material type, unit: irsdk_TrkSurf, type: 2, count: 1, count_as_time: false
-name: PlayerCarIdx, desc: Players carIdx, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarTeamIncidentCount, desc: Players team incident count for this session, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarMyIncidentCount, desc: Players own incident count for this session, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarDriverIncidentCount, desc: Teams current drivers incident count for this session, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarWeightPenalty, desc: Players weight penalty, unit: kg, type: 4, count: 1, count_as_time: false
-name: PlayerCarPowerAdjust, desc: Players power adjust, unit: %, type: 4, count: 1, count_as_time: false
-name: PlayerCarDryTireSetLimit, desc: Players dry tire set limit, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerCarTowTime, desc: Players car is being towed if time is greater than zero, unit: s, type: 4, count: 1, count_as_time: false
-name: PlayerCarInPitStall, desc: Players car is properly in there pitstall, unit: , type: 1, count: 1, count_as_time: false
-name: PlayerCarPitSvStatus, desc: Players car pit service status bits, unit: irsdk_PitSvStatus, type: 2, count: 1, count_as_time: false
-name: PlayerTireCompound, desc: Players car current tire compound, unit: , type: 2, count: 1, count_as_time: false
-name: PlayerFastRepairsUsed, desc: Players car number of fast repairs used, unit: , type: 2, count: 1, count_as_time: false
-name: CarIdxLap, desc: Laps started by car index, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxLapCompleted, desc: Laps completed by car index, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxLapDistPct, desc: Percentage distance around lap by car index, unit: %, type: 4, count: 64, count_as_time: false
-name: CarIdxTrackSurface, desc: Track surface type by car index, unit: irsdk_TrkLoc, type: 2, count: 64, count_as_time: false
-name: CarIdxTrackSurfaceMaterial, desc: Track surface material type by car index, unit: irsdk_TrkSurf, type: 2, count: 64, count_as_time: false
-name: CarIdxOnPitRoad, desc: On pit road between the cones by car index, unit: , type: 1, count: 64, count_as_time: false
-name: CarIdxPosition, desc: Cars position in race by car index, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxClassPosition, desc: Cars class position in race by car index, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxClass, desc: Cars class id by car index, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxF2Time, desc: Race time behind leader or fastest lap time otherwise, unit: s, type: 4, count: 64, count_as_time: false
-name: CarIdxEstTime, desc: Estimated time to reach current location on track, unit: s, type: 4, count: 64, count_as_time: false
-name: CarIdxLastLapTime, desc: Cars last lap time, unit: s, type: 4, count: 64, count_as_time: false
-name: CarIdxBestLapTime, desc: Cars best lap time, unit: s, type: 4, count: 64, count_as_time: false
-name: CarIdxBestLapNum, desc: Cars best lap number, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxTireCompound, desc: Cars current tire compound, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxQualTireCompound, desc: Cars Qual tire compound, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxQualTireCompoundLocked, desc: Cars Qual tire compound is locked-in, unit: , type: 1, count: 64, count_as_time: false
-name: CarIdxFastRepairsUsed, desc: How many fast repairs each car has used, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxSessionFlags, desc: Session flags for each player, unit: irsdk_Flags, type: 3, count: 64, count_as_time: false
-name: PaceMode, desc: Are we pacing or not, unit: irsdk_PaceMode, type: 2, count: 1, count_as_time: false
-name: CarIdxPaceLine, desc: What line cars are pacing in  or -1 if not pacing, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxPaceRow, desc: What row cars are pacing in  or -1 if not pacing, unit: , type: 2, count: 64, count_as_time: false
-name: CarIdxPaceFlags, desc: Pacing status flags for each car, unit: irsdk_PaceFlags, type: 2, count: 64, count_as_time: false
-name: OnPitRoad, desc: Is the player car on pit road between the cones, unit: , type: 1, count: 1, count_as_time: false
-name: CarIdxSteer, desc: Steering wheel angle by car index, unit: rad, type: 4, count: 64, count_as_time: false
-name: CarIdxRPM, desc: Engine rpm by car index, unit: revs/min, type: 4, count: 64, count_as_time: false
-name: CarIdxGear, desc: -1=reverse  0=neutral  1..n=current gear by car index, unit: , type: 2, count: 64, count_as_time: false
-name: SteeringWheelAngle, desc: Steering wheel angle, unit: rad, type: 4, count: 1, count_as_time: false
-name: Throttle, desc: 0=off throttle to 1=full throttle, unit: %, type: 4, count: 1, count_as_time: false
-name: Brake, desc: 0=brake released to 1=max pedal force, unit: %, type: 4, count: 1, count_as_time: false
-name: Clutch, desc: 0=disengaged to 1=fully engaged, unit: %, type: 4, count: 1, count_as_time: false
-name: Gear, desc: -1=reverse  0=neutral  1..n=current gear, unit: , type: 2, count: 1, count_as_time: false
-name: RPM, desc: Engine rpm, unit: revs/min, type: 4, count: 1, count_as_time: false
-name: Lap, desc: Laps started count, unit: , type: 2, count: 1, count_as_time: false
-name: LapCompleted, desc: Laps completed count, unit: , type: 2, count: 1, count_as_time: false
-name: LapDist, desc: Meters traveled from S/F this lap, unit: m, type: 4, count: 1, count_as_time: false
-name: LapDistPct, desc: Percentage distance around lap, unit: %, type: 4, count: 1, count_as_time: false
-name: RaceLaps, desc: Laps completed in race, unit: , type: 2, count: 1, count_as_time: false
-name: LapBestLap, desc: Players best lap number, unit: , type: 2, count: 1, count_as_time: false
-name: LapBestLapTime, desc: Players best lap time, unit: s, type: 4, count: 1, count_as_time: false
-name: LapLastLapTime, desc: Players last lap time, unit: s, type: 4, count: 1, count_as_time: false
-name: LapCurrentLapTime, desc: Estimate of players current lap time as shown in F3 box, unit: s, type: 4, count: 1, count_as_time: false
-name: LapLasNLapSeq, desc: Player num consecutive clean laps completed for N average, unit: , type: 2, count: 1, count_as_time: false
-name: LapLastNLapTime, desc: Player last N average lap time, unit: s, type: 4, count: 1, count_as_time: false
-name: LapBestNLapLap, desc: Player last lap in best N average lap time, unit: , type: 2, count: 1, count_as_time: false
-name: LapBestNLapTime, desc: Player best N average lap time, unit: s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToBestLap, desc: Delta time for best lap, unit: s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToBestLap_DD, desc: Rate of change of delta time for best lap, unit: s/s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToBestLap_OK, desc: Delta time for best lap is valid, unit: , type: 1, count: 1, count_as_time: false
-name: LapDeltaToOptimalLap, desc: Delta time for optimal lap, unit: s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToOptimalLap_DD, desc: Rate of change of delta time for optimal lap, unit: s/s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToOptimalLap_OK, desc: Delta time for optimal lap is valid, unit: , type: 1, count: 1, count_as_time: false
-name: LapDeltaToSessionBestLap, desc: Delta time for session best lap, unit: s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToSessionBestLap_DD, desc: Rate of change of delta time for session best lap, unit: s/s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToSessionBestLap_OK, desc: Delta time for session best lap is valid, unit: , type: 1, count: 1, count_as_time: false
-name: LapDeltaToSessionOptimalLap, desc: Delta time for session optimal lap, unit: s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToSessionOptimalLap_DD, desc: Rate of change of delta time for session optimal lap, unit: s/s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToSessionOptimalLap_OK, desc: Delta time for session optimal lap is valid, unit: , type: 1, count: 1, count_as_time: false
-name: LapDeltaToSessionLastlLap, desc: Delta time for session last lap, unit: s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToSessionLastlLap_DD, desc: Rate of change of delta time for session last lap, unit: s/s, type: 4, count: 1, count_as_time: false
-name: LapDeltaToSessionLastlLap_OK, desc: Delta time for session last lap is valid, unit: , type: 1, count: 1, count_as_time: false
-name: Speed, desc: GPS vehicle speed, unit: m/s, type: 4, count: 1, count_as_time: false
-name: Yaw, desc: Yaw orientation, unit: rad, type: 4, count: 1, count_as_time: false
-name: YawNorth, desc: Yaw orientation relative to north, unit: rad, type: 4, count: 1, count_as_time: false
-name: Pitch, desc: Pitch orientation, unit: rad, type: 4, count: 1, count_as_time: false
-name: Roll, desc: Roll orientation, unit: rad, type: 4, count: 1, count_as_time: false
-name: EnterExitReset, desc: Indicate action the reset key will take 0 enter 1 exit 2 reset, unit: , type: 2, count: 1, count_as_time: false
-name: TrackTemp, desc: Deprecated  set to TrackTempCrew, unit: C, type: 4, count: 1, count_as_time: false
-name: TrackTempCrew, desc: Temperature of track measured by crew around track, unit: C, type: 4, count: 1, count_as_time: false
-name: AirTemp, desc: Temperature of air at start/finish line, unit: C, type: 4, count: 1, count_as_time: false
-name: WeatherType, desc: Weather type (0=constant  1=dynamic), unit: , type: 2, count: 1, count_as_time: false
-name: Skies, desc: Skies (0=clear/1=p cloudy/2=m cloudy/3=overcast), unit: , type: 2, count: 1, count_as_time: false
-name: AirDensity, desc: Density of air at start/finish line, unit: kg/m^3, type: 4, count: 1, count_as_time: false
-name: AirPressure, desc: Pressure of air at start/finish line, unit: Hg, type: 4, count: 1, count_as_time: false
-name: WindVel, desc: Wind velocity at start/finish line, unit: m/s, type: 4, count: 1, count_as_time: false
-name: WindDir, desc: Wind direction at start/finish line, unit: rad, type: 4, count: 1, count_as_time: false
-name: RelativeHumidity, desc: Relative Humidity, unit: %, type: 4, count: 1, count_as_time: false
-name: FogLevel, desc: Fog level, unit: %, type: 4, count: 1, count_as_time: false
-name: SolarAltitude, desc: Sun angle above horizon in radians, unit: rad, type: 4, count: 1, count_as_time: false
-name: SolarAzimuth, desc: Sun angle clockwise from north in radians, unit: rad, type: 4, count: 1, count_as_time: false
-name: DCLapStatus, desc: Status of driver change lap requirements, unit: , type: 2, count: 1, count_as_time: false
-name: DCDriversSoFar, desc: Number of team drivers who have run a stint, unit: , type: 2, count: 1, count_as_time: false
-name: OkToReloadTextures, desc: True if it is ok to reload car textures at this time, unit: , type: 1, count: 1, count_as_time: false
-name: LoadNumTextures, desc: True if the car_num texture will be loaded, unit: , type: 1, count: 1, count_as_time: false
-name: CarLeftRight, desc: Notify if car is to the left or right of driver, unit: irsdk_CarLeftRight, type: 3, count: 1, count_as_time: false
-name: PitsOpen, desc: True if pit stop is allowed for the current player, unit: , type: 1, count: 1, count_as_time: false
-name: VidCapEnabled, desc: True if video capture system is enabled, unit: , type: 1, count: 1, count_as_time: false
-name: VidCapActive, desc: True if video currently being captured, unit: , type: 1, count: 1, count_as_time: false
-name: PitRepairLeft, desc: Time left for mandatory pit repairs if repairs are active, unit: s, type: 4, count: 1, count_as_time: false
-name: PitOptRepairLeft, desc: Time left for optional repairs if repairs are active, unit: s, type: 4, count: 1, count_as_time: false
-name: PitstopActive, desc: Is the player getting pit stop service, unit: , type: 1, count: 1, count_as_time: false
-name: FastRepairUsed, desc: How many fast repairs used so far, unit: , type: 2, count: 1, count_as_time: false
-name: FastRepairAvailable, desc: How many fast repairs left  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: LFTiresUsed, desc: How many left front tires used so far, unit: , type: 2, count: 1, count_as_time: false
-name: RFTiresUsed, desc: How many right front tires used so far, unit: , type: 2, count: 1, count_as_time: false
-name: LRTiresUsed, desc: How many left rear tires used so far, unit: , type: 2, count: 1, count_as_time: false
-name: RRTiresUsed, desc: How many right rear tires used so far, unit: , type: 2, count: 1, count_as_time: false
-name: LeftTireSetsUsed, desc: How many left tire sets used so far, unit: , type: 2, count: 1, count_as_time: false
-name: RightTireSetsUsed, desc: How many right tire sets used so far, unit: , type: 2, count: 1, count_as_time: false
-name: FrontTireSetsUsed, desc: How many front tire sets used so far, unit: , type: 2, count: 1, count_as_time: false
-name: RearTireSetsUsed, desc: How many rear tire sets used so far, unit: , type: 2, count: 1, count_as_time: false
-name: TireSetsUsed, desc: How many tire sets used so far, unit: , type: 2, count: 1, count_as_time: false
-name: LFTiresAvailable, desc: How many left front tires are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: RFTiresAvailable, desc: How many right front tires are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: LRTiresAvailable, desc: How many left rear tires are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: RRTiresAvailable, desc: How many right rear tires are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: LeftTireSetsAvailable, desc: How many left tire sets are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: RightTireSetsAvailable, desc: How many right tire sets are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: FrontTireSetsAvailable, desc: How many front tire sets are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: RearTireSetsAvailable, desc: How many rear tire sets are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: TireSetsAvailable, desc: How many tire sets are remaining  255 is unlimited, unit: , type: 2, count: 1, count_as_time: false
-name: CamCarIdx, desc: Active camera's focus car index, unit: , type: 2, count: 1, count_as_time: false
-name: CamCameraNumber, desc: Active camera number, unit: , type: 2, count: 1, count_as_time: false
-name: CamGroupNumber, desc: Active camera group number, unit: , type: 2, count: 1, count_as_time: false
-name: CamCameraState, desc: State of camera system, unit: irsdk_CameraState, type: 3, count: 1, count_as_time: false
-name: IsOnTrackCar, desc: 1=Car on track physics running, unit: , type: 1, count: 1, count_as_time: false
-name: IsInGarage, desc: 1=Car in garage physics running, unit: , type: 1, count: 1, count_as_time: false
-name: SteeringWheelAngleMax, desc: Steering wheel max angle, unit: rad, type: 4, count: 1, count_as_time: false
-name: ShiftPowerPct, desc: Friction torque applied to gears when shifting or grinding, unit: %, type: 4, count: 1, count_as_time: false
-name: ShiftGrindRPM, desc: RPM of shifter grinding noise, unit: RPM, type: 4, count: 1, count_as_time: false
-name: ThrottleRaw, desc: Raw throttle input 0=off throttle to 1=full throttle, unit: %, type: 4, count: 1, count_as_time: false
-name: BrakeRaw, desc: Raw brake input 0=brake released to 1=max pedal force, unit: %, type: 4, count: 1, count_as_time: false
-name: ClutchRaw, desc: Raw clutch input 0=disengaged to 1=fully engaged, unit: %, type: 4, count: 1, count_as_time: false
-name: HandbrakeRaw, desc: Raw handbrake input 0=handbrake released to 1=max force, unit: %, type: 4, count: 1, count_as_time: false
-name: BrakeABSactive, desc: true if abs is currently reducing brake force pressure, unit: , type: 1, count: 1, count_as_time: false
-name: EngineWarnings, desc: Bitfield for warning lights, unit: irsdk_EngineWarnings, type: 3, count: 1, count_as_time: false
-name: FuelLevelPct, desc: Percent fuel remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: PitSvFlags, desc: Bitfield of pit service checkboxes, unit: irsdk_PitSvFlags, type: 3, count: 1, count_as_time: false
-name: PitSvLFP, desc: Pit service left front tire pressure, unit: kPa, type: 4, count: 1, count_as_time: false
-name: PitSvRFP, desc: Pit service right front tire pressure, unit: kPa, type: 4, count: 1, count_as_time: false
-name: PitSvLRP, desc: Pit service left rear tire pressure, unit: kPa, type: 4, count: 1, count_as_time: false
-name: PitSvRRP, desc: Pit service right rear tire pressure, unit: kPa, type: 4, count: 1, count_as_time: false
-name: PitSvFuel, desc: Pit service fuel add amount, unit: l or kWh, type: 4, count: 1, count_as_time: false
-name: PitSvTireCompound, desc: Pit service pending tire compound, unit: , type: 2, count: 1, count_as_time: false
-name: CarIdxP2P_Status, desc: Push2Pass active or not, unit: , type: 1, count: 64, count_as_time: false
-name: CarIdxP2P_Count, desc: Push2Pass count of usage (or remaining in Race), unit: , type: 2, count: 64, count_as_time: false
-name: SteeringWheelPctTorque, desc: Force feedback % max torque on steering shaft unsigned, unit: %, type: 4, count: 1, count_as_time: false
-name: SteeringWheelPctTorqueSign, desc: Force feedback % max torque on steering shaft signed, unit: %, type: 4, count: 1, count_as_time: false
-name: SteeringWheelPctTorqueSignStops, desc: Force feedback % max torque on steering shaft signed stops, unit: %, type: 4, count: 1, count_as_time: false
-name: SteeringWheelPctSmoothing, desc: Force feedback % max smoothing, unit: %, type: 4, count: 1, count_as_time: false
-name: SteeringWheelPctDamper, desc: Force feedback % max damping, unit: %, type: 4, count: 1, count_as_time: false
-name: SteeringWheelLimiter, desc: Force feedback limiter strength limits impacts and oscillation, unit: %, type: 4, count: 1, count_as_time: false
-name: SteeringWheelMaxForceNm, desc: Value of strength or max force slider in Nm for FFB, unit: N*m, type: 4, count: 1, count_as_time: false
-name: SteeringWheelPeakForceNm, desc: Peak torque mapping to direct input units for FFB, unit: N*m, type: 4, count: 1, count_as_time: false
-name: SteeringWheelUseLinear, desc: True if steering wheel force is using linear mode, unit: , type: 1, count: 1, count_as_time: false
-name: ShiftIndicatorPct, desc: DEPRECATED use DriverCarSLBlinkRPM instead, unit: %, type: 4, count: 1, count_as_time: false
-name: ReplayPlaySpeed, desc: Replay playback speed, unit: , type: 2, count: 1, count_as_time: false
-name: ReplayPlaySlowMotion, desc: 0=not slow motion  1=replay is in slow motion, unit: , type: 1, count: 1, count_as_time: false
-name: ReplaySessionTime, desc: Seconds since replay session start, unit: s, type: 5, count: 1, count_as_time: false
-name: ReplaySessionNum, desc: Replay session number, unit: , type: 2, count: 1, count_as_time: false
-name: TireLF_RumblePitch, desc: Players LF Tire Sound rumblestrip pitch, unit: Hz, type: 4, count: 1, count_as_time: false
-name: TireRF_RumblePitch, desc: Players RF Tire Sound rumblestrip pitch, unit: Hz, type: 4, count: 1, count_as_time: false
-name: TireLR_RumblePitch, desc: Players LR Tire Sound rumblestrip pitch, unit: Hz, type: 4, count: 1, count_as_time: false
-name: TireRR_RumblePitch, desc: Players RR Tire Sound rumblestrip pitch, unit: Hz, type: 4, count: 1, count_as_time: false
-name: IsGarageVisible, desc: 1=Garage screen is visible, unit: , type: 1, count: 1, count_as_time: false
-name: SteeringWheelTorque_ST, desc: Output torque on steering shaft at 360 Hz, unit: N*m, type: 4, count: 6, count_as_time: true
-name: SteeringWheelTorque, desc: Output torque on steering shaft, unit: N*m, type: 4, count: 1, count_as_time: false
-name: VelocityZ_ST, desc: Z velocity, unit: m/s at 360 Hz, type: 4, count: 6, count_as_time: true
-name: VelocityY_ST, desc: Y velocity, unit: m/s at 360 Hz, type: 4, count: 6, count_as_time: true
-name: VelocityX_ST, desc: X velocity, unit: m/s at 360 Hz, type: 4, count: 6, count_as_time: true
-name: VelocityZ, desc: Z velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: VelocityY, desc: Y velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: VelocityX, desc: X velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: YawRate_ST, desc: Yaw rate at 360 Hz, unit: rad/s, type: 4, count: 6, count_as_time: true
-name: PitchRate_ST, desc: Pitch rate at 360 Hz, unit: rad/s, type: 4, count: 6, count_as_time: true
-name: RollRate_ST, desc: Roll rate at 360 Hz, unit: rad/s, type: 4, count: 6, count_as_time: true
-name: YawRate, desc: Yaw rate, unit: rad/s, type: 4, count: 1, count_as_time: false
-name: PitchRate, desc: Pitch rate, unit: rad/s, type: 4, count: 1, count_as_time: false
-name: RollRate, desc: Roll rate, unit: rad/s, type: 4, count: 1, count_as_time: false
-name: VertAccel_ST, desc: Vertical acceleration (including gravity) at 360 Hz, unit: m/s^2, type: 4, count: 6, count_as_time: true
-name: LatAccel_ST, desc: Lateral acceleration (including gravity) at 360 Hz, unit: m/s^2, type: 4, count: 6, count_as_time: true
-name: LongAccel_ST, desc: Longitudinal acceleration (including gravity) at 360 Hz, unit: m/s^2, type: 4, count: 6, count_as_time: true
-name: VertAccel, desc: Vertical acceleration (including gravity), unit: m/s^2, type: 4, count: 1, count_as_time: false
-name: LatAccel, desc: Lateral acceleration (including gravity), unit: m/s^2, type: 4, count: 1, count_as_time: false
-name: LongAccel, desc: Longitudinal acceleration (including gravity), unit: m/s^2, type: 4, count: 1, count_as_time: false
-name: dcStarter, desc: In car trigger car starter, unit: , type: 1, count: 1, count_as_time: false
-name: dcDashPage, desc: In car dash display page adjustment, unit: , type: 4, count: 1, count_as_time: false
-name: dcTearOffVisor, desc: In car tear off visor film, unit: , type: 1, count: 1, count_as_time: false
-name: dpTireChange, desc: Pitstop all tire change request, unit: , type: 4, count: 1, count_as_time: false
-name: dpFuelFill, desc: Pitstop fuel fill flag, unit: , type: 4, count: 1, count_as_time: false
-name: dpFuelAddKg, desc: Pitstop fuel add amount, unit: kg, type: 4, count: 1, count_as_time: false
-name: dpFastRepair, desc: Pitstop fast repair set, unit: , type: 4, count: 1, count_as_time: false
-name: dcBrakeBias, desc: In car brake bias adjustment, unit: , type: 4, count: 1, count_as_time: false
-name: dpLFTireColdPress, desc: Pitstop lf tire cold pressure adjustment, unit: Pa, type: 4, count: 1, count_as_time: false
-name: dpRFTireColdPress, desc: Pitstop rf cold tire pressure adjustment, unit: Pa, type: 4, count: 1, count_as_time: false
-name: dpLRTireColdPress, desc: Pitstop lr tire cold pressure adjustment, unit: Pa, type: 4, count: 1, count_as_time: false
-name: dpRRTireColdPress, desc: Pitstop rr cold tire pressure adjustment, unit: Pa, type: 4, count: 1, count_as_time: false
-name: RFbrakeLinePress, desc: RF brake line pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: RFcoldPressure, desc: RF tire cold pressure  as set in the garage, unit: kPa, type: 4, count: 1, count_as_time: false
-name: RFtempCL, desc: RF tire left carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: RFtempCM, desc: RF tire middle carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: RFtempCR, desc: RF tire right carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: RFwearL, desc: RF tire left percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: RFwearM, desc: RF tire middle percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: RFwearR, desc: RF tire right percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: LFbrakeLinePress, desc: LF brake line pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: LFcoldPressure, desc: LF tire cold pressure  as set in the garage, unit: kPa, type: 4, count: 1, count_as_time: false
-name: LFtempCL, desc: LF tire left carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: LFtempCM, desc: LF tire middle carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: LFtempCR, desc: LF tire right carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: LFwearL, desc: LF tire left percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: LFwearM, desc: LF tire middle percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: LFwearR, desc: LF tire right percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: FuelUsePerHour, desc: Engine fuel used instantaneous, unit: kg/h, type: 4, count: 1, count_as_time: false
-name: Voltage, desc: Engine voltage, unit: V, type: 4, count: 1, count_as_time: false
-name: WaterTemp, desc: Engine coolant temp, unit: C, type: 4, count: 1, count_as_time: false
-name: WaterLevel, desc: Engine coolant level, unit: l, type: 4, count: 1, count_as_time: false
-name: FuelPress, desc: Engine fuel pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: OilTemp, desc: Engine oil temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: OilPress, desc: Engine oil pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: OilLevel, desc: Engine oil level, unit: l, type: 4, count: 1, count_as_time: false
-name: ManifoldPress, desc: Engine manifold pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: FuelLevel, desc: Liters of fuel remaining, unit: l, type: 4, count: 1, count_as_time: false
-name: Engine0_RPM, desc: Engine0Engine rpm, unit: revs/min, type: 4, count: 1, count_as_time: false
-name: RRbrakeLinePress, desc: RR brake line pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: RRcoldPressure, desc: RR tire cold pressure  as set in the garage, unit: kPa, type: 4, count: 1, count_as_time: false
-name: RRtempCL, desc: RR tire left carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: RRtempCM, desc: RR tire middle carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: RRtempCR, desc: RR tire right carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: RRwearL, desc: RR tire left percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: RRwearM, desc: RR tire middle percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: RRwearR, desc: RR tire right percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: LRbrakeLinePress, desc: LR brake line pressure, unit: bar, type: 4, count: 1, count_as_time: false
-name: LRcoldPressure, desc: LR tire cold pressure  as set in the garage, unit: kPa, type: 4, count: 1, count_as_time: false
-name: LRtempCL, desc: LR tire left carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: LRtempCM, desc: LR tire middle carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: LRtempCR, desc: LR tire right carcass temperature, unit: C, type: 4, count: 1, count_as_time: false
-name: LRwearL, desc: LR tire left percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: LRwearM, desc: LR tire middle percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: LRwearR, desc: LR tire right percent tread remaining, unit: %, type: 4, count: 1, count_as_time: false
-name: CRshockDefl, desc: CR shock deflection, unit: m, type: 4, count: 1, count_as_time: false
-name: CRshockDefl_ST, desc: CR shock deflection at 360 Hz, unit: m, type: 4, count: 6, count_as_time: true
-name: CRshockVel, desc: CR shock velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: CRshockVel_ST, desc: CR shock velocity at 360 Hz, unit: m/s, type: 4, count: 6, count_as_time: true
-name: LRshockDefl, desc: LR shock deflection, unit: m, type: 4, count: 1, count_as_time: false
-name: LRshockDefl_ST, desc: LR shock deflection at 360 Hz, unit: m, type: 4, count: 6, count_as_time: true
-name: LRshockVel, desc: LR shock velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: LRshockVel_ST, desc: LR shock velocity at 360 Hz, unit: m/s, type: 4, count: 6, count_as_time: true
-name: RRshockDefl, desc: RR shock deflection, unit: m, type: 4, count: 1, count_as_time: false
-name: RRshockDefl_ST, desc: RR shock deflection at 360 Hz, unit: m, type: 4, count: 6, count_as_time: true
-name: RRshockVel, desc: RR shock velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: RRshockVel_ST, desc: RR shock velocity at 360 Hz, unit: m/s, type: 4, count: 6, count_as_time: true
-name: LFshockDefl, desc: LF shock deflection, unit: m, type: 4, count: 1, count_as_time: false
-name: LFshockDefl_ST, desc: LF shock deflection at 360 Hz, unit: m, type: 4, count: 6, count_as_time: true
-name: LFshockVel, desc: LF shock velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: LFshockVel_ST, desc: LF shock velocity at 360 Hz, unit: m/s, type: 4, count: 6, count_as_time: true
-name: RFshockDefl, desc: RF shock deflection, unit: m, type: 4, count: 1, count_as_time: false
-name: RFshockDefl_ST, desc: RF shock deflection at 360 Hz, unit: m, type: 4, count: 6, count_as_time: true
-name: RFshockVel, desc: RF shock velocity, unit: m/s, type: 4, count: 1, count_as_time: false
-name: RFshockVel_ST, desc: RF shock velocity at 360 Hz, unit: m/s, type: 4, count: 6, count_as_time: true
-*/
+
+#[derive(Clone)]
+#[repr(i32)]
+pub enum SessionState {
+    StateInvalid,
+    StateGetInCar,
+    StateWarmup,
+    StateParadeLaps,
+    StateRacing,
+    StateCheckered,
+    StateCoolDown,
+}
+
+impl From<i32> for SessionState {
+    fn from(value: i32) -> Self {
+        match value {
+            1 => Self::StateGetInCar,
+            2 => Self::StateWarmup,
+            3 => Self::StateParadeLaps,
+            4 => Self::StateRacing,
+            5 => Self::StateCheckered,
+            6 => Self::StateCoolDown,
+            _ => Self::StateInvalid,
+        }
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone)]
+    #[repr(C)]
+    pub struct Flags: u32 {
+        // global flags
+        const irsdk_checkered        = 0x00000001;
+        const irsdk_white            = 0x00000002;
+        const irsdk_green            = 0x00000004;
+        const irsdk_yellow           = 0x00000008;
+        const irsdk_red              = 0x00000010;
+        const irsdk_blue             = 0x00000020;
+        const irsdk_debris           = 0x00000040;
+        const irsdk_crossed          = 0x00000080;
+        const irsdk_yellowWaving     = 0x00000100;
+        const irsdk_oneLapToGreen    = 0x00000200;
+        const irsdk_greenHeld        = 0x00000400;
+        const irsdk_tenToGo          = 0x00000800;
+        const irsdk_fiveToGo         = 0x00001000;
+        const irsdk_randomWaving     = 0x00002000;
+        const irsdk_caution          = 0x00004000;
+        const irsdk_cautionWaving    = 0x00008000;
+
+        // drivers black flags
+        const irsdk_black			 = 0x00010000;
+        const irsdk_disqualify		 = 0x00020000;
+        const irsdk_servicible		 = 0x00040000; // car is allowed service (not a flag;
+        const irsdk_furled			 = 0x00080000;
+        const irsdk_repair			 = 0x00100000;
+
+        // start lights
+        const irsdk_startHidden		 = 0x10000000;
+        const irsdk_startReady		 = 0x20000000;
+        const irsdk_startSet		 = 0x40000000;
+        const irsdk_startGo			 = 0x80000000;
+    }
+}
+
+#[derive(Clone)]
+#[repr(i32)]
+pub enum TrkLoc {
+    NotInWorld,
+    OffTrack,
+    InPitStall,
+    AproachingPits,
+    OnTrack,
+}
+
+impl From<i32> for TrkLoc {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => Self::OffTrack,
+            1 => Self::InPitStall,
+            2 => Self::AproachingPits,
+            3 => Self::OnTrack,
+            _ => Self::NotInWorld,
+        }
+    }
+}
+
+#[derive(Clone)]
+#[repr(i32)]
+pub enum TrkSurf {
+    SurfaceNotInWorld,
+    UndefinedMaterial,
+    Asphalt1Material,
+    Asphalt2Material,
+    Asphalt3Material,
+    Asphalt4Material,
+    Concrete1Material,
+    Concrete2Material,
+    RacingDirt1Material,
+    RacingDirt2Material,
+    Paint1Material,
+    Paint2Material,
+    Rumble1Material,
+    Rumble2Material,
+    Rumble3Material,
+    Rumble4Material,
+    Grass1Material,
+    Grass2Material,
+    Grass3Material,
+    Grass4Material,
+    Dirt1Material,
+    Dirt2Material,
+    Dirt3Material,
+    Dirt4Material,
+    SandMaterial,
+    Gravel1Material,
+    Gravel2Material,
+    GrasscreteMaterial,
+    AstroturfMaterial,
+}
+
+impl From<i32> for TrkSurf {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => Self::UndefinedMaterial,
+            1 => Self::Asphalt1Material,
+            2 => Self::Asphalt2Material,
+            3 => Self::Asphalt3Material,
+            4 => Self::Asphalt4Material,
+            5 => Self::Concrete1Material,
+            6 => Self::Concrete2Material,
+            7 => Self::RacingDirt1Material,
+            8 => Self::RacingDirt2Material,
+            9 => Self::Paint1Material,
+            10 => Self::Paint2Material,
+            11 => Self::Rumble1Material,
+            12 => Self::Rumble2Material,
+            13 => Self::Rumble3Material,
+            14 => Self::Rumble4Material,
+            15 => Self::Grass1Material,
+            16 => Self::Grass2Material,
+            17 => Self::Grass3Material,
+            18 => Self::Grass4Material,
+            19 => Self::Dirt1Material,
+            20 => Self::Dirt2Material,
+            21 => Self::Dirt3Material,
+            22 => Self::Dirt4Material,
+            23 => Self::SandMaterial,
+            24 => Self::Gravel1Material,
+            25 => Self::Gravel2Material,
+            26 => Self::GrasscreteMaterial,
+            27 => Self::AstroturfMaterial,
+            _ => Self::SurfaceNotInWorld,
+        }
+    }
+}
+
+#[derive(Clone)]
+#[repr(i32)]
+pub enum PitSvStatus {
+    PitSvNone,
+    PitSvInProgress,
+    PitSvComplete,
+    PitSvTooFarLeft,
+    PitSvTooFarRight,
+    PitSvTooFarForward,
+    PitSvTooFarBack,
+    PitSvBadAngle,
+    PitSvCantFixThat,
+}
+
+impl From<i32> for PitSvStatus {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => Self::PitSvNone,
+            1 => Self::PitSvInProgress,
+            2 => Self::PitSvComplete,
+            100 => Self::PitSvTooFarLeft,
+            101 => Self::PitSvTooFarRight,
+            102 => Self::PitSvTooFarForward,
+            103 => Self::PitSvTooFarBack,
+            104 => Self::PitSvBadAngle,
+            105 => Self::PitSvCantFixThat,
+            _ => Self::PitSvNone,
+        }
+    }
+}
+
+#[derive(Clone)]
+#[repr(i32)]
+pub enum PaceMode {
+    PaceModeSingleFileStart,
+    PaceModeDoubleFileStart,
+    PaceModeSingleFileRestart,
+    PaceModeDoubleFileRestart,
+    PaceModeNotPacing,
+}
+
+impl From<i32> for PaceMode {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => Self::PaceModeSingleFileStart,
+            1 => Self::PaceModeDoubleFileStart,
+            2 => Self::PaceModeSingleFileRestart,
+            3 => Self::PaceModeDoubleFileRestart,
+            _ => Self::PaceModeNotPacing,
+        }
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone)]
+    #[repr(C)]
+    pub struct PaceFlags: u32 {
+        const PaceFlagsEndOfLine = 0x01;
+        const PaceFlagsFreePass = 0x02;
+        const PaceFlagsWavedAround = 0x04;
+    }
+}
+
+#[derive(Clone)]
+#[repr(i32)]
+pub enum CarLeftRight {
+    LROff,
+    LRClear,
+    LRCarLeft,
+    LRCarRight,
+    LRCarLeftRight,
+    LR2CarsLeft,
+    LR2CarsRight,
+}
+impl From<i32> for CarLeftRight {
+    fn from(value: i32) -> Self {
+        match value {
+            0 => Self::LROff,
+            1 => Self::LRClear,
+            2 => Self::LRCarLeft,
+            3 => Self::LRCarRight,
+            4 => Self::LRCarLeftRight,
+            5 => Self::LR2CarsLeft,
+            6 => Self::LR2CarsRight,
+            _ => Self::LROff,
+        }
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone)]
+    #[repr(C)]
+    pub struct CameraState: u32 {
+        const IsSessionScreen          = 0x0001;
+        const IsScenicActive           = 0x0002;
+        const CamToolActive            = 0x0004;
+        const UIHidden                 = 0x0008;
+        const UseAutoShotSelection     = 0x0010;
+        const UseTemporaryEdits        = 0x0020;
+        const UseKeyAcceleration       = 0x0040;
+        const UseKey10xAcceleration    = 0x0080;
+        const UseMouseAimMode          = 0x0100;
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone)]
+    #[repr(C)]
+    pub struct EngineWarnings: u32{
+        const waterTempWarning		= 0x01;
+        const fuelPressureWarning	= 0x02;
+        const oilPressureWarning	= 0x04;
+        const engineStalled			= 0x08;
+        const pitSpeedLimiter		= 0x10;
+        const revLimiterActive		= 0x20;
+        const oilTempWarning		= 0x40;
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone)]
+    #[repr(C)]
+    pub struct PitSvFlags: u32{
+        const LFTireChange		= 0x0001;
+        const RFTireChange		= 0x0002;
+        const LRTireChange		= 0x0004;
+        const RRTireChange		= 0x0008;
+        const FuelFill			= 0x0010;
+        const WindshieldTearoff	= 0x0020;
+        const FastRepair		= 0x0040;
+    }
+}

@@ -11,7 +11,12 @@ use windows::{
     },
 };
 
-use self::data::{Data, LiveData, SessionData};
+use crate::Time;
+
+use self::data::{
+    CameraState, Data, EngineWarnings, Flags, LiveData, PaceFlags, PitSvFlags, SessionData, TrkLoc,
+    TrkSurf,
+};
 
 pub mod data;
 
@@ -431,20 +436,28 @@ impl Processor {
 
 fn map_processors(name: &str) -> Processor {
     match name {
-        "SessionTime" => Processor::f64(|d, v| d.session_time = Some(v)), //s
+        "SessionTime" => Processor::f64(|d, v| d.session_time = Some(Time::from_secs(v))), //s
         "SessionTick" => Processor::i32(|d, v| d.session_tick = Some(v)),
         "SessionNum" => Processor::i32(|d, v| d.session_num = Some(v)),
-        "SessionState" => Processor::i32(|d, v| d.session_state = Some(v)), //irsdk_SessionState
+        "SessionState" => Processor::i32(|d, v| d.session_state = Some(v.into())),
         "SessionUniqueID" => Processor::i32(|d, v| d.session_unique_id = Some(v)),
-        "SessionFlags" => Processor::i32(|d, v| d.session_flags = Some(v)), //irsdk_Flags
-        "SessionTimeRemain" => Processor::f64(|d, v| d.session_time_remain = Some(v)), //s
+        "SessionFlags" => {
+            Processor::i32(|d, v| d.session_flags = Some(Flags::from_bits_retain(v as u32)))
+        }
+        "SessionTimeRemain" => {
+            Processor::f64(|d, v| d.session_time_remain = Some(Time::from_secs(v)))
+        } //s
         "SessionLapsRemain" => Processor::i32(|d, v| d.session_laps_remain = Some(v)),
         "SessionLapsRemainEx" => Processor::i32(|d, v| d.session_laps_remain_ex = Some(v)),
-        "SessionTimeTotal" => Processor::f64(|d, v| d.session_time_total = Some(v)), //s
+        "SessionTimeTotal" => {
+            Processor::f64(|d, v| d.session_time_total = Some(Time::from_secs(v)))
+        } //s
         "SessionLapsTotal" => Processor::i32(|d, v| d.session_laps_total = Some(v)),
         "SessionJokerLapsRemain" => Processor::i32(|d, v| d.session_joker_laps_remain = Some(v)),
         "SessionOnJokerLap" => Processor::i8(|d, v| d.session_on_joker_lap = Some(v)),
-        "SessionTimeOfDay" => Processor::f32(|d, v| d.session_time_of_day = Some(v)), //s
+        "SessionTimeOfDay" => {
+            Processor::f32(|d, v| d.session_time_of_day = Some(Time::from_secs(v)))
+        } //s
         "RadioTransmitCarIdx" => Processor::i32(|d, v| d.radio_transmit_car_idx = Some(v)),
         "RadioTransmitRadioIdx" => Processor::i32(|d, v| d.radio_transmit_radio_idx = Some(v)),
         "RadioTransmitFrequencyIdx" => {
@@ -465,21 +478,21 @@ fn map_processors(name: &str) -> Processor {
         "FrameRate" => Processor::f32(|d, v| d.frame_rate = Some(v)), //fps
         "CpuUsageFG" => Processor::f32(|d, v| d.cpu_usage_fg = Some(v)), //%
         "GpuUsage" => Processor::f32(|d, v| d.gpu_usage = Some(v)),   //%
-        "ChanAvgLatency" => Processor::f32(|d, v| d.chan_avg_latency = Some(v)), //s
-        "ChanLatency" => Processor::f32(|d, v| d.chan_latency = Some(v)), //s
-        "ChanQuality" => Processor::f32(|d, v| d.chan_quality = Some(v)), //%
-        "ChanPartnerQuality" => Processor::f32(|d, v| d.chan_partner_quality = Some(v)), //%
-        "CpuUsageBG" => Processor::f32(|d, v| d.cpu_usage_bg = Some(v)), //%
-        "ChanClockSkew" => Processor::f32(|d, v| d.chan_clock_skew = Some(v)), //s
+        "ChanAvgLatency" => Processor::f32(|d, v| d.chan_avg_latency = Some(Time::from_secs(v))), //s
+        "ChanLatency" => Processor::f32(|d, v| d.chan_latency = Some(Time::from_secs(v))), //s
+        "ChanQuality" => Processor::f32(|d, v| d.chan_quality = Some(v)),                  //%
+        "ChanPartnerQuality" => Processor::f32(|d, v| d.chan_partner_quality = Some(v)),   //%
+        "CpuUsageBG" => Processor::f32(|d, v| d.cpu_usage_bg = Some(v)),                   //%
+        "ChanClockSkew" => Processor::f32(|d, v| d.chan_clock_skew = Some(Time::from_secs(v))), //s
         "MemPageFaultSec" => Processor::f32(|d, v| d.mem_page_fault_sec = Some(v)),
         "MemSoftPageFaultSec" => Processor::f32(|d, v| d.mem_soft_page_fault_sec = Some(v)),
         "PlayerCarPosition" => Processor::i32(|d, v| d.player_car_position = Some(v)),
         "PlayerCarClassPosition" => Processor::i32(|d, v| d.player_car_class_position = Some(v)),
         "PlayerCarClass" => Processor::i32(|d, v| d.player_car_class = Some(v)),
-        "PlayerTrackSurface" => Processor::i32(|d, v| d.player_track_surface = Some(v)), //irsdk_TrkLoc
+        "PlayerTrackSurface" => Processor::i32(|d, v| d.player_track_surface = Some(v.into())),
         "PlayerTrackSurfaceMaterial" => {
-            Processor::i32(|d, v| d.player_track_surface_material = Some(v))
-        } //irsdk_TrkSurf
+            Processor::i32(|d, v| d.player_track_surface_material = Some(v.into()))
+        }
         "PlayerCarIdx" => Processor::i32(|d, v| d.player_car_idx = Some(v)),
         "PlayerCarTeamIncidentCount" => {
             Processor::i32(|d, v| d.player_car_team_incident_count = Some(v))
@@ -495,26 +508,40 @@ fn map_processors(name: &str) -> Processor {
         "PlayerCarDryTireSetLimit" => {
             Processor::i32(|d, v| d.player_car_dry_tire_set_limit = Some(v))
         }
-        "PlayerCarTowTime" => Processor::f32(|d, v| d.player_car_tow_time = Some(v)), //s
+        "PlayerCarTowTime" => {
+            Processor::f32(|d, v| d.player_car_tow_time = Some(Time::from_secs(v)))
+        } //s
         "PlayerCarInPitStall" => Processor::i8(|d, v| d.player_car_in_pit_stall = Some(v)),
-        "PlayerCarPitSvStatus" => Processor::i32(|d, v| d.player_car_pit_sv_status = Some(v)), //irsdk_PitSvStatus
+        "PlayerCarPitSvStatus" => {
+            Processor::i32(|d, v| d.player_car_pit_sv_status = Some(v.into()))
+        }
         "PlayerTireCompound" => Processor::i32(|d, v| d.player_tire_compound = Some(v)),
         "PlayerFastRepairsUsed" => Processor::i32(|d, v| d.player_fast_repairs_used = Some(v)),
         "CarIdxLap" => Processor::vec_i32(|d, v| d.car_idx_lap = Some(v)),
         "CarIdxLapCompleted" => Processor::vec_i32(|d, v| d.car_idx_lap_completed = Some(v)),
-        "CarIdxLapDistPct" => Processor::vec_f32(|d, v| d.car_idx_lap_dist_pct = Some(v)), //%
-        "CarIdxTrackSurface" => Processor::vec_i32(|d, v| d.car_idx_track_surface = Some(v)), //irsdk_TrkLoc
-        "CarIdxTrackSurfaceMaterial" => {
-            Processor::vec_i32(|d, v| d.car_idx_track_surface_material = Some(v))
-        } //irsdk_TrkSurf
+        "CarIdxLapDistPct" => Processor::vec_f32(|d, v| d.car_idx_lap_dist_pct = Some(v)),
+        "CarIdxTrackSurface" => Processor::vec_i32(|d, v| {
+            d.car_idx_track_surface = Some(v.iter().map(|v| TrkLoc::from(*v)).collect())
+        }), //irsdk_TrkLoc
+        "CarIdxTrackSurfaceMaterial" => Processor::vec_i32(|d, v| {
+            d.car_idx_track_surface_material = Some(v.iter().map(|v| TrkSurf::from(*v)).collect())
+        }), //irsdk_TrkSurf
         "CarIdxOnPitRoad" => Processor::vec_u8(|d, v| d.car_idx_on_pit_road = Some(v)),
         "CarIdxPosition" => Processor::vec_i32(|d, v| d.car_idx_position = Some(v)),
         "CarIdxClassPosition" => Processor::vec_i32(|d, v| d.car_idx_class_position = Some(v)),
         "CarIdxClass" => Processor::vec_i32(|d, v| d.car_idx_class = Some(v)),
-        "CarIdxF2Time" => Processor::vec_f32(|d, v| d.car_idx_f2_time = Some(v)), //s
-        "CarIdxEstTime" => Processor::vec_f32(|d, v| d.car_idx_est_time = Some(v)), //s
-        "CarIdxLastLapTime" => Processor::vec_f32(|d, v| d.car_idx_last_lap_time = Some(v)), //s
-        "CarIdxBestLapTime" => Processor::vec_f32(|d, v| d.car_idx_best_lap_time = Some(v)), //s
+        "CarIdxF2Time" => Processor::vec_f32(|d, v| {
+            d.car_idx_f2_time = Some(v.iter().map(|v| Time::from_secs(*v)).collect())
+        }), //s
+        "CarIdxEstTime" => Processor::vec_f32(|d, v| {
+            d.car_idx_est_time = Some(v.iter().map(|v| Time::from_secs(*v)).collect())
+        }), //s
+        "CarIdxLastLapTime" => Processor::vec_f32(|d, v| {
+            d.car_idx_last_lap_time = Some(v.iter().map(|v| Time::from_secs(*v)).collect())
+        }), //s
+        "CarIdxBestLapTime" => Processor::vec_f32(|d, v| {
+            d.car_idx_best_lap_time = Some(v.iter().map(|v| Time::from_secs(*v)).collect())
+        }), //s
         "CarIdxBestLapNum" => Processor::vec_i32(|d, v| d.car_idx_best_lap_num = Some(v)),
         "CarIdxTireCompound" => Processor::vec_i32(|d, v| d.car_idx_tire_compound = Some(v)),
         "CarIdxQualTireCompound" => {
@@ -524,11 +551,23 @@ fn map_processors(name: &str) -> Processor {
             Processor::vec_u8(|d, v| d.car_idx_qual_tire_compound_locked = Some(v))
         }
         "CarIdxFastRepairsUsed" => Processor::vec_i32(|d, v| d.car_idx_fast_repairs_used = Some(v)),
-        "CarIdxSessionFlags" => Processor::vec_i32(|d, v| d.car_idx_session_flags = Some(v)), //irsdk_Flags
-        "PaceMode" => Processor::i32(|d, v| d.pace_mode = Some(v)), //irsdk_PaceMode
+        "CarIdxSessionFlags" => Processor::vec_i32(|d, v| {
+            d.car_idx_session_flags = Some(
+                v.iter()
+                    .map(|v| Flags::from_bits_retain(*v as u32))
+                    .collect(),
+            )
+        }),
+        "PaceMode" => Processor::i32(|d, v| d.pace_mode = Some(v.into())), //irsdk_PaceMode
         "CarIdxPaceLine" => Processor::vec_i32(|d, v| d.car_idx_pace_line = Some(v)),
         "CarIdxPaceRow" => Processor::vec_i32(|d, v| d.car_idx_pace_row = Some(v)),
-        "CarIdxPaceFlags" => Processor::vec_i32(|d, v| d.car_idx_pace_flags = Some(v)), //irsdk_PaceFlags
+        "CarIdxPaceFlags" => Processor::vec_i32(|d, v| {
+            d.car_idx_pace_flags = Some(
+                v.iter()
+                    .map(|v| PaceFlags::from_bits_retain(*v as u32))
+                    .collect(),
+            )
+        }), //irsdk_PaceFlags
         "OnPitRoad" => Processor::i8(|d, v| d.on_pit_road = Some(v)),
         "CarIdxSteer" => Processor::vec_f32(|d, v| d.car_idx_steer = Some(v)), //rad
         "CarIdxRPM" => Processor::vec_f32(|d, v| d.car_idx_rpm = Some(v)),     //revs/min
@@ -545,21 +584,31 @@ fn map_processors(name: &str) -> Processor {
         "LapDistPct" => Processor::f32(|d, v| d.lap_dist_pct = Some(v)), //%
         "RaceLaps" => Processor::i32(|d, v| d.race_laps = Some(v)),
         "LapBestLap" => Processor::i32(|d, v| d.lap_best_lap = Some(v)),
-        "LapBestLapTime" => Processor::f32(|d, v| d.lap_best_lap_time = Some(v)), //s
-        "LapLastLapTime" => Processor::f32(|d, v| d.lap_last_lap_time = Some(v)), //s
-        "LapCurrentLapTime" => Processor::f32(|d, v| d.lap_current_lap_time = Some(v)), //s
+        "LapBestLapTime" => Processor::f32(|d, v| d.lap_best_lap_time = Some(Time::from_secs(v))), //s
+        "LapLastLapTime" => Processor::f32(|d, v| d.lap_last_lap_time = Some(Time::from_secs(v))), //s
+        "LapCurrentLapTime" => {
+            Processor::f32(|d, v| d.lap_current_lap_time = Some(Time::from_secs(v)))
+        } //s
         "LapLasNLapSeq" => Processor::i32(|d, v| d.lap_las_n_lap_seq = Some(v)),
-        "LapLastNLapTime" => Processor::f32(|d, v| d.lap_last_n_lap_time = Some(v)), //s
+        "LapLastNLapTime" => {
+            Processor::f32(|d, v| d.lap_last_n_lap_time = Some(Time::from_secs(v)))
+        } //s
         "LapBestNLapLap" => Processor::i32(|d, v| d.lap_best_n_lap_lap = Some(v)),
-        "LapBestNLapTime" => Processor::f32(|d, v| d.lap_best_n_lap_time = Some(v)), //s
-        "LapDeltaToBestLap" => Processor::f32(|d, v| d.lap_delta_to_best_lap = Some(v)), //s
+        "LapBestNLapTime" => {
+            Processor::f32(|d, v| d.lap_best_n_lap_time = Some(Time::from_secs(v)))
+        } //s
+        "LapDeltaToBestLap" => {
+            Processor::f32(|d, v| d.lap_delta_to_best_lap = Some(Time::from_secs(v)))
+        } //s
         "LapDeltaToBestLap_DD" => Processor::f32(|d, v| d.lap_delta_to_best_lap_dd = Some(v)), //s/s
         "LapDeltaToBestLap_OK" => Processor::i8(|d, v| d.lap_delta_to_best_lap_ok = Some(v)),
-        "LapDeltaToOptimalLap" => Processor::f32(|d, v| d.lap_delta_to_optimal_lap = Some(v)), //s
+        "LapDeltaToOptimalLap" => {
+            Processor::f32(|d, v| d.lap_delta_to_optimal_lap = Some(Time::from_secs(v)))
+        } //s
         "LapDeltaToOptimalLap_DD" => Processor::f32(|d, v| d.lap_delta_to_optimal_lap_dd = Some(v)), //s/s
         "LapDeltaToOptimalLap_OK" => Processor::i8(|d, v| d.lap_delta_to_optimal_lap_ok = Some(v)),
         "LapDeltaToSessionBestLap" => {
-            Processor::f32(|d, v| d.lap_delta_to_session_best_lap = Some(v))
+            Processor::f32(|d, v| d.lap_delta_to_session_best_lap = Some(Time::from_secs(v)))
         } //s
         "LapDeltaToSessionBestLap_DD" => {
             Processor::f32(|d, v| d.lap_delta_to_session_best_lap_dd = Some(v))
@@ -568,7 +617,7 @@ fn map_processors(name: &str) -> Processor {
             Processor::i8(|d, v| d.lap_delta_to_session_best_lap_ok = Some(v))
         }
         "LapDeltaToSessionOptimalLap" => {
-            Processor::f32(|d, v| d.lap_delta_to_session_optimal_lap = Some(v))
+            Processor::f32(|d, v| d.lap_delta_to_session_optimal_lap = Some(Time::from_secs(v)))
         } //s
         "LapDeltaToSessionOptimalLap_DD" => {
             Processor::f32(|d, v| d.lap_delta_to_session_optimal_lap_dd = Some(v))
@@ -577,7 +626,7 @@ fn map_processors(name: &str) -> Processor {
             Processor::i8(|d, v| d.lap_delta_to_session_optimal_lap_ok = Some(v))
         }
         "LapDeltaToSessionLastlLap" => {
-            Processor::f32(|d, v| d.lap_delta_to_session_lastl_lap = Some(v))
+            Processor::f32(|d, v| d.lap_delta_to_session_lastl_lap = Some(Time::from_secs(v)))
         } //s
         "LapDeltaToSessionLastlLap_DD" => {
             Processor::f32(|d, v| d.lap_delta_to_session_lastl_lap_dd = Some(v))
@@ -608,12 +657,14 @@ fn map_processors(name: &str) -> Processor {
         "DCDriversSoFar" => Processor::i32(|d, v| d.dc_drivers_so_far = Some(v)),
         "OkToReloadTextures" => Processor::i8(|d, v| d.ok_to_reload_textures = Some(v)),
         "LoadNumTextures" => Processor::i8(|d, v| d.load_num_textures = Some(v)),
-        "CarLeftRight" => Processor::i32(|d, v| d.car_left_right = Some(v)), //irsdk_CarLeftRight
+        "CarLeftRight" => Processor::i32(|d, v| d.car_left_right = Some(v.into())),
         "PitsOpen" => Processor::i8(|d, v| d.pits_open = Some(v)),
         "VidCapEnabled" => Processor::i8(|d, v| d.vid_cap_enabled = Some(v)),
         "VidCapActive" => Processor::i8(|d, v| d.vid_cap_active = Some(v)),
-        "PitRepairLeft" => Processor::f32(|d, v| d.pit_repair_left = Some(v)), //s
-        "PitOptRepairLeft" => Processor::f32(|d, v| d.pit_opt_repair_left = Some(v)), //s
+        "PitRepairLeft" => Processor::f32(|d, v| d.pit_repair_left = Some(Time::from_secs(v))), //s
+        "PitOptRepairLeft" => {
+            Processor::f32(|d, v| d.pit_opt_repair_left = Some(Time::from_secs(v)))
+        } //s
         "PitstopActive" => Processor::i8(|d, v| d.pitstop_active = Some(v)),
         "FastRepairUsed" => Processor::i32(|d, v| d.fast_repair_used = Some(v)),
         "FastRepairAvailable" => Processor::i32(|d, v| d.fast_repair_available = Some(v)),
@@ -638,7 +689,9 @@ fn map_processors(name: &str) -> Processor {
         "CamCarIdx" => Processor::i32(|d, v| d.cam_car_idx = Some(v)),
         "CamCameraNumber" => Processor::i32(|d, v| d.cam_camera_number = Some(v)),
         "CamGroupNumber" => Processor::i32(|d, v| d.cam_group_number = Some(v)),
-        "CamCameraState" => Processor::i32(|d, v| d.cam_camera_state = Some(v)), //irsdk_CameraState
+        "CamCameraState" => Processor::i32(|d, v| {
+            d.cam_camera_state = Some(CameraState::from_bits_retain(v as u32))
+        }),
         "IsOnTrackCar" => Processor::i8(|d, v| d.is_on_track_car = Some(v)),
         "IsInGarage" => Processor::i8(|d, v| d.is_in_garage = Some(v)),
         "SteeringWheelAngleMax" => Processor::f32(|d, v| d.steering_wheel_angle_max = Some(v)), //rad
@@ -649,14 +702,18 @@ fn map_processors(name: &str) -> Processor {
         "ClutchRaw" => Processor::f32(|d, v| d.clutch_raw = Some(v)),          //%
         "HandbrakeRaw" => Processor::f32(|d, v| d.handbrake_raw = Some(v)),    //%
         "BrakeABSactive" => Processor::i8(|d, v| d.brake_ab_sactive = Some(v)),
-        "EngineWarnings" => Processor::i32(|d, v| d.engine_warnings = Some(v)), //irsdk_EngineWarnings
-        "FuelLevelPct" => Processor::f32(|d, v| d.fuel_level_pct = Some(v)),    //%
-        "PitSvFlags" => Processor::i32(|d, v| d.pit_sv_flags = Some(v)),        //irsdk_PitSvFlags
-        "PitSvLFP" => Processor::f32(|d, v| d.pit_sv_lfp = Some(v)),            //kPa
-        "PitSvRFP" => Processor::f32(|d, v| d.pit_sv_rfp = Some(v)),            //kPa
-        "PitSvLRP" => Processor::f32(|d, v| d.pit_sv_lrp = Some(v)),            //kPa
-        "PitSvRRP" => Processor::f32(|d, v| d.pit_sv_rrp = Some(v)),            //kPa
-        "PitSvFuel" => Processor::f32(|d, v| d.pit_sv_fuel = Some(v)),          //l or kWh
+        "EngineWarnings" => Processor::i32(|d, v| {
+            d.engine_warnings = Some(EngineWarnings::from_bits_retain(v as u32))
+        }),
+        "FuelLevelPct" => Processor::f32(|d, v| d.fuel_level_pct = Some(v)), //%
+        "PitSvFlags" => {
+            Processor::i32(|d, v| d.pit_sv_flags = Some(PitSvFlags::from_bits_retain(v as u32)))
+        }
+        "PitSvLFP" => Processor::f32(|d, v| d.pit_sv_lfp = Some(v)), //kPa
+        "PitSvRFP" => Processor::f32(|d, v| d.pit_sv_rfp = Some(v)), //kPa
+        "PitSvLRP" => Processor::f32(|d, v| d.pit_sv_lrp = Some(v)), //kPa
+        "PitSvRRP" => Processor::f32(|d, v| d.pit_sv_rrp = Some(v)), //kPa
+        "PitSvFuel" => Processor::f32(|d, v| d.pit_sv_fuel = Some(v)), //l or kWh
         "PitSvTireCompound" => Processor::i32(|d, v| d.pit_sv_tire_compound = Some(v)),
         "CarIdxP2P_Status" => Processor::vec_u8(|d, v| d.car_idx_p2p_status = Some(v)),
         "CarIdxP2P_Count" => Processor::vec_i32(|d, v| d.car_idx_p2p_count = Some(v)),
@@ -680,7 +737,9 @@ fn map_processors(name: &str) -> Processor {
         "ShiftIndicatorPct" => Processor::f32(|d, v| d.shift_indicator_pct = Some(v)), //%
         "ReplayPlaySpeed" => Processor::i32(|d, v| d.replay_play_speed = Some(v)),
         "ReplayPlaySlowMotion" => Processor::i8(|d, v| d.replay_play_slow_motion = Some(v)),
-        "ReplaySessionTime" => Processor::f64(|d, v| d.replay_session_time = Some(v)), //s
+        "ReplaySessionTime" => {
+            Processor::f64(|d, v| d.replay_session_time = Some(Time::from_secs(v)))
+        } //s
         "ReplaySessionNum" => Processor::i32(|d, v| d.replay_session_num = Some(v)),
         "TireLF_RumblePitch" => Processor::f32(|d, v| d.tire_lf_rumble_pitch = Some(v)), //Hz
         "TireRF_RumblePitch" => Processor::f32(|d, v| d.tire_rf_rumble_pitch = Some(v)), //Hz
