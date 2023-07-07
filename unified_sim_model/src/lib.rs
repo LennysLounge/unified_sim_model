@@ -39,7 +39,7 @@ pub trait GameAdapter {
         &mut self,
         model: Arc<RwLock<Model>>,
         command_rx: mpsc::Receiver<AdapterCommand>,
-        update_event: &UpdateEvent,
+        update_event: UpdateEvent,
     ) -> Result<(), AdapterError>;
 }
 
@@ -175,7 +175,7 @@ impl Adapter {
         thread::Builder::new()
             .name("Acc connection".into())
             .spawn(move || {
-                let result = game.run(model, command_rx, &update_event);
+                let result = game.run(model, command_rx, update_event.clone());
                 update_event.disable();
                 result
             })

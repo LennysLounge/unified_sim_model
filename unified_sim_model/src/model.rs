@@ -24,6 +24,7 @@ use indexmap::IndexMap;
 use crate::{
     games::acc::model::{AccCamera, AccEntry, AccSession},
     time::Time,
+    Distance, Temperature,
 };
 
 /// A single piece of data in the model that carries extra information about its
@@ -100,6 +101,11 @@ impl<T> Value<T> {
         self.available = true;
     }
 
+    /// Set the value to be unavailable.
+    pub fn set_unavailable(&mut self) {
+        self.available = false;
+    }
+
     /// Set the inner value to a value provided by the game.
     /// This sets the `available` flag to true and the `editable` flag to false.
     ///
@@ -119,6 +125,16 @@ impl<T> Value<T> {
     pub fn edit(&mut self, new_value: T) {
         self.value = new_value;
         self.available = true;
+    }
+
+    /// Return if this value is available.
+    pub fn is_avaliable(&self) -> bool {
+        self.available
+    }
+
+    /// Return if this value is editable.
+    pub fn is_editable(&self) -> bool {
+        self.editable
     }
 }
 
@@ -281,11 +297,13 @@ pub struct Session {
     /// - **Assetto Corsa Competizione:**
     /// The week day of the session is availabe in Acc. It will default to be sunday.
     /// This value is editable for the entire duration of the event.
+    /// - **iRacing:**
+    /// Not yet implemented.
     pub day: Value<Day>,
     /// The air temperature.
-    pub ambient_temp: Value<f32>,
+    pub ambient_temp: Value<Temperature>,
     /// The track temperature
-    pub track_temp: Value<f32>,
+    pub track_temp: Value<Temperature>,
     /// The best lap of the session.
     pub best_lap: Value<Option<Lap>>,
     /// Name of the track.
@@ -301,7 +319,7 @@ pub struct Session {
     /// - **Assetto Corsa Competizione:**
     /// After the session changes or when the adapter first connects there might be a short delay before
     /// the track length is availabe.
-    pub track_length: Value<i32>,
+    pub track_length: Value<Distance>,
     /// Contains additional data that is game specific.
     pub game_data: SessionGameData,
 }

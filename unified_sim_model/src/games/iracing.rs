@@ -8,11 +8,19 @@ use std::{
 };
 
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, warn};
 
-use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
+use crate::{
+    log_todo,
+    model::{self, Model, SessionGameData},
+    AdapterCommand, GameAdapter, Temperature, UpdateEvent,
+};
 
-use self::irsdk::Irsdk;
+use self::irsdk::{
+    live_data::{self},
+    static_data::{self, MaybeUnlimited, WeekendInfo, WeekendOptions},
+    Data, Irsdk,
+};
 
 pub mod irsdk;
 
@@ -35,42 +43,75 @@ impl From<IRacingError> for crate::AdapterError {
     }
 }
 
-pub struct IRacingAdapter {}
+pub struct IRacingAdapter;
 impl GameAdapter for IRacingAdapter {
     fn run(
         &mut self,
-        _model: Arc<RwLock<Model>>,
+        model: Arc<RwLock<Model>>,
         command_rx: Receiver<AdapterCommand>,
-        update_event: &UpdateEvent,
+        update_event: UpdateEvent,
     ) -> Result<()> {
-        let mut irsdk = Irsdk::new().map_err(|_| IRacingError::GameNotRunning)?;
+        let sdk = Irsdk::new().map_err(|_| IRacingError::GameNotRunning)?;
 
+        if let Ok(mut model) = model.write() {
+            model.connected = true;
+        }
+        let mut connection = IRacingConnection::new(model.clone(), command_rx, update_event, sdk);
+        let result = connection.run_loop();
+
+        if let Ok(mut model) = model.write() {
+            model.connected = false;
+        }
+
+        result
+    }
+}
+
+struct IRacingConnection {
+    model: Arc<RwLock<Model>>,
+    command_rx: Receiver<AdapterCommand>,
+    update_event: UpdateEvent,
+    sdk: Irsdk,
+    last_static_data_update: i32,
+}
+
+impl IRacingConnection {
+    fn new(
+        model: Arc<RwLock<Model>>,
+        command_rx: Receiver<AdapterCommand>,
+        update_event: UpdateEvent,
+        sdk: Irsdk,
+    ) -> Self {
+        Self {
+            model,
+            command_rx,
+            update_event,
+            sdk,
+            last_static_data_update: -1,
+        }
+    }
+
+    fn run_loop(&mut self) -> Result<()> {
         loop {
-            let should_close = Self::handle_commands(&command_rx)?;
+            let should_close = self.handle_commands()?;
             if should_close {
                 break;
             }
 
-            let _data = irsdk.poll().map_err(|e| match e {
+            let data = self.sdk.poll().map_err(|e| match e {
                 irsdk::PollError::NotConnected => IRacingError::Disconnected,
             })?;
 
-            //info!("laps: {:?}", data.car_idx_lap);
-
-            //Self::update_model(&data, &model)?;
-
-            update_event.trigger();
+            self.update_model(&data)?;
+            self.update_event.trigger();
 
             thread::sleep(Duration::from_millis(100));
         }
-
         Ok(())
     }
-}
 
-impl IRacingAdapter {
-    fn handle_commands(receiver: &Receiver<AdapterCommand>) -> Result<bool> {
-        let should_close = match receiver.try_recv() {
+    fn handle_commands(&self) -> Result<bool> {
+        let should_close = match self.command_rx.try_recv() {
             Ok(command) => match command {
                 AdapterCommand::Close => true,
                 AdapterCommand::FocusOnCar(_) => {
@@ -93,13 +134,189 @@ impl IRacingAdapter {
         Ok(should_close)
     }
 
-    // fn update_model(data: &Data, model: &Arc<RwLock<Model>>) -> Result<()> {
-    //     let model = model
-    //         .write()
-    //         .map_err(|_| IRacingError::Other("Model was poisoned".into()))?;
+    fn update_model(&mut self, data: &Data) -> Result<()> {
+        let mut model = self
+            .model
+            .write()
+            .map_err(|_| IRacingError::Other("Model was poisoned".into()))?;
 
-    //     //info!("Current gear: {:?}", data.gear.value());
+        // Create sessions
+        if data
+            .static_data
+            .session_info
+            .as_ref()
+            .is_some_and(|s| s.sessions.len() != model.sessions.len())
+        {
+            let sessions = &data.static_data.session_info.as_ref().unwrap().sessions;
+            for session_info in sessions {
+                let Some(session_num) = session_info.session_num else {break;};
+                let session_id = model::SessionId(session_num as usize);
+                model.sessions.insert(
+                    session_id,
+                    model::Session {
+                        id: session_id,
+                        game_data: SessionGameData::None,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
 
-    //     Ok(())
-    // }
+        // Update static data
+        if data.static_data.update_count != self.last_static_data_update {
+            self.last_static_data_update = data.static_data.update_count;
+
+            let sessions = &data.static_data.session_info.as_ref().unwrap().sessions;
+            for session_info in sessions {
+                let Some(session_num) = session_info.session_num else {break;};
+                let session_id = model::SessionId(session_num as usize);
+                let Some(ref mut session) = model.sessions.get_mut(&session_id) else {break;};
+
+                update_session_static(session, &data.static_data, session_info);
+            }
+        }
+
+        // Set current session.
+        let current_session_num = data.live_data.session_num.ok_or(IRacingError::Other(
+            "No session number in live data".to_owned(),
+        ))?;
+        let current_session_id = model::SessionId(current_session_num as usize);
+        if !model.sessions.contains_key(&current_session_id) {
+            return Err(IRacingError::Other(
+                "Current session number is not a valid session".to_owned(),
+            )
+            .into());
+        }
+        model.current_session = Some(current_session_id);
+
+        // Update session.
+        let mut current_session = model
+            .current_session_mut()
+            .expect("The current session should be available");
+        update_session_live(&mut current_session, &data.live_data);
+
+        Ok(())
+    }
+}
+
+fn update_session_live(session: &mut model::Session, data: &live_data::LiveData) {
+    if let Some(ref session_state) = data.session_state {
+        session.phase.set(map_session_phase(session_state));
+    }
+
+    if let Some(ref time_remaining) = data.session_time_remain {
+        session.time_remaining.set(time_remaining.clone());
+    }
+
+    if let Some(ref laps_remaining) = data.session_laps_remain {
+        session.laps_remaining.set(laps_remaining.clone());
+    }
+
+    if let Some(ambient_temp) = data.air_temp {
+        session
+            .ambient_temp
+            .set(Temperature::from_celcius(ambient_temp));
+    }
+
+    if let Some(track_temp) = data.track_temp {
+        session
+            .track_temp
+            .set(Temperature::from_celcius(track_temp));
+    }
+
+    if let Some(time_of_day) = data.session_time_of_day {
+        session.time_of_day.set(time_of_day.clone());
+    }
+}
+
+fn update_session_static(
+    session: &mut model::Session,
+    data: &static_data::StaticData,
+    session_info: &static_data::Session,
+) {
+    if let Some(ref session_type_str) = session_info.session_type {
+        session.session_type.set(map_session_type(session_type_str));
+    }
+
+    if let Some(ref session_time) = session_info.session_time {
+        match session_time {
+            MaybeUnlimited::Unlimited => session.session_time.set_unavailable(),
+            MaybeUnlimited::Value(t) => session.session_time.set(t.clone()),
+        }
+    }
+
+    if let Some(ref session_laps) = session_info.session_laps {
+        match session_laps {
+            MaybeUnlimited::Unlimited => session.laps.set_unavailable(),
+            MaybeUnlimited::Value(laps) => session.laps.set(laps.clone()),
+        }
+    }
+
+    if let Some(WeekendInfo {
+        weekend_options:
+            Some(WeekendOptions {
+                time_of_day: Some(ref time_of_day),
+                ..
+            }),
+        ..
+    }) = data.weekend_info
+    {
+        session.time_of_day.set(time_of_day.clone());
+    }
+
+    if let Some(WeekendInfo {
+        track_name: Some(ref track_name),
+        ..
+    }) = data.weekend_info
+    {
+        session.track_name.set(track_name.clone());
+    }
+
+    if let Some(WeekendInfo {
+        track_length: Some(ref track_length),
+        ..
+    }) = data.weekend_info
+    {
+        session.track_length.set(track_length.clone());
+    }
+
+    if let Some(WeekendInfo {
+        track_surface_temp: Some(ref track_temp),
+        ..
+    }) = data.weekend_info
+    {
+        session.track_temp.set(track_temp.clone());
+    }
+
+    if let Some(WeekendInfo {
+        track_air_temp: Some(ref ambient_temp),
+        ..
+    }) = data.weekend_info
+    {
+        session.ambient_temp.set(ambient_temp.clone());
+    }
+}
+
+fn map_session_type(session_type_str: &str) -> model::SessionType {
+    match session_type_str {
+        "Race" => model::SessionType::Race,
+        "Practice" => model::SessionType::Practice,
+        "Open Qualify" => model::SessionType::Qualifying,
+        _ => {
+            warn!("Unknown session type: {}", session_type_str);
+            model::SessionType::None
+        }
+    }
+}
+
+fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionPhase {
+    match session_state {
+        live_data::SessionState::StateInvalid => model::SessionPhase::Waiting,
+        live_data::SessionState::StateGetInCar => model::SessionPhase::Preparing,
+        live_data::SessionState::StateWarmup => model::SessionPhase::Preparing,
+        live_data::SessionState::StateParadeLaps => model::SessionPhase::Formation,
+        live_data::SessionState::StateRacing => model::SessionPhase::Active,
+        live_data::SessionState::StateCheckered => model::SessionPhase::Ending,
+        live_data::SessionState::StateCoolDown => model::SessionPhase::Finished,
+    }
 }

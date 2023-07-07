@@ -13,17 +13,26 @@ use windows::{
 
 use crate::Time;
 
-use self::data::{
-    CameraState, Data, EngineWarnings, Flags, LiveData, PaceFlags, PitSvFlags, SessionData, TrkLoc,
-    TrkSurf,
+use self::{
+    live_data::{
+        CameraState, EngineWarnings, Flags, LiveData, PaceFlags, PitSvFlags, TrkLoc, TrkSurf,
+    },
+    static_data::StaticData,
 };
 
-pub mod data;
+pub mod live_data;
+pub mod static_data;
 
 pub const MAX_BUFFERS: usize = 4;
 pub const _SUPPORTED_VERSION: i32 = 2;
 pub const MAX_STRING: usize = 32;
 pub const MAX_DESC: usize = 64;
+
+#[derive(Default, Clone)]
+pub struct Data {
+    pub static_data: StaticData,
+    pub live_data: LiveData,
+}
 
 #[derive(Debug, Error)]
 pub enum PollError {
@@ -46,7 +55,7 @@ pub struct Irsdk {
     /// Last update number of the session data.
     session_data_last_udpate: i32,
     /// The current session data.
-    session_data: SessionData,
+    session_data: StaticData,
 }
 
 impl Irsdk {
@@ -74,7 +83,7 @@ impl Irsdk {
             var_handlers: Vec::new(),
             connected: false,
             session_data_last_udpate: 0,
-            session_data: SessionData::default(),
+            session_data: StaticData::default(),
         });
     }
 
@@ -107,7 +116,7 @@ impl Irsdk {
         }
 
         let mut data = Data::default();
-        data.session_data = self.session_data.clone();
+        data.static_data = self.session_data.clone();
 
         // Read var buffer
         self.parse_var_buffer(header, &mut data);
@@ -128,7 +137,7 @@ impl Irsdk {
         let session_str = String::from_utf8_lossy(&session_str_buffer)
             .trim_matches('\0')
             .to_string();
-        let session_data = serde_yaml::from_str::<SessionData>(&session_str);
+        let session_data = serde_yaml::from_str::<StaticData>(&session_str);
         if let Err(ref e) = session_data {
             warn!(
                 "Error parsing session data yaml. Using default instead: {}",
@@ -137,6 +146,7 @@ impl Irsdk {
         }
         // TODO: This should probably create an error instead of using the default.
         self.session_data = session_data.unwrap_or_default();
+        self.session_data.update_count = header.session_data_update;
         for entry in self.session_data.get_unmapped().iter() {
             warn!("Unmapped field in session string: {:?}", entry);
         }

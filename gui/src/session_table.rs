@@ -284,7 +284,7 @@ fn display_entries_table(
                             let mut delta = RichText::new(entry.performance_delta.format());
                             if *entry.current_lap.invalid {
                                 delta = delta.color(egui::Color32::RED);
-                            } else if entry.performance_delta.ms < 0 {
+                            } else if entry.performance_delta.ms < 0.0 {
                                 delta = delta.color(egui::Color32::GREEN);
                             }
                             ui.label(delta);

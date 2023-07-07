@@ -9,7 +9,7 @@ use crate::{
         Model, Nationality, Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
     },
     time::Time,
-    AdapterError, GameAdapter, UpdateEvent,
+    AdapterError, Distance, GameAdapter, Temperature, UpdateEvent,
 };
 
 #[derive(Default)]
@@ -20,7 +20,7 @@ impl GameAdapter for DummyAdapter {
         &mut self,
         model: Arc<RwLock<Model>>,
         _command_rx: mpsc::Receiver<crate::AdapterCommand>,
-        _update_event: &UpdateEvent,
+        _update_event: UpdateEvent,
     ) -> Result<(), AdapterError> {
         let mut model = model.write().expect("Should be able to lock for writing");
 
@@ -45,8 +45,8 @@ impl GameAdapter for DummyAdapter {
             phase: Value::new(SessionPhase::Active),
             time_of_day: Value::new(Time::from(50_846_123)),
             day: Value::new(Day::Sunday),
-            ambient_temp: Value::new(24.0),
-            track_temp: Value::new(26.0),
+            ambient_temp: Value::new(Temperature::from_celcius(24.0)),
+            track_temp: Value::new(Temperature::from_celcius(26.0)),
             best_lap: Value::new(Some(Lap {
                 time: Value::new(Time::from(81_1234)),
                 splits: Value::new(vec![
@@ -59,7 +59,7 @@ impl GameAdapter for DummyAdapter {
                 invalid: Value::new(false),
             })),
             track_name: Value::new("Dummy track".to_string()),
-            track_length: Value::new(1234),
+            track_length: Value::new(Distance::from_meter(1234.0)),
             game_data: SessionGameData::None,
         });
         model.current_session = Some(id);

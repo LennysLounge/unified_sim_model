@@ -20,7 +20,7 @@ impl Display for Distance {
 impl Distance {
     /// Create a distance from meters.
     #[allow(dead_code)]
-    pub fn from_meters(v: f32) -> Self {
+    pub fn from_meter(v: f32) -> Self {
         Self { meter: v }
     }
 

@@ -43,7 +43,7 @@ impl Dialog for App {
         if let Some(ref mut adapter) = self.adapter {
             if adapter.is_finished() {
                 if let Some(Err(e)) = adapter.join() {
-                    info!("Connection closed: {:?}", e);
+                    info!("Connection closed: {}", e);
                 }
             }
         }
@@ -67,6 +67,10 @@ impl Dialog for App {
                         }
                         if ui.button("ACC").clicked() {
                             self.adapter = Some(Adapter::new_acc());
+                            ui.close_menu();
+                        }
+                        if ui.button("iRacing").clicked() {
+                            self.adapter = Some(Adapter::new_iracing());
                             ui.close_menu();
                         }
                     }

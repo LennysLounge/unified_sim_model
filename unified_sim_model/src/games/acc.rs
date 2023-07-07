@@ -66,7 +66,7 @@ impl GameAdapter for AccAdapter {
         &mut self,
         model: Arc<RwLock<Model>>,
         command_rx: mpsc::Receiver<AdapterCommand>,
-        update_event: &UpdateEvent,
+        update_event: UpdateEvent,
     ) -> result::Result<(), crate::AdapterError> {
         // Setup the model state for this game.
         if let Ok(mut model) = model.write() {

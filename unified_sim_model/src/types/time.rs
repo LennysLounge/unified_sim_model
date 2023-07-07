@@ -38,7 +38,7 @@ impl Time {
     /// Create a time from seconds.
     pub fn from_secs(secs: impl Into<f64>) -> Self {
         Self {
-            ms: secs.into() / 1000.0,
+            ms: secs.into() * 1000.0,
         }
     }
 

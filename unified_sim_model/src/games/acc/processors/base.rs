@@ -14,6 +14,7 @@ use crate::{
         Nationality, Session, SessionGameData, Value,
     },
     time::Time,
+    Distance, Temperature,
 };
 
 /// A processor to transfer game data directly into the model.
@@ -136,8 +137,12 @@ impl AccProcessor for BaseProcessor {
         session
             .time_of_day
             .set((update.time_of_day * 1000.0).into());
-        session.ambient_temp.set(update.ambient_temp as f32);
-        session.track_temp.set(update.track_temp as f32);
+        session
+            .ambient_temp
+            .set(Temperature::from_celcius(update.ambient_temp as f32));
+        session
+            .track_temp
+            .set(Temperature::from_celcius(update.track_temp as f32));
 
         // Set focused car.
         let focused_entry = EntryId(update.focused_car_id);
@@ -219,7 +224,9 @@ impl AccProcessor for BaseProcessor {
         debug!("Track data");
         if let Some(session) = context.model.current_session_mut() {
             session.track_name.set(track.track_name.clone());
-            session.track_length.set(track.track_meter);
+            session
+                .track_length
+                .set(Distance::from_meter(track.track_meter as f32));
         }
         let available_cameras = &mut context.model.available_cameras;
         for (set, cameras) in track.camera_sets.iter() {
