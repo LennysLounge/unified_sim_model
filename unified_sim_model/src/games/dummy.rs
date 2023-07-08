@@ -91,13 +91,13 @@ impl GameAdapter for DummyAdapter {
                         }
                         drivers
                     },
-                    current_driver: DriverId(0),
+                    current_driver: Some(DriverId(0)),
                     team_name: Value::new(format!("Team nr.{}", i)),
-                    car: Value::new(Car {
-                        name: "Car model",
-                        manufacturer: "Manufacturer",
-                        category: CarCategory { name: "Car Cat" },
-                    }),
+                    car: Value::new(Car::new_static(
+                        "Car model",
+                        "Manufacturer",
+                        CarCategory { name: "Car Cat" },
+                    )),
                     car_number: Value::new(i),
                     nationality: Value::new(Nationality::NONE),
                     world_pos: Value::new([0.0, 0.0, 0.0]),

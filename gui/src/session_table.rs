@@ -237,7 +237,7 @@ fn display_entries_table(
                             ui.label(driver_name);
                         });
                         row.cell(|ui| {
-                            ui.label(entry.car.name);
+                            ui.label(entry.car.name());
                         });
                         let r = row.cell_sense(Sense::click(), |ui| {
                             ui.label(format!("{:.3}", entry.distance_driven));

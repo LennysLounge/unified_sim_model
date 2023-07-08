@@ -344,7 +344,7 @@ pub struct Entry {
     /// The collection of drivers registered for this entry.
     pub drivers: HashMap<DriverId, Driver>,
     /// The currently driving drivier.
-    pub current_driver: DriverId,
+    pub current_driver: Option<DriverId>,
     /// The name of the team.
     ///
     /// ### Availability:
@@ -353,6 +353,10 @@ pub struct Entry {
     /// This value can be edited for the entire duration of the connection.
     pub team_name: Value<String>,
     /// The car this entry is driving.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// Only the car name is available at the moment.
     pub car: Value<Car>,
     /// The car number for this entry.
     pub car_number: Value<i32>,
@@ -362,12 +366,19 @@ pub struct Entry {
     /// - **Assetto Corsa Competizione:**
     /// Team nationality is not availabe.
     /// This value can be edited for the entire duration of the connection.
+    /// - **iRacing:**
+    /// Team nationality is not availabe.
+    /// This value can be edited for the entire duration of the connection.
     pub nationality: Value<Nationality>,
     /// The position of this car in an x, y, z coordinate system.
     ///
     /// ### Availability:
     /// - ** Assetto Corsa Competizione:**
     /// The world position is not availabe in ACC.
+    /// TODO: It is possible to approximate the world position using the spline position
+    /// and the track map.
+    /// - ** iRacing:**
+    /// The world position is not availabe in iRacing.
     /// TODO: It is possible to approximate the world position using the spline position
     /// and the track map.
     pub world_pos: Value<[f32; 3]>,
@@ -407,12 +418,19 @@ pub struct Entry {
     /// The current speed of the entry in m/s.
     pub speed: Value<f32>,
     /// If the entry is currently connected to the session.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// In iRacing all drivers of a session are always listed in that session.
+    /// It is not know when the player itself enters or leaves the session.
     pub connected: Value<bool>,
     /// The current stint time of the entry.
     ///
     /// ### Availability:
     /// - **Assetto Corsa Competizione:**
     /// Stint time is not implemented for ACC yet.
+    /// - **iRacing:**
+    /// Stint time is not implemented for iRacing yet.
     pub stint_time: Value<Time>,
     /// The distance driven by this entry in laps.
     /// This is simply the lap count + the current lap progress from the spline position.
@@ -445,14 +463,24 @@ pub struct Driver {
     /// The last name of the driver.
     pub last_name: Value<String>,
     /// The short name of the driver.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// A short name is not available.
     pub short_name: Value<String>,
     /// Nationality of the driver.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// A driver nationality is not available.
     pub nationality: Value<Nationality>,
     /// Total driving time this driver has done in the current session.
     ///
     /// ### Availability:
     /// - **Assetto Corsa Competizione:**
     /// Driving time is not yet implemented for ACC.
+    /// - **iRacing:**
+    /// Driving time is not yet implemented for iRacing.
     pub driving_time: Value<Time>,
     /// The best lap this driver has done.
     /// This indexes the lap list in the entry of this driver.
@@ -579,23 +607,75 @@ impl CarCategory {
 }
 
 /// A car model.
-#[derive(Debug, Default, Clone)]
-pub struct Car {
-    pub name: &'static str,
-    pub manufacturer: &'static str,
-    pub category: CarCategory,
+#[derive(Debug, Clone)]
+pub enum Car {
+    /// A car model where the data is known at compile time.
+    Static {
+        name: &'static str,
+        manufacturer: &'static str,
+        category: CarCategory,
+    },
+    /// A car model where the data is only knonw at runtime.
+    Owned {
+        name: String,
+        manufacturer: String,
+        category: CarCategory,
+    },
+}
+
+impl Default for Car {
+    fn default() -> Self {
+        Car::CAR_DEFAULT.clone()
+    }
 }
 
 impl Car {
-    pub const fn new(
+    /// The Default car.
+    pub const CAR_DEFAULT: Car = Car::new_static("", "", CarCategory::new(""));
+
+    /// Create a static car model.
+    pub const fn new_static(
         name: &'static str,
         manufacturer: &'static str,
         category: CarCategory,
     ) -> Self {
-        Self {
+        Self::Static {
             name,
             manufacturer,
             category,
+        }
+    }
+
+    /// Create a new oned car model.
+    pub fn new(name: String, manufacturer: String, category: CarCategory) -> Self {
+        Self::Owned {
+            name,
+            manufacturer,
+            category,
+        }
+    }
+
+    /// The name of the car.
+    pub fn name(&self) -> &str {
+        match self {
+            Car::Static { name, .. } => name,
+            Car::Owned { name, .. } => &name,
+        }
+    }
+
+    /// The manufacturer of the car.
+    pub fn manufacturer(&self) -> &str {
+        match self {
+            Car::Static { manufacturer, .. } => manufacturer,
+            Car::Owned { manufacturer, .. } => &manufacturer,
+        }
+    }
+
+    /// The category of the car.
+    pub fn category(&self) -> &CarCategory {
+        match self {
+            Car::Static { category, .. } => category,
+            Car::Owned { category, .. } => &category,
         }
     }
 }

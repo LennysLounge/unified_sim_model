@@ -39,21 +39,22 @@ impl AccProcessor for LapProcessor {
             ))?;
 
         let Some(entry) = session.entries.get_mut(&entry_id) else {return Ok(())};
+        let Some(current_driver) = entry.current_driver else {return Ok(())};
 
-        let lap = map_lap(&update.last_lap, entry.current_driver, entry.id);
+        let lap = map_lap(&update.last_lap, current_driver, entry.id);
         let lap_index = entry.laps.len();
         entry.laps.push(lap.clone());
 
         // Check personal best for driver
         fn current_driver_best_lap(entry: &Entry) -> Option<&Lap> {
-            let driver = entry.drivers.get(&entry.current_driver)?;
+            let driver = entry.drivers.get(&entry.current_driver?)?;
             entry.laps.get((*driver.best_lap)?)
         }
         let personal_best = current_driver_best_lap(entry)
             .map_or(true, |best_lap| lap.time < best_lap.time)
             && !*lap.invalid;
         if personal_best {
-            if let Some(driver) = entry.drivers.get_mut(&entry.current_driver) {
+            if let Some(driver) = entry.drivers.get_mut(&current_driver) {
                 driver.best_lap.set(Some(lap_index));
             }
         }

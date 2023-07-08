@@ -581,7 +581,7 @@ pub struct Driver {
     pub team_id: Option<i32>,
     pub team_name: Option<String>,
     pub car_number: Option<String>,
-    pub car_number_raw: Option<String>,
+    pub car_number_raw: Option<i32>,
     pub car_path: Option<String>,
     #[serde(rename = "CarClassID")]
     pub car_class_id: Option<i32>,

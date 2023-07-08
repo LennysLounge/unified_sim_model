@@ -137,6 +137,7 @@ impl Irsdk {
         let session_str = String::from_utf8_lossy(&session_str_buffer)
             .trim_matches('\0')
             .to_string();
+        println!("{session_str}");
         let session_data = serde_yaml::from_str::<StaticData>(&session_str);
         if let Err(ref e) = session_data {
             warn!(
@@ -169,7 +170,13 @@ impl Irsdk {
 
             let processor = map_processors(&name);
             if let Processor::None = processor {
-                info!("Unmapped variable \"{}\". {:?}", name, header);
+                let desc = String::from_utf8_lossy(&header.description)
+                    .trim_matches(char::from(0))
+                    .to_owned();
+                let unit = String::from_utf8_lossy(&header.unit)
+                    .trim_matches(char::from(0))
+                    .to_owned();
+                info!("Unmapped variable \"{name}\".\ndesc: {desc}\n:unit: {unit}\n type: {:?}, count: {}" , header.var_type, header.count);
             }
 
             self.var_handlers.push(VarHandler { header, processor });
@@ -368,6 +375,14 @@ impl VarHandler {
                 }
                 p(data, vec);
             }
+            Processor::VecBool(p) => {
+                let mut vec = Vec::new();
+                for i in 0..count {
+                    let bytes = &raw[i * size..i * size + size];
+                    vec.push(bytes[0] > 0);
+                }
+                p(data, vec);
+            }
             Processor::None => (),
         }
     }
@@ -378,6 +393,7 @@ pub enum Processor {
     U8(Box<dyn Fn(&mut LiveData, u8)>),
     VecU8(Box<dyn Fn(&mut LiveData, Vec<u8>)>),
     Bool(Box<dyn Fn(&mut LiveData, bool)>),
+    VecBool(Box<dyn Fn(&mut LiveData, Vec<bool>)>),
     I32(Box<dyn Fn(&mut LiveData, i32)>),
     VecI32(Box<dyn Fn(&mut LiveData, Vec<i32>)>),
     F32(Box<dyn Fn(&mut LiveData, f32)>),
@@ -396,6 +412,7 @@ impl Debug for Processor {
             Processor::U8(_) => write!(f, "u8"),
             Processor::VecU8(_) => write!(f, "Vec<u8>"),
             Processor::Bool(_) => write!(f, "bool"),
+            Processor::VecBool(_) => write!(f, "Vec<bool>"),
             Processor::F32(_) => write!(f, "f32"),
             Processor::VecF32(_) => write!(f, "Vec<f32>"),
         }
@@ -414,14 +431,16 @@ impl Processor {
             Processor::U8(_) => 1,
             Processor::VecU8(_) => 1,
             Processor::Bool(_) => 1,
+            Processor::VecBool(_) => 1,
             Processor::F32(_) => 4,
             Processor::VecF32(_) => 4,
         }
     }
-    fn i8(target: impl Fn(&mut LiveData, u8) + 'static) -> Self {
+    #[allow(dead_code)]
+    fn u8(target: impl Fn(&mut LiveData, u8) + 'static) -> Self {
         Processor::U8(Box::new(target))
     }
-    fn _bool(target: impl Fn(&mut LiveData, bool) + 'static) -> Self {
+    fn bool(target: impl Fn(&mut LiveData, bool) + 'static) -> Self {
         Processor::Bool(Box::new(target))
     }
     fn i32(target: impl Fn(&mut LiveData, i32) + 'static) -> Self {
@@ -439,8 +458,12 @@ impl Processor {
     fn vec_f32(target: impl Fn(&mut LiveData, Vec<f32>) + 'static) -> Self {
         Processor::VecF32(Box::new(target))
     }
+    #[allow(dead_code)]
     fn vec_u8(target: impl Fn(&mut LiveData, Vec<u8>) + 'static) -> Self {
         Processor::VecU8(Box::new(target))
+    }
+    fn vec_bool(target: impl Fn(&mut LiveData, Vec<bool>) + 'static) -> Self {
+        Processor::VecBool(Box::new(target))
     }
 }
 
@@ -464,7 +487,7 @@ fn map_processors(name: &str) -> Processor {
         } //s
         "SessionLapsTotal" => Processor::i32(|d, v| d.session_laps_total = Some(v)),
         "SessionJokerLapsRemain" => Processor::i32(|d, v| d.session_joker_laps_remain = Some(v)),
-        "SessionOnJokerLap" => Processor::i8(|d, v| d.session_on_joker_lap = Some(v)),
+        "SessionOnJokerLap" => Processor::bool(|d, v| d.session_on_joker_lap = Some(v)),
         "SessionTimeOfDay" => {
             Processor::f32(|d, v| d.session_time_of_day = Some(Time::from_secs(v)))
         } //s
@@ -474,17 +497,17 @@ fn map_processors(name: &str) -> Processor {
             Processor::i32(|d, v| d.radio_transmit_frequency_idx = Some(v))
         }
         "DisplayUnits" => Processor::i32(|d, v| d.display_units = Some(v)),
-        "DriverMarker" => Processor::i8(|d, v| d.driver_marker = Some(v)),
-        "PushToTalk" => Processor::i8(|d, v| d.push_to_talk = Some(v)),
-        "PushToPass" => Processor::i8(|d, v| d.push_to_pass = Some(v)),
-        "ManualBoost" => Processor::i8(|d, v| d.manual_boost = Some(v)),
-        "ManualNoBoost" => Processor::i8(|d, v| d.manual_no_boost = Some(v)),
-        "IsOnTrack" => Processor::i8(|d, v| d.is_on_track = Some(v)),
-        "IsReplayPlaying" => Processor::i8(|d, v| d.is_replay_playing = Some(v)),
+        "DriverMarker" => Processor::bool(|d, v| d.driver_marker = Some(v)),
+        "PushToTalk" => Processor::bool(|d, v| d.push_to_talk = Some(v)),
+        "PushToPass" => Processor::bool(|d, v| d.push_to_pass = Some(v)),
+        "ManualBoost" => Processor::bool(|d, v| d.manual_boost = Some(v)),
+        "ManualNoBoost" => Processor::bool(|d, v| d.manual_no_boost = Some(v)),
+        "IsOnTrack" => Processor::bool(|d, v| d.is_on_track = Some(v)),
+        "IsReplayPlaying" => Processor::bool(|d, v| d.is_replay_playing = Some(v)),
         "ReplayFrameNum" => Processor::i32(|d, v| d.replay_frame_num = Some(v)),
         "ReplayFrameNumEnd" => Processor::i32(|d, v| d.replay_frame_num_end = Some(v)),
-        "IsDiskLoggingEnabled" => Processor::i8(|d, v| d.is_disk_logging_enabled = Some(v)),
-        "IsDiskLoggingActive" => Processor::i8(|d, v| d.is_disk_logging_active = Some(v)),
+        "IsDiskLoggingEnabled" => Processor::bool(|d, v| d.is_disk_logging_enabled = Some(v)),
+        "IsDiskLoggingActive" => Processor::bool(|d, v| d.is_disk_logging_active = Some(v)),
         "FrameRate" => Processor::f32(|d, v| d.frame_rate = Some(v)), //fps
         "CpuUsageFG" => Processor::f32(|d, v| d.cpu_usage_fg = Some(v)), //%
         "GpuUsage" => Processor::f32(|d, v| d.gpu_usage = Some(v)),   //%
@@ -521,7 +544,7 @@ fn map_processors(name: &str) -> Processor {
         "PlayerCarTowTime" => {
             Processor::f32(|d, v| d.player_car_tow_time = Some(Time::from_secs(v)))
         } //s
-        "PlayerCarInPitStall" => Processor::i8(|d, v| d.player_car_in_pit_stall = Some(v)),
+        "PlayerCarInPitStall" => Processor::bool(|d, v| d.player_car_in_pit_stall = Some(v)),
         "PlayerCarPitSvStatus" => {
             Processor::i32(|d, v| d.player_car_pit_sv_status = Some(v.into()))
         }
@@ -536,7 +559,7 @@ fn map_processors(name: &str) -> Processor {
         "CarIdxTrackSurfaceMaterial" => Processor::vec_i32(|d, v| {
             d.car_idx_track_surface_material = Some(v.iter().map(|v| TrkSurf::from(*v)).collect())
         }), //irsdk_TrkSurf
-        "CarIdxOnPitRoad" => Processor::vec_u8(|d, v| d.car_idx_on_pit_road = Some(v)),
+        "CarIdxOnPitRoad" => Processor::vec_bool(|d, v| d.car_idx_on_pit_road = Some(v)),
         "CarIdxPosition" => Processor::vec_i32(|d, v| d.car_idx_position = Some(v)),
         "CarIdxClassPosition" => Processor::vec_i32(|d, v| d.car_idx_class_position = Some(v)),
         "CarIdxClass" => Processor::vec_i32(|d, v| d.car_idx_class = Some(v)),
@@ -558,7 +581,7 @@ fn map_processors(name: &str) -> Processor {
             Processor::vec_i32(|d, v| d.car_idx_qual_tire_compound = Some(v))
         }
         "CarIdxQualTireCompoundLocked" => {
-            Processor::vec_u8(|d, v| d.car_idx_qual_tire_compound_locked = Some(v))
+            Processor::vec_bool(|d, v| d.car_idx_qual_tire_compound_locked = Some(v))
         }
         "CarIdxFastRepairsUsed" => Processor::vec_i32(|d, v| d.car_idx_fast_repairs_used = Some(v)),
         "CarIdxSessionFlags" => Processor::vec_i32(|d, v| {
@@ -578,7 +601,7 @@ fn map_processors(name: &str) -> Processor {
                     .collect(),
             )
         }), //irsdk_PaceFlags
-        "OnPitRoad" => Processor::i8(|d, v| d.on_pit_road = Some(v)),
+        "OnPitRoad" => Processor::bool(|d, v| d.on_pit_road = Some(v)),
         "CarIdxSteer" => Processor::vec_f32(|d, v| d.car_idx_steer = Some(v)), //rad
         "CarIdxRPM" => Processor::vec_f32(|d, v| d.car_idx_rpm = Some(v)),     //revs/min
         "CarIdxGear" => Processor::vec_i32(|d, v| d.car_idx_gear = Some(v)),
@@ -611,12 +634,14 @@ fn map_processors(name: &str) -> Processor {
             Processor::f32(|d, v| d.lap_delta_to_best_lap = Some(Time::from_secs(v)))
         } //s
         "LapDeltaToBestLap_DD" => Processor::f32(|d, v| d.lap_delta_to_best_lap_dd = Some(v)), //s/s
-        "LapDeltaToBestLap_OK" => Processor::i8(|d, v| d.lap_delta_to_best_lap_ok = Some(v)),
+        "LapDeltaToBestLap_OK" => Processor::bool(|d, v| d.lap_delta_to_best_lap_ok = Some(v)),
         "LapDeltaToOptimalLap" => {
             Processor::f32(|d, v| d.lap_delta_to_optimal_lap = Some(Time::from_secs(v)))
         } //s
         "LapDeltaToOptimalLap_DD" => Processor::f32(|d, v| d.lap_delta_to_optimal_lap_dd = Some(v)), //s/s
-        "LapDeltaToOptimalLap_OK" => Processor::i8(|d, v| d.lap_delta_to_optimal_lap_ok = Some(v)),
+        "LapDeltaToOptimalLap_OK" => {
+            Processor::bool(|d, v| d.lap_delta_to_optimal_lap_ok = Some(v))
+        }
         "LapDeltaToSessionBestLap" => {
             Processor::f32(|d, v| d.lap_delta_to_session_best_lap = Some(Time::from_secs(v)))
         } //s
@@ -624,7 +649,7 @@ fn map_processors(name: &str) -> Processor {
             Processor::f32(|d, v| d.lap_delta_to_session_best_lap_dd = Some(v))
         } //s/s
         "LapDeltaToSessionBestLap_OK" => {
-            Processor::i8(|d, v| d.lap_delta_to_session_best_lap_ok = Some(v))
+            Processor::bool(|d, v| d.lap_delta_to_session_best_lap_ok = Some(v))
         }
         "LapDeltaToSessionOptimalLap" => {
             Processor::f32(|d, v| d.lap_delta_to_session_optimal_lap = Some(Time::from_secs(v)))
@@ -633,7 +658,7 @@ fn map_processors(name: &str) -> Processor {
             Processor::f32(|d, v| d.lap_delta_to_session_optimal_lap_dd = Some(v))
         } //s/s
         "LapDeltaToSessionOptimalLap_OK" => {
-            Processor::i8(|d, v| d.lap_delta_to_session_optimal_lap_ok = Some(v))
+            Processor::bool(|d, v| d.lap_delta_to_session_optimal_lap_ok = Some(v))
         }
         "LapDeltaToSessionLastlLap" => {
             Processor::f32(|d, v| d.lap_delta_to_session_lastl_lap = Some(Time::from_secs(v)))
@@ -642,7 +667,7 @@ fn map_processors(name: &str) -> Processor {
             Processor::f32(|d, v| d.lap_delta_to_session_lastl_lap_dd = Some(v))
         } //s/s
         "LapDeltaToSessionLastlLap_OK" => {
-            Processor::i8(|d, v| d.lap_delta_to_session_lastl_lap_ok = Some(v))
+            Processor::bool(|d, v| d.lap_delta_to_session_lastl_lap_ok = Some(v))
         }
         "Speed" => Processor::f32(|d, v| d.speed = Some(v)), //m/s
         "Yaw" => Processor::f32(|d, v| d.yaw = Some(v)),     //rad
@@ -665,17 +690,17 @@ fn map_processors(name: &str) -> Processor {
         "SolarAzimuth" => Processor::f32(|d, v| d.solar_azimuth = Some(v)), //rad
         "DCLapStatus" => Processor::i32(|d, v| d.dc_lap_status = Some(v)),
         "DCDriversSoFar" => Processor::i32(|d, v| d.dc_drivers_so_far = Some(v)),
-        "OkToReloadTextures" => Processor::i8(|d, v| d.ok_to_reload_textures = Some(v)),
-        "LoadNumTextures" => Processor::i8(|d, v| d.load_num_textures = Some(v)),
+        "OkToReloadTextures" => Processor::bool(|d, v| d.ok_to_reload_textures = Some(v)),
+        "LoadNumTextures" => Processor::bool(|d, v| d.load_num_textures = Some(v)),
         "CarLeftRight" => Processor::i32(|d, v| d.car_left_right = Some(v.into())),
-        "PitsOpen" => Processor::i8(|d, v| d.pits_open = Some(v)),
-        "VidCapEnabled" => Processor::i8(|d, v| d.vid_cap_enabled = Some(v)),
-        "VidCapActive" => Processor::i8(|d, v| d.vid_cap_active = Some(v)),
+        "PitsOpen" => Processor::bool(|d, v| d.pits_open = Some(v)),
+        "VidCapEnabled" => Processor::bool(|d, v| d.vid_cap_enabled = Some(v)),
+        "VidCapActive" => Processor::bool(|d, v| d.vid_cap_active = Some(v)),
         "PitRepairLeft" => Processor::f32(|d, v| d.pit_repair_left = Some(Time::from_secs(v))), //s
         "PitOptRepairLeft" => {
             Processor::f32(|d, v| d.pit_opt_repair_left = Some(Time::from_secs(v)))
         } //s
-        "PitstopActive" => Processor::i8(|d, v| d.pitstop_active = Some(v)),
+        "PitstopActive" => Processor::bool(|d, v| d.pitstop_active = Some(v)),
         "FastRepairUsed" => Processor::i32(|d, v| d.fast_repair_used = Some(v)),
         "FastRepairAvailable" => Processor::i32(|d, v| d.fast_repair_available = Some(v)),
         "LFTiresUsed" => Processor::i32(|d, v| d.lf_tires_used = Some(v)),
@@ -702,8 +727,8 @@ fn map_processors(name: &str) -> Processor {
         "CamCameraState" => Processor::i32(|d, v| {
             d.cam_camera_state = Some(CameraState::from_bits_retain(v as u32))
         }),
-        "IsOnTrackCar" => Processor::i8(|d, v| d.is_on_track_car = Some(v)),
-        "IsInGarage" => Processor::i8(|d, v| d.is_in_garage = Some(v)),
+        "IsOnTrackCar" => Processor::bool(|d, v| d.is_on_track_car = Some(v)),
+        "IsInGarage" => Processor::bool(|d, v| d.is_in_garage = Some(v)),
         "SteeringWheelAngleMax" => Processor::f32(|d, v| d.steering_wheel_angle_max = Some(v)), //rad
         "ShiftPowerPct" => Processor::f32(|d, v| d.shift_power_pct = Some(v)),                  //%
         "ShiftGrindRPM" => Processor::f32(|d, v| d.shift_grind_rpm = Some(v)), //RPM
@@ -711,7 +736,7 @@ fn map_processors(name: &str) -> Processor {
         "BrakeRaw" => Processor::f32(|d, v| d.brake_raw = Some(v)),            //%
         "ClutchRaw" => Processor::f32(|d, v| d.clutch_raw = Some(v)),          //%
         "HandbrakeRaw" => Processor::f32(|d, v| d.handbrake_raw = Some(v)),    //%
-        "BrakeABSactive" => Processor::i8(|d, v| d.brake_ab_sactive = Some(v)),
+        "BrakeABSactive" => Processor::bool(|d, v| d.brake_ab_sactive = Some(v)),
         "EngineWarnings" => Processor::i32(|d, v| {
             d.engine_warnings = Some(EngineWarnings::from_bits_retain(v as u32))
         }),
@@ -725,7 +750,7 @@ fn map_processors(name: &str) -> Processor {
         "PitSvRRP" => Processor::f32(|d, v| d.pit_sv_rrp = Some(v)), //kPa
         "PitSvFuel" => Processor::f32(|d, v| d.pit_sv_fuel = Some(v)), //l or kWh
         "PitSvTireCompound" => Processor::i32(|d, v| d.pit_sv_tire_compound = Some(v)),
-        "CarIdxP2P_Status" => Processor::vec_u8(|d, v| d.car_idx_p2p_status = Some(v)),
+        "CarIdxP2P_Status" => Processor::vec_bool(|d, v| d.car_idx_p2p_status = Some(v)),
         "CarIdxP2P_Count" => Processor::vec_i32(|d, v| d.car_idx_p2p_count = Some(v)),
         "SteeringWheelPctTorque" => Processor::f32(|d, v| d.steering_wheel_pct_torque = Some(v)), //%
         "SteeringWheelPctTorqueSign" => {
@@ -743,10 +768,10 @@ fn map_processors(name: &str) -> Processor {
         "SteeringWheelPeakForceNm" => {
             Processor::f32(|d, v| d.steering_wheel_peak_force_nm = Some(v))
         } //N*m
-        "SteeringWheelUseLinear" => Processor::i8(|d, v| d.steering_wheel_use_linear = Some(v)),
+        "SteeringWheelUseLinear" => Processor::bool(|d, v| d.steering_wheel_use_linear = Some(v)),
         "ShiftIndicatorPct" => Processor::f32(|d, v| d.shift_indicator_pct = Some(v)), //%
         "ReplayPlaySpeed" => Processor::i32(|d, v| d.replay_play_speed = Some(v)),
-        "ReplayPlaySlowMotion" => Processor::i8(|d, v| d.replay_play_slow_motion = Some(v)),
+        "ReplayPlaySlowMotion" => Processor::bool(|d, v| d.replay_play_slow_motion = Some(v)),
         "ReplaySessionTime" => {
             Processor::f64(|d, v| d.replay_session_time = Some(Time::from_secs(v)))
         } //s
@@ -755,30 +780,30 @@ fn map_processors(name: &str) -> Processor {
         "TireRF_RumblePitch" => Processor::f32(|d, v| d.tire_rf_rumble_pitch = Some(v)), //Hz
         "TireLR_RumblePitch" => Processor::f32(|d, v| d.tire_lr_rumble_pitch = Some(v)), //Hz
         "TireRR_RumblePitch" => Processor::f32(|d, v| d.tire_rr_rumble_pitch = Some(v)), //Hz
-        "IsGarageVisible" => Processor::i8(|d, v| d.is_garage_visible = Some(v)),
-        "SteeringWheelTorque_ST" => Processor::f32(|d, v| d.steering_wheel_torque_st = Some(v)), //N*m
+        "IsGarageVisible" => Processor::bool(|d, v| d.is_garage_visible = Some(v)),
+        "SteeringWheelTorque_ST" => Processor::vec_f32(|d, v| d.steering_wheel_torque_st = Some(v)), //N*m
         "SteeringWheelTorque" => Processor::f32(|d, v| d.steering_wheel_torque = Some(v)), //N*m
-        "VelocityZ_ST" => Processor::f32(|d, v| d.velocity_z_st = Some(v)), //m/s at 360 Hz
-        "VelocityY_ST" => Processor::f32(|d, v| d.velocity_y_st = Some(v)), //m/s at 360 Hz
-        "VelocityX_ST" => Processor::f32(|d, v| d.velocity_x_st = Some(v)), //m/s at 360 Hz
-        "VelocityZ" => Processor::f32(|d, v| d.velocity_z = Some(v)),       //m/s
-        "VelocityY" => Processor::f32(|d, v| d.velocity_y = Some(v)),       //m/s
-        "VelocityX" => Processor::f32(|d, v| d.velocity_x = Some(v)),       //m/s
-        "YawRate_ST" => Processor::f32(|d, v| d.yaw_rate_st = Some(v)),     //rad/s
-        "PitchRate_ST" => Processor::f32(|d, v| d.pitch_rate_st = Some(v)), //rad/s
-        "RollRate_ST" => Processor::f32(|d, v| d.roll_rate_st = Some(v)),   //rad/s
-        "YawRate" => Processor::f32(|d, v| d.yaw_rate = Some(v)),           //rad/s
-        "PitchRate" => Processor::f32(|d, v| d.pitch_rate = Some(v)),       //rad/s
-        "RollRate" => Processor::f32(|d, v| d.roll_rate = Some(v)),         //rad/s
-        "VertAccel_ST" => Processor::f32(|d, v| d.vert_accel_st = Some(v)), //m/s^2
-        "LatAccel_ST" => Processor::f32(|d, v| d.lat_accel_st = Some(v)),   //m/s^2
-        "LongAccel_ST" => Processor::f32(|d, v| d.long_accel_st = Some(v)), //m/s^2
-        "VertAccel" => Processor::f32(|d, v| d.vert_accel = Some(v)),       //m/s^2
-        "LatAccel" => Processor::f32(|d, v| d.lat_accel = Some(v)),         //m/s^2
-        "LongAccel" => Processor::f32(|d, v| d.long_accel = Some(v)),       //m/s^2
-        "dcStarter" => Processor::i8(|d, v| d.dc_starter = Some(v)),
+        "VelocityZ_ST" => Processor::vec_f32(|d, v| d.velocity_z_st = Some(v)), //m/s at 360 Hz
+        "VelocityY_ST" => Processor::vec_f32(|d, v| d.velocity_y_st = Some(v)), //m/s at 360 Hz
+        "VelocityX_ST" => Processor::vec_f32(|d, v| d.velocity_x_st = Some(v)), //m/s at 360 Hz
+        "VelocityZ" => Processor::f32(|d, v| d.velocity_z = Some(v)),           //m/s
+        "VelocityY" => Processor::f32(|d, v| d.velocity_y = Some(v)),           //m/s
+        "VelocityX" => Processor::f32(|d, v| d.velocity_x = Some(v)),           //m/s
+        "YawRate_ST" => Processor::vec_f32(|d, v| d.yaw_rate_st = Some(v)),     //rad/s
+        "PitchRate_ST" => Processor::vec_f32(|d, v| d.pitch_rate_st = Some(v)), //rad/s
+        "RollRate_ST" => Processor::vec_f32(|d, v| d.roll_rate_st = Some(v)),   //rad/s
+        "YawRate" => Processor::f32(|d, v| d.yaw_rate = Some(v)),               //rad/s
+        "PitchRate" => Processor::f32(|d, v| d.pitch_rate = Some(v)),           //rad/s
+        "RollRate" => Processor::f32(|d, v| d.roll_rate = Some(v)),             //rad/s
+        "VertAccel_ST" => Processor::vec_f32(|d, v| d.vert_accel_st = Some(v)), //m/s^2
+        "LatAccel_ST" => Processor::vec_f32(|d, v| d.lat_accel_st = Some(v)),   //m/s^2
+        "LongAccel_ST" => Processor::vec_f32(|d, v| d.long_accel_st = Some(v)), //m/s^2
+        "VertAccel" => Processor::f32(|d, v| d.vert_accel = Some(v)),           //m/s^2
+        "LatAccel" => Processor::f32(|d, v| d.lat_accel = Some(v)),             //m/s^2
+        "LongAccel" => Processor::f32(|d, v| d.long_accel = Some(v)),           //m/s^2
+        "dcStarter" => Processor::bool(|d, v| d.dc_starter = Some(v)),
         "dcDashPage" => Processor::f32(|d, v| d.dc_dash_page = Some(v)),
-        "dcTearOffVisor" => Processor::i8(|d, v| d.dc_tear_off_visor = Some(v)),
+        "dcTearOffVisor" => Processor::bool(|d, v| d.dc_tear_off_visor = Some(v)),
         "dpTireChange" => Processor::f32(|d, v| d.dp_tire_change = Some(v)),
         "dpFuelFill" => Processor::f32(|d, v| d.dp_fuel_fill = Some(v)),
         "dpFuelAddKg" => Processor::f32(|d, v| d.dp_fuel_add_kg = Some(v)), //kg
@@ -832,25 +857,25 @@ fn map_processors(name: &str) -> Processor {
         "LRwearM" => Processor::f32(|d, v| d.l_rwear_m = Some(v)),                       //%
         "LRwearR" => Processor::f32(|d, v| d.l_rwear_r = Some(v)),                       //%
         "CRshockDefl" => Processor::f32(|d, v| d.c_rshock_defl = Some(v)),               //m
-        "CRshockDefl_ST" => Processor::f32(|d, v| d.c_rshock_defl_st = Some(v)),         //m
+        "CRshockDefl_ST" => Processor::vec_f32(|d, v| d.c_rshock_defl_st = Some(v)),     //m
         "CRshockVel" => Processor::f32(|d, v| d.c_rshock_vel = Some(v)),                 //m/s
-        "CRshockVel_ST" => Processor::f32(|d, v| d.c_rshock_vel_st = Some(v)),           //m/s
+        "CRshockVel_ST" => Processor::vec_f32(|d, v| d.c_rshock_vel_st = Some(v)),       //m/s
         "LRshockDefl" => Processor::f32(|d, v| d.l_rshock_defl = Some(v)),               //m
-        "LRshockDefl_ST" => Processor::f32(|d, v| d.l_rshock_defl_st = Some(v)),         //m
+        "LRshockDefl_ST" => Processor::vec_f32(|d, v| d.l_rshock_defl_st = Some(v)),     //m
         "LRshockVel" => Processor::f32(|d, v| d.l_rshock_vel = Some(v)),                 //m/s
-        "LRshockVel_ST" => Processor::f32(|d, v| d.l_rshock_vel_st = Some(v)),           //m/s
+        "LRshockVel_ST" => Processor::vec_f32(|d, v| d.l_rshock_vel_st = Some(v)),       //m/s
         "RRshockDefl" => Processor::f32(|d, v| d.r_rshock_defl = Some(v)),               //m
-        "RRshockDefl_ST" => Processor::f32(|d, v| d.r_rshock_defl_st = Some(v)),         //m
+        "RRshockDefl_ST" => Processor::vec_f32(|d, v| d.r_rshock_defl_st = Some(v)),     //m
         "RRshockVel" => Processor::f32(|d, v| d.r_rshock_vel = Some(v)),                 //m/s
-        "RRshockVel_ST" => Processor::f32(|d, v| d.r_rshock_vel_st = Some(v)),           //m/s
+        "RRshockVel_ST" => Processor::vec_f32(|d, v| d.r_rshock_vel_st = Some(v)),       //m/s
         "LFshockDefl" => Processor::f32(|d, v| d.l_fshock_defl = Some(v)),               //m
-        "LFshockDefl_ST" => Processor::f32(|d, v| d.l_fshock_defl_st = Some(v)),         //m
+        "LFshockDefl_ST" => Processor::vec_f32(|d, v| d.l_fshock_defl_st = Some(v)),     //m
         "LFshockVel" => Processor::f32(|d, v| d.l_fshock_vel = Some(v)),                 //m/s
-        "LFshockVel_ST" => Processor::f32(|d, v| d.l_fshock_vel_st = Some(v)),           //m/s
+        "LFshockVel_ST" => Processor::vec_f32(|d, v| d.l_fshock_vel_st = Some(v)),       //m/s
         "RFshockDefl" => Processor::f32(|d, v| d.r_fshock_defl = Some(v)),               //m
-        "RFshockDefl_ST" => Processor::f32(|d, v| d.r_fshock_defl_st = Some(v)),         //m
+        "RFshockDefl_ST" => Processor::vec_f32(|d, v| d.r_fshock_defl_st = Some(v)),     //m
         "RFshockVel" => Processor::f32(|d, v| d.r_fshock_vel = Some(v)),                 //m/s
-        "RFshockVel_ST" => Processor::f32(|d, v| d.r_fshock_vel_st = Some(v)), //m/s        //m/s
+        "RFshockVel_ST" => Processor::vec_f32(|d, v| d.r_fshock_vel_st = Some(v)), //m/s        //m/s
         _ => Processor::None,
     }
 }

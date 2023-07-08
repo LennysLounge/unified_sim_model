@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::{
         mpsc::{Receiver, TryRecvError},
         Arc, RwLock,
@@ -12,13 +13,13 @@ use tracing::{error, warn};
 
 use crate::{
     log_todo,
-    model::{self, Model, SessionGameData},
+    model::{self, CarCategory, Model, SessionGameData},
     AdapterCommand, GameAdapter, Temperature, UpdateEvent,
 };
 
 use self::irsdk::{
     live_data::{self},
-    static_data::{self, MaybeUnlimited, WeekendInfo, WeekendOptions},
+    static_data::{self, DriverInfo, MaybeUnlimited, WeekendInfo, WeekendOptions},
     Data, Irsdk,
 };
 
@@ -199,36 +200,6 @@ impl IRacingConnection {
     }
 }
 
-fn update_session_live(session: &mut model::Session, data: &live_data::LiveData) {
-    if let Some(ref session_state) = data.session_state {
-        session.phase.set(map_session_phase(session_state));
-    }
-
-    if let Some(ref time_remaining) = data.session_time_remain {
-        session.time_remaining.set(time_remaining.clone());
-    }
-
-    if let Some(ref laps_remaining) = data.session_laps_remain {
-        session.laps_remaining.set(laps_remaining.clone());
-    }
-
-    if let Some(ambient_temp) = data.air_temp {
-        session
-            .ambient_temp
-            .set(Temperature::from_celcius(ambient_temp));
-    }
-
-    if let Some(track_temp) = data.track_temp {
-        session
-            .track_temp
-            .set(Temperature::from_celcius(track_temp));
-    }
-
-    if let Some(time_of_day) = data.session_time_of_day {
-        session.time_of_day.set(time_of_day.clone());
-    }
-}
-
 fn update_session_static(
     session: &mut model::Session,
     data: &static_data::StaticData,
@@ -295,6 +266,41 @@ fn update_session_static(
     {
         session.ambient_temp.set(ambient_temp.clone());
     }
+
+    // Create entries
+    if let static_data::StaticData {
+        weekend_info:
+            Some(WeekendInfo {
+                weekend_options:
+                    Some(WeekendOptions {
+                        num_starters: Some(ref num_starters),
+                        ..
+                    }),
+                ..
+            }),
+        driver_info:
+            Some(DriverInfo {
+                drivers: ref driver_infos,
+                ..
+            }),
+        ..
+    } = data
+    {
+        if session.entries.len() != *num_starters as usize {
+            for driver_info in driver_infos {
+                let Some(team_id) = driver_info.team_id else {break;};
+                let entry_id = model::EntryId(team_id);
+                if !session.entries.contains_key(&entry_id) {
+                    let Some(entry) = map_entry(driver_info) else {break;};
+                    session.entries.insert(entry.id, entry);
+                }
+
+                let Some(entry) = session.entries.get_mut(&entry_id) else {break};
+                let Some(driver) = map_driver(driver_info) else {break;};
+                entry.drivers.insert(driver.id, driver);
+            }
+        }
+    }
 }
 
 fn map_session_type(session_type_str: &str) -> model::SessionType {
@@ -318,5 +324,84 @@ fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionP
         live_data::SessionState::StateRacing => model::SessionPhase::Active,
         live_data::SessionState::StateCheckered => model::SessionPhase::Ending,
         live_data::SessionState::StateCoolDown => model::SessionPhase::Finished,
+    }
+}
+
+fn map_driver(driver_info: &static_data::Driver) -> Option<model::Driver> {
+    let driver_name = driver_info.user_name.clone()?;
+    let (first_name, last_name) = driver_name.split_once(" ")?;
+    Some(model::Driver {
+        id: model::DriverId(driver_info.car_idx?),
+        first_name: first_name.to_owned().into(),
+        last_name: last_name.to_owned().into(),
+        short_name: model::Value::default(),
+        nationality: model::Value::default(),
+        driving_time: model::Value::default(),
+        best_lap: model::Value::default(),
+    })
+}
+
+fn map_entry(driver_info: &static_data::Driver) -> Option<model::Entry> {
+    Some(model::Entry {
+        id: model::EntryId(driver_info.team_id?),
+        drivers: HashMap::new(),
+        current_driver: None,
+        team_name: driver_info.team_name.clone()?.into(),
+        car: model::Car::new(
+            driver_info.car_screen_name.to_owned()?,
+            "".to_owned(),
+            CarCategory::new(""),
+        )
+        .into(),
+        car_number: driver_info.car_number_raw?.into(),
+        nationality: model::Value::<model::Nationality>::default().with_editable(),
+        world_pos: model::Value::default(),
+        orientation: model::Value::default(),
+        position: model::Value::default(),
+        spline_pos: model::Value::default(),
+        lap_count: model::Value::default(),
+        laps: Vec::new(),
+        current_lap: model::Value::default(),
+        best_lap: model::Value::new(None),
+        performance_delta: model::Value::default(),
+        time_behind_leader: model::Value::default(),
+        in_pits: model::Value::default(),
+        gear: model::Value::default(),
+        speed: model::Value::default(),
+        connected: model::Value::default(),
+        stint_time: model::Value::default(),
+        distance_driven: model::Value::default(),
+        focused: false,
+        game_data: model::EntryGameData::None,
+    })
+}
+
+fn update_session_live(session: &mut model::Session, data: &live_data::LiveData) {
+    if let Some(ref session_state) = data.session_state {
+        session.phase.set(map_session_phase(session_state));
+    }
+
+    if let Some(ref time_remaining) = data.session_time_remain {
+        session.time_remaining.set(time_remaining.clone());
+    }
+
+    if let Some(ref laps_remaining) = data.session_laps_remain {
+        session.laps_remaining.set(laps_remaining.clone());
+    }
+
+    if let Some(ambient_temp) = data.air_temp {
+        session
+            .ambient_temp
+            .set(Temperature::from_celcius(ambient_temp));
+    }
+
+    if let Some(track_temp) = data.track_temp {
+        session
+            .track_temp
+            .set(Temperature::from_celcius(track_temp));
+    }
+
+    if let Some(time_of_day) = data.session_time_of_day {
+        session.time_of_day.set(time_of_day.clone());
     }
 }
