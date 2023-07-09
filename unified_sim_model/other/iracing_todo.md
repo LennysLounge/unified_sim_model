@@ -1,4 +1,3 @@
-- Get rid of pace car
 - current lap time should be localy timed even if its wrong.
 - time to leader is relative to the pace car which is wrong.
 

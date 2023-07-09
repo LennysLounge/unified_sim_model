@@ -272,6 +272,11 @@ fn init_entries(data: &Data) -> Result<HashMap<model::EntryId, model::Entry>> {
 
     let driver_infos = &data.static_data.driver_info;
     for driver_info in driver_infos.drivers.iter() {
+        if driver_info.car_is_pace_car.is_some_and(|v| v > 0) {
+            // This is a pace car
+            continue;
+        }
+
         let Some(car_idx) = driver_info.car_idx else {
             Err(IRacingError::MissingData("car_idx".into()))?
         };
