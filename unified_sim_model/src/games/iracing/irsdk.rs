@@ -137,7 +137,6 @@ impl Irsdk {
         let session_str = String::from_utf8_lossy(&session_str_buffer)
             .trim_matches('\0')
             .to_string();
-        println!("{session_str}");
         let session_data = serde_yaml::from_str::<StaticData>(&session_str);
         if let Err(ref e) = session_data {
             warn!(

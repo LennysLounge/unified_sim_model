@@ -18,8 +18,8 @@ use crate::{
 };
 
 use self::irsdk::{
-    live_data::{self},
-    static_data::{self, DriverInfo, MaybeUnlimited, WeekendInfo, WeekendOptions},
+    live_data,
+    static_data::{self},
     Data, Irsdk,
 };
 
@@ -34,6 +34,8 @@ pub enum IRacingError {
     GameNotRunning,
     #[error("The game disconnected")]
     Disconnected,
+    #[error("Missing required data: {0}")]
+    MissingData(String),
     #[error("The adapter encountered an error: {0}")]
     Other(String),
 }
@@ -73,7 +75,7 @@ struct IRacingConnection {
     command_rx: Receiver<AdapterCommand>,
     update_event: UpdateEvent,
     sdk: Irsdk,
-    last_static_data_update: i32,
+    static_data_update_count: Option<i32>,
 }
 
 impl IRacingConnection {
@@ -88,7 +90,7 @@ impl IRacingConnection {
             command_rx,
             update_event,
             sdk,
-            last_static_data_update: -1,
+            static_data_update_count: None,
         }
     }
 
@@ -141,40 +143,14 @@ impl IRacingConnection {
             .write()
             .map_err(|_| IRacingError::Other("Model was poisoned".into()))?;
 
-        // Create sessions
-        if data
-            .static_data
-            .session_info
-            .as_ref()
-            .is_some_and(|s| s.sessions.len() != model.sessions.len())
-        {
-            let sessions = &data.static_data.session_info.as_ref().unwrap().sessions;
-            for session_info in sessions {
-                let Some(session_num) = session_info.session_num else {break;};
-                let session_id = model::SessionId(session_num as usize);
-                model.sessions.insert(
-                    session_id,
-                    model::Session {
-                        id: session_id,
-                        game_data: SessionGameData::None,
-                        ..Default::default()
-                    },
-                );
+        if let None = self.static_data_update_count {
+            // Initialise model
+            let session_infos = &data.static_data.session_info;
+            for session_info in session_infos.sessions.iter() {
+                let session = init_session(session_info, data)?;
+                model.sessions.insert(session.id, session);
             }
-        }
-
-        // Update static data
-        if data.static_data.update_count != self.last_static_data_update {
-            self.last_static_data_update = data.static_data.update_count;
-
-            let sessions = &data.static_data.session_info.as_ref().unwrap().sessions;
-            for session_info in sessions {
-                let Some(session_num) = session_info.session_num else {break;};
-                let session_id = model::SessionId(session_num as usize);
-                let Some(ref mut session) = model.sessions.get_mut(&session_id) else {break;};
-
-                update_session_static(session, &data.static_data, session_info);
-            }
+            self.static_data_update_count = Some(data.static_data.update_count);
         }
 
         // Set current session.
@@ -196,144 +172,134 @@ impl IRacingConnection {
             .expect("The current session should be available");
         update_session_live(&mut current_session, &data.live_data);
 
+        // Update entries
+        for (_entry_id, entry) in current_session.entries.iter_mut() {
+            update_entry_live(entry, &data);
+        }
+
         Ok(())
     }
 }
 
-fn update_session_static(
-    session: &mut model::Session,
-    data: &static_data::StaticData,
-    session_info: &static_data::Session,
-) {
-    if let Some(ref session_type_str) = session_info.session_type {
-        session.session_type.set(map_session_type(session_type_str));
-    }
+fn init_session(session_info: &static_data::Session, data: &Data) -> Result<model::Session> {
+    let session_num = session_info
+        .session_num
+        .ok_or_else(|| IRacingError::MissingData("session_num".into()))?;
+    let id = model::SessionId(session_num as usize);
 
-    if let Some(ref session_time) = session_info.session_time {
-        match session_time {
-            MaybeUnlimited::Unlimited => session.session_time.set_unavailable(),
-            MaybeUnlimited::Value(t) => session.session_time.set(t.clone()),
-        }
-    }
+    let session_type = match session_info.session_type {
+        Some(ref type_str) => map_session_type(type_str).into(),
+        None => Err(IRacingError::MissingData("session_type".into()))?,
+    };
 
-    if let Some(ref session_laps) = session_info.session_laps {
-        match session_laps {
-            MaybeUnlimited::Unlimited => session.laps.set_unavailable(),
-            MaybeUnlimited::Value(laps) => session.laps.set(laps.clone()),
-        }
-    }
+    let session_time = match session_info.session_time {
+        Some(ref time) => match time {
+            static_data::MaybeUnlimited::Unlimited => model::Value::default(),
+            static_data::MaybeUnlimited::Value(t) => t.clone().into(),
+        },
+        None => Err(IRacingError::MissingData("session_time".into()))?,
+    };
 
-    if let Some(WeekendInfo {
-        weekend_options:
-            Some(WeekendOptions {
-                time_of_day: Some(ref time_of_day),
-                ..
-            }),
-        ..
-    }) = data.weekend_info
-    {
-        session.time_of_day.set(time_of_day.clone());
-    }
+    let laps = match session_info.session_laps {
+        Some(ref laps) => match laps {
+            static_data::MaybeUnlimited::Unlimited => model::Value::default(),
+            static_data::MaybeUnlimited::Value(laps) => laps.clone().into(),
+        },
+        None => Err(IRacingError::MissingData("session_laps".into()))?,
+    };
 
-    if let Some(WeekendInfo {
-        track_name: Some(ref track_name),
-        ..
-    }) = data.weekend_info
-    {
-        session.track_name.set(track_name.clone());
-    }
+    let time_of_day = match data.static_data.weekend_info.weekend_options {
+        Some(static_data::WeekendOptions {
+            time_of_day: Some(ref time_of_day),
+            ..
+        }) => time_of_day.clone().into(),
+        _ => model::Value::default(),
+    };
 
-    if let Some(WeekendInfo {
-        track_length: Some(ref track_length),
-        ..
-    }) = data.weekend_info
-    {
-        session.track_length.set(track_length.clone());
-    }
+    let ambient_temp = match data.static_data.weekend_info.track_air_temp {
+        Some(temp) => temp.clone().into(),
+        None => model::Value::default(),
+    };
 
-    if let Some(WeekendInfo {
-        track_surface_temp: Some(ref track_temp),
-        ..
-    }) = data.weekend_info
-    {
-        session.track_temp.set(track_temp.clone());
-    }
+    let track_temp = match data.static_data.weekend_info.track_surface_temp {
+        Some(temp) => temp.clone().into(),
+        None => model::Value::default(),
+    };
 
-    if let Some(WeekendInfo {
-        track_air_temp: Some(ref ambient_temp),
-        ..
-    }) = data.weekend_info
-    {
-        session.ambient_temp.set(ambient_temp.clone());
-    }
+    let track_name = match data.static_data.weekend_info.track_name {
+        Some(ref track_name) => track_name.clone().into(),
+        None => model::Value::default(),
+    };
 
-    // Create entries
-    if let static_data::StaticData {
-        weekend_info:
-            Some(WeekendInfo {
-                weekend_options:
-                    Some(WeekendOptions {
-                        num_starters: Some(ref num_starters),
-                        ..
-                    }),
-                ..
-            }),
-        driver_info:
-            Some(DriverInfo {
-                drivers: ref driver_infos,
-                ..
-            }),
-        ..
-    } = data
-    {
-        if session.entries.len() != *num_starters as usize {
-            for driver_info in driver_infos {
-                let Some(team_id) = driver_info.team_id else {break;};
-                let entry_id = model::EntryId(team_id);
-                if !session.entries.contains_key(&entry_id) {
-                    let Some(entry) = map_entry(driver_info) else {break;};
-                    session.entries.insert(entry.id, entry);
-                }
+    let track_length = match data.static_data.weekend_info.track_length {
+        Some(ref track_length) => track_length.clone().into(),
+        None => model::Value::default(),
+    };
 
-                let Some(entry) = session.entries.get_mut(&entry_id) else {break};
-                let Some(driver) = map_driver(driver_info) else {break;};
-                entry.drivers.insert(driver.id, driver);
-            }
-        }
-    }
+    Ok(model::Session {
+        id,
+        entries: init_entries(data)?,
+        session_type,
+        phase: model::SessionPhase::Waiting.into(),
+        session_time,
+        time_remaining: model::Value::default(),
+        laps,
+        laps_remaining: model::Value::default(),
+        time_of_day,
+        day: model::Value::default(),
+        ambient_temp,
+        track_temp,
+        best_lap: model::Value::default(),
+        track_name,
+        track_length,
+        game_data: SessionGameData::None,
+    })
 }
 
-fn map_session_type(session_type_str: &str) -> model::SessionType {
-    match session_type_str {
-        "Race" => model::SessionType::Race,
-        "Practice" => model::SessionType::Practice,
-        "Open Qualify" => model::SessionType::Qualifying,
-        _ => {
-            warn!("Unknown session type: {}", session_type_str);
-            model::SessionType::None
+fn init_entries(data: &Data) -> Result<HashMap<model::EntryId, model::Entry>> {
+    let mut entries = HashMap::new();
+
+    let driver_infos = &data.static_data.driver_info;
+    for driver_info in driver_infos.drivers.iter() {
+        let Some(team_id) = driver_info.team_id else {
+            Err(IRacingError::MissingData("team_id".into()))?
+        };
+        let entry_id = model::EntryId(team_id);
+        if !entries.contains_key(&entry_id) {
+            let entry = map_entry(driver_info)?;
+            entries.insert(entry.id, entry);
         }
+
+        let entry = entries
+            .get_mut(&entry_id)
+            .expect("entry should have been just created");
+        let driver = map_driver(driver_info)?;
+        entry.drivers.insert(driver.id, driver);
     }
+    Ok(entries)
 }
 
-fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionPhase {
-    match session_state {
-        live_data::SessionState::StateInvalid => model::SessionPhase::Waiting,
-        live_data::SessionState::StateGetInCar => model::SessionPhase::Preparing,
-        live_data::SessionState::StateWarmup => model::SessionPhase::Preparing,
-        live_data::SessionState::StateParadeLaps => model::SessionPhase::Formation,
-        live_data::SessionState::StateRacing => model::SessionPhase::Active,
-        live_data::SessionState::StateCheckered => model::SessionPhase::Ending,
-        live_data::SessionState::StateCoolDown => model::SessionPhase::Finished,
-    }
-}
+fn map_driver(driver_info: &static_data::Driver) -> Result<model::Driver> {
+    let (first_name, last_name) = {
+        let split: Option<(String, String)> = driver_info.user_name.clone().and_then(|name| {
+            name.split_once(" ")
+                .map(|(l, r)| (l.to_owned(), r.to_owned()))
+        });
+        if let Some((first_name, last_name)) = split {
+            (first_name.into(), last_name.into())
+        } else {
+            (model::Value::default(), model::Value::default())
+        }
+    };
 
-fn map_driver(driver_info: &static_data::Driver) -> Option<model::Driver> {
-    let driver_name = driver_info.user_name.clone()?;
-    let (first_name, last_name) = driver_name.split_once(" ")?;
-    Some(model::Driver {
-        id: model::DriverId(driver_info.car_idx?),
-        first_name: first_name.to_owned().into(),
-        last_name: last_name.to_owned().into(),
+    let car_idx = driver_info
+        .car_idx
+        .ok_or_else(|| IRacingError::MissingData("car_idx".into()))?;
+
+    Ok(model::Driver {
+        id: model::DriverId(car_idx),
+        first_name,
+        last_name,
         short_name: model::Value::default(),
         nationality: model::Value::default(),
         driving_time: model::Value::default(),
@@ -341,19 +307,35 @@ fn map_driver(driver_info: &static_data::Driver) -> Option<model::Driver> {
     })
 }
 
-fn map_entry(driver_info: &static_data::Driver) -> Option<model::Entry> {
-    Some(model::Entry {
-        id: model::EntryId(driver_info.team_id?),
+fn map_entry(driver_info: &static_data::Driver) -> Result<model::Entry> {
+    let team_id = driver_info
+        .team_id
+        .ok_or_else(|| IRacingError::MissingData("team_id".into()))?;
+
+    let team_name = match driver_info.team_name {
+        Some(ref name) => name.clone().into(),
+        None => model::Value::default(),
+    };
+
+    let car = match driver_info.car_screen_name {
+        Some(ref car_name) => {
+            model::Car::new(car_name.to_owned(), "".to_owned(), CarCategory::new("")).into()
+        }
+        None => model::Value::default(),
+    };
+
+    let car_number = match driver_info.car_number_raw {
+        Some(number) => number.into(),
+        None => model::Value::default(),
+    };
+
+    Ok(model::Entry {
+        id: model::EntryId(team_id),
         drivers: HashMap::new(),
         current_driver: None,
-        team_name: driver_info.team_name.clone()?.into(),
-        car: model::Car::new(
-            driver_info.car_screen_name.to_owned()?,
-            "".to_owned(),
-            CarCategory::new(""),
-        )
-        .into(),
-        car_number: driver_info.car_number_raw?.into(),
+        team_name,
+        car,
+        car_number,
         nationality: model::Value::<model::Nationality>::default().with_editable(),
         world_pos: model::Value::default(),
         orientation: model::Value::default(),
@@ -374,6 +356,18 @@ fn map_entry(driver_info: &static_data::Driver) -> Option<model::Entry> {
         focused: false,
         game_data: model::EntryGameData::None,
     })
+}
+
+fn map_session_type(session_type_str: &str) -> model::SessionType {
+    match session_type_str {
+        "Race" => model::SessionType::Race,
+        "Practice" => model::SessionType::Practice,
+        "Open Qualify" => model::SessionType::Qualifying,
+        _ => {
+            warn!("Unknown session type: {}", session_type_str);
+            model::SessionType::None
+        }
+    }
 }
 
 fn update_session_live(session: &mut model::Session, data: &live_data::LiveData) {
@@ -404,4 +398,20 @@ fn update_session_live(session: &mut model::Session, data: &live_data::LiveData)
     if let Some(time_of_day) = data.session_time_of_day {
         session.time_of_day.set(time_of_day.clone());
     }
+}
+
+fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionPhase {
+    match session_state {
+        live_data::SessionState::StateInvalid => model::SessionPhase::Waiting,
+        live_data::SessionState::StateGetInCar => model::SessionPhase::Preparing,
+        live_data::SessionState::StateWarmup => model::SessionPhase::Preparing,
+        live_data::SessionState::StateParadeLaps => model::SessionPhase::Formation,
+        live_data::SessionState::StateRacing => model::SessionPhase::Active,
+        live_data::SessionState::StateCheckered => model::SessionPhase::Ending,
+        live_data::SessionState::StateCoolDown => model::SessionPhase::Finished,
+    }
+}
+
+fn update_entry_live(entry: &mut model::Entry, data: &Data) {
+    // TODO: Update current driver.
 }

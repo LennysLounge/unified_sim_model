@@ -15,7 +15,7 @@ struct Model {
 
 struct Session {
 	id:                     X			X
-	entries:                X			-
+	entries:                X			X
 	session_type:           X			X
 	phase:                  X			X
 	session_time:           X			X
@@ -34,14 +34,14 @@ struct Session {
 
 struct Entry {
 	id:						X			X
-	drivers:				X			-
+	drivers:				X			X
 	current_driver:			X			-
 	team_name:				X			X
 	car:					X			X
 	car_number:				X			X
 	nationality:			X			X
 	world_pos:				X			X
-	orientation:			X			-
+	orientation:			X			X
 	position:				X			-
 	spline_pos:				X			-
 	lap_count:				X			-

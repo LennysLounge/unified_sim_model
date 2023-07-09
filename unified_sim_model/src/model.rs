@@ -383,6 +383,10 @@ pub struct Entry {
     /// and the track map.
     pub world_pos: Value<[f32; 3]>,
     /// The orientation of the car in the pitch, yaw, and roll axis.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// Orientation is not available for iRacing.
     pub orientation: Value<[f32; 3]>,
     /// The classification position of this entry.
     pub position: Value<i32>,

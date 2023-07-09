@@ -12,15 +12,14 @@ pub struct StaticData {
     /// Incremented when an update ocures.
     #[serde(skip)]
     pub update_count: i32,
-    pub missing_field: Option<i32>,
-    pub weekend_info: Option<WeekendInfo>,
-    pub session_info: Option<SessionInfo>,
-    pub camera_info: Option<CameraInfo>,
-    pub radio_info: Option<RadioInfo>,
-    pub driver_info: Option<DriverInfo>,
-    pub split_time_info: Option<SplitTimeInfo>,
-    pub qualify_results_info: Option<QualifyResultsInfo>,
-    pub car_setup: Option<CarSetup>,
+    pub weekend_info: WeekendInfo,
+    pub session_info: SessionInfo,
+    pub camera_info: CameraInfo,
+    pub radio_info: RadioInfo,
+    pub driver_info: DriverInfo,
+    pub split_time_info: SplitTimeInfo,
+    pub qualify_results_info: QualifyResultsInfo,
+    pub car_setup: CarSetup,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,
 }
@@ -33,30 +32,14 @@ impl StaticData {
             .iter()
             .map(|(key, value)| (Value::String(format!("{prefix}{key}")), value.clone()))
             .collect();
-        self.weekend_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.session_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.camera_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.radio_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.driver_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.split_time_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.qualify_results_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.car_setup
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
+        map.extend(self.weekend_info.get_unmapped(&prefix));
+        map.extend(self.session_info.get_unmapped(&prefix));
+        map.extend(self.camera_info.get_unmapped(&prefix));
+        map.extend(self.radio_info.get_unmapped(&prefix));
+        map.extend(self.driver_info.get_unmapped(&prefix));
+        map.extend(self.split_time_info.get_unmapped(&prefix));
+        map.extend(self.qualify_results_info.get_unmapped(&prefix));
+        map.extend(self.car_setup.get_unmapped(&prefix));
         map
     }
 }

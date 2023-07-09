@@ -228,7 +228,10 @@ fn display_entries_table(
                             ui.add(egui::Label::new(entry.team_name.as_ref()).wrap(false));
                         });
                         row.cell(|ui| {
-                            let driver_name = match entry.drivers.get(&entry.current_driver) {
+                            let driver = entry
+                                .current_driver
+                                .and_then(|driver_id| entry.drivers.get(&driver_id));
+                            let driver_name = match driver {
                                 Some(driver) => {
                                     format!("{} {}", driver.first_name, driver.last_name)
                                 }
@@ -264,8 +267,8 @@ fn display_entries_table(
                         });
                         row.cell(|ui| {
                             let best_lap = entry
-                                .drivers
-                                .get(&entry.current_driver)
+                                .current_driver
+                                .and_then(|driver_id| entry.drivers.get(&driver_id))
                                 .and_then(|driver| *driver.best_lap)
                                 .and_then(|lap_index| entry.laps.get(lap_index))
                                 .map_or("-".to_string(), |lap| lap.time.format());
