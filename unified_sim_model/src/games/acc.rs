@@ -176,7 +176,13 @@ impl AccConnection {
         process_message(&mut self.lap_proc, message, &mut context)?;
 
         if let Message::RealtimeCarUpdate(update) = message {
-            distance_driven::calc_distance_driven(context.model, &EntryId(update.car_id as i32))
+            let entry = context
+                .model
+                .current_session_mut()
+                .and_then(|session| session.entries.get_mut(&EntryId(update.car_id as i32)));
+            if let Some(entry) = entry {
+                distance_driven::calc_distance_driven(entry);
+            }
         }
 
         while !context.events.is_empty() {

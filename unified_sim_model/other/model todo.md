@@ -55,7 +55,7 @@ struct Entry {
 	speed:					X			X
 	connected:				X			X
 	stint_time:				X			X
-	distance_driven:		X			-
+	distance_driven:		X			X
 	focused:				X			X
 	game_data:				X			X
 }

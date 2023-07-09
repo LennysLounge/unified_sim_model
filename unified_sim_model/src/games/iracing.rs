@@ -23,6 +23,8 @@ use self::irsdk::{
     Data, Irsdk,
 };
 
+use super::common::distance_driven;
+
 pub mod irsdk;
 
 /// A specialized result for Connection errors.
@@ -181,8 +183,10 @@ impl IRacingConnection {
         update_session_live(&mut current_session, &data.live_data);
 
         // Update entries
+        //println!("lap_dist_pct: {:?}", data.live_data.car_idx_lap_dist_pct);
         for (_entry_id, entry) in current_session.entries.iter_mut() {
             update_entry_live(entry, &data);
+            distance_driven::calc_distance_driven(entry);
         }
 
         Ok(())
@@ -439,7 +443,7 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data) {
 
     if let Some(ref car_idx_laps) = data.live_data.car_idx_lap_completed {
         if let Some(laps) = car_idx_laps.get(car_idx) {
-            entry.lap_count.set(*laps);
+            entry.lap_count.set((*laps).max(0));
         }
     }
 

@@ -1,7 +1,5 @@
 - Correcly know if a car is on track or not using TrkLoc
 - Get rid of pace car
-- spline pos is not working
-- lap count should always be positive
 - current lap time should be localy timed even if its wrong.
 - time to leader is relative to the pace car which is wrong.
 - Positions dont work.
