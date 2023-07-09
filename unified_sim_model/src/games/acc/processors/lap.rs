@@ -7,7 +7,7 @@ use crate::{
         data::{LapInfo, RealtimeCarUpdate},
         AccConnectionError, AccProcessor, AccProcessorContext, Result,
     },
-    model::{DriverId, Entry, EntryId, Event, Lap, LapCompleted},
+    model::{DriverId, EntryId, Event, Lap, LapCompleted},
     time::Time,
 };
 
@@ -42,20 +42,17 @@ impl AccProcessor for LapProcessor {
         let current_driver = entry.current_driver;
 
         let lap = map_lap(&update.last_lap, current_driver, entry.id);
-        let lap_index = entry.laps.len();
         entry.laps.push(lap.clone());
 
-        // Check personal best for driver
-        fn current_driver_best_lap(entry: &Entry) -> Option<&Lap> {
-            let driver = entry.drivers.get(&entry.current_driver)?;
-            entry.laps.get((*driver.best_lap)?)
-        }
-        let personal_best = current_driver_best_lap(entry)
+        let personal_best = entry
+            .drivers
+            .get(&entry.current_driver)
+            .and_then(|driver| driver.best_lap.as_ref().as_ref())
             .map_or(true, |best_lap| lap.time < best_lap.time)
             && !*lap.invalid;
         if personal_best {
             if let Some(driver) = entry.drivers.get_mut(&current_driver) {
-                driver.best_lap.set(Some(lap_index));
+                driver.best_lap.set(Some(lap.clone()));
             }
         }
 
@@ -63,11 +60,11 @@ impl AccProcessor for LapProcessor {
         let entry_best = entry
             .best_lap
             .as_ref()
-            .and_then(|best_lap| entry.laps.get(best_lap))
+            .as_ref()
             .map_or(true, |best_lap| lap.time < best_lap.time)
             && !*lap.invalid;
         if entry_best {
-            entry.best_lap.set(Some(lap_index));
+            entry.best_lap.set(Some(lap.clone()));
         }
 
         // Check session best.

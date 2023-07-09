@@ -409,7 +409,7 @@ pub struct Entry {
     /// current lap data.
     pub current_lap: Value<Lap>,
     /// The best lap this entry has completed.
-    pub best_lap: Value<Option<usize>>,
+    pub best_lap: Value<Option<Lap>>,
     /// The performance delta compared to the best lap.
     ///
     /// ### Availability:
@@ -504,7 +504,7 @@ pub struct Driver {
     pub driving_time: Value<Time>,
     /// The best lap this driver has done.
     /// This indexes the lap list in the entry of this driver.
-    pub best_lap: Value<Option<usize>>,
+    pub best_lap: Value<Option<Lap>>,
 }
 
 /// Data about a single lap.
