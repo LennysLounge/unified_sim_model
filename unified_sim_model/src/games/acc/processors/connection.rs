@@ -5,10 +5,12 @@ use tracing::info;
 use crate::{
     games::acc::{
         data::{RealtimeCarUpdate, SessionUpdate},
-        AccProcessor, AccProcessorContext, Result,
+        AccProcessorContext, Result,
     },
     model::{EntryId, Event},
 };
+
+use super::AccProcessor;
 
 /// Processor for the connection property on an entry.
 ///

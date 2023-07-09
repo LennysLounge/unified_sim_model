@@ -7,7 +7,7 @@ use crate::{
             SessionType, SessionUpdate, TrackData,
         },
         model::{AccCamera, AccEntry, AccSession},
-        AccConnectionError, AccProcessor, AccProcessorContext, Result,
+        AccConnectionError, AccProcessorContext, Result,
     },
     model::{
         self, Camera, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, GameCamera, Lap,
@@ -16,6 +16,8 @@ use crate::{
     time::Time,
     Distance, Temperature,
 };
+
+use super::AccProcessor;
 
 /// A processor to transfer game data directly into the model.
 /// Transfers only data that is available without doing any additional processing.

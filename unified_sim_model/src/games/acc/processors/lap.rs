@@ -5,11 +5,13 @@ use tracing::info;
 use crate::{
     games::acc::{
         data::{LapInfo, RealtimeCarUpdate},
-        AccConnectionError, AccProcessor, AccProcessorContext, Result,
+        AccConnectionError, AccProcessorContext, Result,
     },
     model::{DriverId, EntryId, Event, Lap, LapCompleted},
     time::Time,
 };
+
+use super::AccProcessor;
 
 #[derive(Debug, Default)]
 pub struct LapProcessor {
