@@ -91,7 +91,7 @@ impl GameAdapter for DummyAdapter {
                         }
                         drivers
                     },
-                    current_driver: Some(DriverId(0)),
+                    current_driver: DriverId(0),
                     team_name: Value::new(format!("Team nr.{}", i)),
                     car: Value::new(Car::new_static(
                         "Car model",

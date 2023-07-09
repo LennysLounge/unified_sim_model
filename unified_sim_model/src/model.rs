@@ -348,7 +348,7 @@ pub struct Entry {
     /// The collection of drivers registered for this entry.
     pub drivers: HashMap<DriverId, Driver>,
     /// The currently driving drivier.
-    pub current_driver: Option<DriverId>,
+    pub current_driver: DriverId,
     /// The name of the team.
     ///
     /// ### Availability:

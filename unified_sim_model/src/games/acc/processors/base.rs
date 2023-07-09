@@ -191,7 +191,7 @@ impl AccProcessor for BaseProcessor {
 
         let current_driver_id = DriverId(update.driver_id as i32);
         let entry = entry.unwrap();
-        entry.current_driver = Some(current_driver_id);
+        entry.current_driver = current_driver_id;
         entry
             .orientation
             .set([update.pitch, update.yaw, update.roll]);
@@ -286,7 +286,7 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
                 (id, driver)
             })
             .collect(),
-        current_driver: Some(DriverId(car.current_driver_index as i32)),
+        current_driver: DriverId(car.current_driver_index as i32),
         team_name: Value::<String>::default().with_editable(),
         car: car.car_model_type.clone().into(),
         car_number: car.race_number.into(),
