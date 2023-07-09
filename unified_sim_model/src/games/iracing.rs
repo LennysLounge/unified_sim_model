@@ -155,7 +155,6 @@ impl IRacingConnection {
                 let session = init_session(session_info, data)?;
                 model.sessions.insert(session.id, session);
             }
-            self.static_data_update_count = Some(data.static_data.update_count);
         }
 
         // Set current session.
@@ -189,7 +188,20 @@ impl IRacingConnection {
             update_entry_live(entry, &data);
             distance_driven::calc_distance_driven(entry);
         }
-        self.lap_processor.process(&mut model, data)?;
+
+        // Update lap times.
+        if self
+            .static_data_update_count
+            .map_or(true, |count| count != data.static_data.update_count)
+        {
+            self.static_data_update_count = Some(data.static_data.update_count);
+
+            // Althoug we are using the live data to check if a lap was completed, the last lap time
+            // updates quite a bit after the lap counter updates. This makes it difficult to know when to
+            // read out the last lap time. Instead we wait for a static data update which should happen
+            // atleast everytime a car finishes a lap.
+            self.lap_processor.process(&mut model, data)?;
+        }
 
         Ok(())
     }

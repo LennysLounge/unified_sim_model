@@ -45,7 +45,7 @@ struct Session {
 struct Entry {
 	id:						X			X
 	drivers:				X			X
-	current_driver:			X			-
+	current_driver:			X			X
 	team_name:				X			X
 	car:					X			X
 	car_number:				X			X
@@ -81,9 +81,9 @@ struct Driver {
 }
 
 struct Lap {
-	time:					X
-	splits:					X
-	invalid:				X			-
-	driver_id:				X
-	entry_id:				X
+	time:					X			X
+	splits:					X			X
+	invalid:				X			X
+	driver_id:				X			X
+	entry_id:				X			X
 }

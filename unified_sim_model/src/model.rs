@@ -348,6 +348,9 @@ pub struct Entry {
     /// The collection of drivers registered for this entry.
     pub drivers: HashMap<DriverId, Driver>,
     /// The currently driving drivier.
+    ///
+    ///
+    /// TODO: Check how this works in team races for iracing.
     pub current_driver: DriverId,
     /// The name of the team.
     ///
@@ -518,8 +521,14 @@ pub struct Lap {
     /// - **Assetto Corsa Competizione:**
     /// Split times as not availabe for a lap that hasnt finished yet.
     /// Only completed laps have split times availabe.
+    /// . **iRacing:**
+    /// Split times are not available in iracing.
     pub splits: Value<Vec<Time>>,
     /// If the lap was invalid.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// The validity of lap times is not available in iRacing.
     pub invalid: Value<bool>,
     /// Id of the driver that drove this lap.
     pub driver_id: DriverId,
@@ -590,11 +599,17 @@ impl SessionPhase {
 
 #[derive(Debug)]
 pub enum Event {
+    /// When a new entry joines the session.
     EntryConnected(EntryId),
+    /// When an entry rejoins a session it was previously registered in.
     EntryReconnected(EntryId),
+    /// When an entry disconnects from the session.
     EntryDisconnected(EntryId),
+    /// When the session changes
     SessionChanged(SessionId),
+    /// When the session phase changes.
     SessionPhaseChanged(SessionId, SessionPhase),
+    /// When a lap was completed.
     LapCompleted(LapCompleted),
 }
 
