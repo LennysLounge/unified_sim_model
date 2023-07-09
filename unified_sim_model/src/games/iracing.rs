@@ -58,6 +58,7 @@ impl GameAdapter for IRacingAdapter {
 
         if let Ok(mut model) = model.write() {
             model.connected = true;
+            model.event_name.set("iRacing".to_owned());
         }
         let mut connection = IRacingConnection::new(model.clone(), command_rx, update_event, sdk);
         let result = connection.run_loop();
@@ -166,6 +167,13 @@ impl IRacingConnection {
         }
         model.current_session = Some(current_session_id);
 
+        // Set the focused entry
+        if let Some(ref cam_car_idx) = data.live_data.cam_car_idx {
+            model.focused_entry = Some(model::EntryId(*cam_car_idx));
+        } else {
+            model.focused_entry = None;
+        }
+
         // Update session.
         let mut current_session = model
             .current_session_mut()
@@ -261,22 +269,73 @@ fn init_entries(data: &Data) -> Result<HashMap<model::EntryId, model::Entry>> {
 
     let driver_infos = &data.static_data.driver_info;
     for driver_info in driver_infos.drivers.iter() {
-        let Some(team_id) = driver_info.team_id else {
-            Err(IRacingError::MissingData("team_id".into()))?
+        let Some(car_idx) = driver_info.car_idx else {
+            Err(IRacingError::MissingData("car_idx".into()))?
         };
-        let entry_id = model::EntryId(team_id);
+        let entry_id = model::EntryId(car_idx);
         if !entries.contains_key(&entry_id) {
             let entry = map_entry(driver_info)?;
             entries.insert(entry.id, entry);
         }
-
-        let entry = entries
-            .get_mut(&entry_id)
-            .expect("entry should have been just created");
-        let driver = map_driver(driver_info)?;
-        entry.drivers.insert(driver.id, driver);
     }
     Ok(entries)
+}
+
+fn map_entry(driver_info: &static_data::Driver) -> Result<model::Entry> {
+    let driver = map_driver(driver_info)?;
+
+    let car_idx = driver_info
+        .car_idx
+        .ok_or_else(|| IRacingError::MissingData("car_idx".into()))?;
+
+    let team_name = match driver_info.team_name {
+        Some(ref name) => name.clone().into(),
+        None => model::Value::default(),
+    };
+
+    let car = match driver_info.car_screen_name {
+        Some(ref car_name) => {
+            model::Car::new(car_name.to_owned(), "".to_owned(), CarCategory::new("")).into()
+        }
+        None => model::Value::default(),
+    };
+
+    let car_number = match driver_info.car_number_raw {
+        Some(number) => number.into(),
+        None => model::Value::default(),
+    };
+
+    Ok(model::Entry {
+        id: model::EntryId(car_idx),
+        drivers: {
+            let mut drivers = HashMap::new();
+            drivers.insert(driver.id, driver.clone());
+            drivers
+        },
+        current_driver: Some(driver.id),
+        team_name,
+        car,
+        car_number,
+        nationality: model::Value::<model::Nationality>::default().with_editable(),
+        world_pos: model::Value::default(),
+        orientation: model::Value::default(),
+        position: model::Value::default(),
+        spline_pos: model::Value::default(),
+        lap_count: model::Value::default(),
+        laps: Vec::new(),
+        current_lap: model::Value::default(),
+        best_lap: model::Value::new(None),
+        performance_delta: model::Value::default(),
+        time_behind_leader: model::Value::default(),
+        in_pits: model::Value::default(),
+        gear: model::Value::default(),
+        speed: model::Value::default(),
+        connected: model::Value::default(),
+        stint_time: model::Value::default(),
+        distance_driven: model::Value::default(),
+        focused: false,
+        game_data: model::EntryGameData::None,
+    })
 }
 
 fn map_driver(driver_info: &static_data::Driver) -> Result<model::Driver> {
@@ -304,57 +363,6 @@ fn map_driver(driver_info: &static_data::Driver) -> Result<model::Driver> {
         nationality: model::Value::default(),
         driving_time: model::Value::default(),
         best_lap: model::Value::default(),
-    })
-}
-
-fn map_entry(driver_info: &static_data::Driver) -> Result<model::Entry> {
-    let team_id = driver_info
-        .team_id
-        .ok_or_else(|| IRacingError::MissingData("team_id".into()))?;
-
-    let team_name = match driver_info.team_name {
-        Some(ref name) => name.clone().into(),
-        None => model::Value::default(),
-    };
-
-    let car = match driver_info.car_screen_name {
-        Some(ref car_name) => {
-            model::Car::new(car_name.to_owned(), "".to_owned(), CarCategory::new("")).into()
-        }
-        None => model::Value::default(),
-    };
-
-    let car_number = match driver_info.car_number_raw {
-        Some(number) => number.into(),
-        None => model::Value::default(),
-    };
-
-    Ok(model::Entry {
-        id: model::EntryId(team_id),
-        drivers: HashMap::new(),
-        current_driver: None,
-        team_name,
-        car,
-        car_number,
-        nationality: model::Value::<model::Nationality>::default().with_editable(),
-        world_pos: model::Value::default(),
-        orientation: model::Value::default(),
-        position: model::Value::default(),
-        spline_pos: model::Value::default(),
-        lap_count: model::Value::default(),
-        laps: Vec::new(),
-        current_lap: model::Value::default(),
-        best_lap: model::Value::new(None),
-        performance_delta: model::Value::default(),
-        time_behind_leader: model::Value::default(),
-        in_pits: model::Value::default(),
-        gear: model::Value::default(),
-        speed: model::Value::default(),
-        connected: model::Value::default(),
-        stint_time: model::Value::default(),
-        distance_driven: model::Value::default(),
-        focused: false,
-        game_data: model::EntryGameData::None,
     })
 }
 
@@ -413,5 +421,59 @@ fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionP
 }
 
 fn update_entry_live(entry: &mut model::Entry, data: &Data) {
-    // TODO: Update current driver.
+    let car_idx = entry.id.0 as usize;
+
+    // TODO: Update current driver for team races.
+
+    if let Some(ref car_idx_position) = data.live_data.car_idx_position {
+        if let Some(position) = car_idx_position.get(car_idx) {
+            entry.position.set(*position);
+        }
+    }
+
+    if let Some(ref car_idx_lap_dist_pct) = data.live_data.car_idx_lap_dist_pct {
+        if let Some(spline_pos) = car_idx_lap_dist_pct.get(car_idx) {
+            entry.spline_pos.set(*spline_pos);
+        }
+    }
+
+    if let Some(ref car_idx_laps) = data.live_data.car_idx_lap_completed {
+        if let Some(laps) = car_idx_laps.get(car_idx) {
+            entry.lap_count.set(*laps);
+        }
+    }
+
+    if let Some(ref lap_time_est) = data.live_data.car_idx_est_time {
+        if let Some(time) = lap_time_est.get(car_idx) {
+            entry.current_lap.set(model::Lap {
+                time: time.clone().into(),
+                splits: Vec::new().into(),
+                invalid: model::Value::default(),
+                driver_id: entry.current_driver.unwrap(),
+                entry_id: entry.id,
+            });
+        }
+    }
+
+    if let Some(ref car_idx_f2_time) = data.live_data.car_idx_f2_time {
+        if let Some(time) = car_idx_f2_time.get(car_idx) {
+            entry.time_behind_leader.set(time.clone());
+        }
+    }
+
+    if let Some(ref car_idx_on_pit_road) = data.live_data.car_idx_on_pit_road {
+        if let Some(on_pit_road) = car_idx_on_pit_road.get(car_idx) {
+            entry.in_pits.set(*on_pit_road);
+        }
+    }
+
+    if let Some(ref car_idx_gear) = data.live_data.car_idx_gear {
+        if let Some(gear) = car_idx_gear.get(car_idx) {
+            entry.gear.set(*gear);
+        }
+    }
+
+    if let Some(ref cam_car_idx) = data.live_data.cam_car_idx {
+        entry.focused = *cam_car_idx as usize == car_idx;
+    }
 }

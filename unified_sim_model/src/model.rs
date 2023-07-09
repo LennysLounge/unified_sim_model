@@ -216,6 +216,10 @@ pub struct Model {
     /// In Acc there is no event name or server name available. Instead
     /// the default "Assetto Corsa Competizione" is used. This value is editable during
     /// the entire duration of the connection.
+    /// - **iRacing:**
+    /// In iRacing there is no event name or server name available. Instead
+    /// the default "iRacing" is used. This value is editable during
+    /// the entire duration of the connection.
     pub event_name: Value<String>,
     /// The currently active camera.
     pub active_camera: Value<Camera>,
@@ -397,6 +401,12 @@ pub struct Entry {
     /// List of all laps completed by this entry.
     pub laps: Vec<Lap>,
     /// The current lap time data for this entry.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// The current lap time is only an approximation of the current lap time.
+    /// Since all timing is done on the client side it is not possible to get realtime
+    /// current lap data.
     pub current_lap: Value<Lap>,
     /// The best lap this entry has completed.
     pub best_lap: Value<Option<usize>>,
@@ -406,6 +416,8 @@ pub struct Entry {
     /// - **Assetto Corsa Competizione:**
     /// It is a little unclear what the reference lap time for the performance delta is.
     /// The best guess right now is that it references the best lap of the current stint.
+    /// - **iRacing:**
+    /// Perforamce delta is not available in iRacing.
     pub performance_delta: Value<Time>,
     /// The time difference from the leader of the session to this entry.
     /// In a timed session, this is the difference in lap time. Otherwise it is the difference
@@ -420,6 +432,10 @@ pub struct Entry {
     /// The gear of the entry.
     pub gear: Value<i32>,
     /// The current speed of the entry in m/s.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// The car speed is not implemented yet in iRacing.
     pub speed: Value<f32>,
     /// If the entry is currently connected to the session.
     ///

@@ -18,7 +18,7 @@ pub struct StaticData {
     pub radio_info: RadioInfo,
     pub driver_info: DriverInfo,
     pub split_time_info: SplitTimeInfo,
-    pub qualify_results_info: QualifyResultsInfo,
+    pub qualify_results_info: Option<QualifyResultsInfo>,
     pub car_setup: CarSetup,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,
@@ -38,7 +38,9 @@ impl StaticData {
         map.extend(self.radio_info.get_unmapped(&prefix));
         map.extend(self.driver_info.get_unmapped(&prefix));
         map.extend(self.split_time_info.get_unmapped(&prefix));
-        map.extend(self.qualify_results_info.get_unmapped(&prefix));
+        self.qualify_results_info
+            .as_ref()
+            .map(|v| map.extend(v.get_unmapped(&prefix)));
         map.extend(self.car_setup.get_unmapped(&prefix));
         map
     }
@@ -51,8 +53,10 @@ pub struct WeekendInfo {
     #[serde(rename = "TrackID")]
     pub track_id: Option<i32>,
     #[serde(deserialize_with = "km_deserializer")]
+    #[serde(default)]
     pub track_length: Option<Distance>,
     #[serde(deserialize_with = "km_deserializer")]
+    #[serde(default)]
     pub track_length_official: Option<Distance>,
     pub track_display_name: Option<String>,
     pub track_display_short_name: Option<String>,
@@ -60,33 +64,45 @@ pub struct WeekendInfo {
     pub track_city: Option<String>,
     pub track_country: Option<String>,
     #[serde(deserialize_with = "m_deserializer")]
+    #[serde(default)]
     pub track_altitude: Option<Distance>,
     #[serde(deserialize_with = "decimal_degrees_deserializer")]
+    #[serde(default)]
     pub track_latitude: Option<Angle>,
     #[serde(deserialize_with = "decimal_degrees_deserializer")]
+    #[serde(default)]
     pub track_longitude: Option<Angle>,
     #[serde(deserialize_with = "rad_deserializer")]
+    #[serde(default)]
     pub track_north_offset: Option<Angle>,
     pub track_num_turns: Option<i32>,
     #[serde(deserialize_with = "kph_deserializer")]
+    #[serde(default)]
     pub track_pit_speed_limit: Option<Speed>,
     pub track_type: Option<String>,
     pub track_direction: Option<String>,
     pub track_weather_type: Option<String>,
     pub track_skies: Option<String>,
     #[serde(deserialize_with = "celcius_deserializer")]
+    #[serde(default)]
     pub track_surface_temp: Option<Temperature>,
     #[serde(deserialize_with = "celcius_deserializer")]
+    #[serde(default)]
     pub track_air_temp: Option<Temperature>,
     #[serde(deserialize_with = "air_pressure_deserializer")]
+    #[serde(default)]
     pub track_air_pressure: Option<f32>,
     #[serde(deserialize_with = "ms_deserializer")]
+    #[serde(default)]
     pub track_wind_vel: Option<Speed>,
     #[serde(deserialize_with = "rad_deserializer")]
+    #[serde(default)]
     pub track_wind_dir: Option<Angle>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub track_relative_humidity: Option<f32>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub track_fog_level: Option<f32>,
     pub track_cleanup: Option<i32>,
     pub track_dynamic_track: Option<i32>,
@@ -156,14 +172,19 @@ pub struct WeekendOptions {
     pub skies: Option<String>,
     pub wind_direction: Option<String>,
     #[serde(deserialize_with = "kmh_deserializer")]
+    #[serde(default)]
     pub wind_speed: Option<Speed>,
     #[serde(deserialize_with = "celcius_deserializer")]
+    #[serde(default)]
     pub weather_temp: Option<Temperature>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub relative_humidity: Option<f32>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub fog_level: Option<f32>,
     #[serde(deserialize_with = "time_of_day_deserializer")]
+    #[serde(default)]
     pub time_of_day: Option<Time>,
     pub date: Option<String>,
     pub earth_rotation_speedup_factor: Option<i32>,
@@ -176,8 +197,10 @@ pub struct WeekendOptions {
     pub hardcore_level: Option<i32>,
     pub num_joker_laps: Option<i32>,
     #[serde(deserialize_with = "unlimited_i32_deserializer")]
+    #[serde(default)]
     pub incident_limit: Option<MaybeUnlimited<i32>>,
     #[serde(deserialize_with = "unlimited_i32_deserializer")]
+    #[serde(default)]
     pub fast_repairs_limit: Option<MaybeUnlimited<i32>>,
     pub green_white_checkered_limit: Option<i32>,
     #[serde(flatten)]
@@ -244,8 +267,10 @@ impl SessionInfo {
 pub struct Session {
     pub session_num: Option<i32>,
     #[serde(deserialize_with = "unlimited_i32_deserializer")]
+    #[serde(default)]
     pub session_laps: Option<MaybeUnlimited<i32>>,
     #[serde(deserialize_with = "unlimited_sec_deserializer")]
+    #[serde(default)]
     pub session_time: Option<MaybeUnlimited<Time>>,
     pub session_num_laps_to_avg: Option<i32>,
     pub session_type: Option<String>,
@@ -580,12 +605,16 @@ pub struct Driver {
     pub car_class_rel_speed: Option<i32>,
     pub car_class_license_level: Option<i32>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub car_class_max_fuel_pct: Option<f32>,
     #[serde(deserialize_with = "kg_deserializer")]
+    #[serde(default)]
     pub car_class_weight_penalty: Option<Weight>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub car_class_power_adjust: Option<f32>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub car_class_dry_tire_set_limit: Option<f32>,
     pub car_class_color: Option<String>,
     pub car_class_est_lap_time: Option<f32>,
@@ -782,13 +811,17 @@ impl Tires {
 #[serde(rename_all = "PascalCase")]
 pub struct TireLeft {
     #[serde(deserialize_with = "kpa_deserializer")]
+    #[serde(default)]
     pub cold_pressure: Option<Pressure>,
     #[serde(deserialize_with = "kpa_deserializer")]
+    #[serde(default)]
     pub last_hot_pressure: Option<Pressure>,
     #[serde(rename = "LastTempsOMI")]
     #[serde(deserialize_with = "tripple_celcius_deserializer_reverse")]
+    #[serde(default)]
     pub last_temps_imo: Option<InnerMiddleOutside<Temperature>>,
     #[serde(deserialize_with = "tripple_percent_deserializer")]
+    #[serde(default)]
     pub tread_remaining: Option<InnerMiddleOutside<f32>>,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,
@@ -810,13 +843,17 @@ impl TireLeft {
 #[serde(rename_all = "PascalCase")]
 pub struct TireRight {
     #[serde(deserialize_with = "kpa_deserializer")]
+    #[serde(default)]
     pub cold_pressure: Option<Pressure>,
     #[serde(deserialize_with = "kpa_deserializer")]
+    #[serde(default)]
     pub last_hot_pressure: Option<Pressure>,
     #[serde(deserialize_with = "tripple_celcius_deserializer")]
+    #[serde(default)]
     #[serde(rename = "LastTempsIMO")]
     pub last_temps_imo: Option<InnerMiddleOutside<Temperature>>,
     #[serde(deserialize_with = "tripple_percent_deserializer")]
+    #[serde(default)]
     pub tread_remaining: Option<InnerMiddleOutside<f32>>,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,
@@ -888,10 +925,13 @@ impl Chassis {
 #[serde(rename_all = "PascalCase")]
 pub struct ChassisFront {
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub arb_diameter: Option<Distance>,
     #[serde(deserialize_with = "turns_deserializer")]
+    #[serde(default)]
     pub spring_preload: Option<f32>,
     #[serde(deserialize_with = "percent_deserializer")]
+    #[serde(default)]
     pub brake_pressure_bias: Option<f32>,
     pub screen_color: Option<String>,
     #[serde(flatten)]
@@ -914,14 +954,19 @@ impl ChassisFront {
 #[serde(rename_all = "PascalCase")]
 pub struct ChassisCornerFront {
     #[serde(deserialize_with = "n_deserializer")]
+    #[serde(default)]
     pub corner_weight: Option<f32>,
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub ride_height: Option<Distance>,
     #[serde(deserialize_with = "clicks_deserializer")]
+    #[serde(default)]
     pub shock_setting: Option<f32>,
     #[serde(deserialize_with = "deg_deserializer")]
+    #[serde(default)]
     pub camber: Option<Angle>,
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub toe_in: Option<Distance>,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,
@@ -943,16 +988,22 @@ impl ChassisCornerFront {
 #[serde(rename_all = "PascalCase")]
 pub struct ChassisRear {
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub ride_height: Option<Distance>,
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub pushrod_offset: Option<Distance>,
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub spring_perch_offset: Option<Distance>,
     #[serde(deserialize_with = "n_per_mm_deserializer")]
+    #[serde(default)]
     pub spring_rate: Option<f32>,
     #[serde(deserialize_with = "clicks_deserializer")]
+    #[serde(default)]
     pub shock_setting: Option<f32>,
     #[serde(deserialize_with = "l_deserializer")]
+    #[serde(default)]
     pub fuel_level: Option<f32>,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,
@@ -974,10 +1025,13 @@ impl ChassisRear {
 #[serde(rename_all = "PascalCase")]
 pub struct ChassisCornerRear {
     #[serde(deserialize_with = "n_deserializer")]
+    #[serde(default)]
     pub corner_weight: Option<f32>,
     #[serde(deserialize_with = "deg_deserializer")]
+    #[serde(default)]
     pub camber: Option<Angle>,
     #[serde(deserialize_with = "mm_deserializer")]
+    #[serde(default)]
     pub toe_in: Option<Distance>,
     #[serde(flatten)]
     pub unmapped: HashMap<String, Value>,

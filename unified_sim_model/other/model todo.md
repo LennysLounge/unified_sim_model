@@ -7,10 +7,10 @@ struct Model {
 	sessions:               X			X
 	current_session:        X			X
 	events:                 X			
-	event_name:             X			
+	event_name:             X			X
 	active_camera:			X			
 	available_cameras:		X			
-	focused_entry:			X			
+	focused_entry:			X			X
 }
 
 struct Session {
@@ -23,7 +23,7 @@ struct Session {
 	laps:                   X			X
 	laps_remaining:         X			X
 	time_of_day:            X			X
-	day:                    X			X	
+	day:                    X			X
 	ambient_temp:           X			X
 	track_temp:             X			X
 	best_lap:               X			-
@@ -42,21 +42,21 @@ struct Entry {
 	nationality:			X			X
 	world_pos:				X			X
 	orientation:			X			X
-	position:				X			-
-	spline_pos:				X			-
-	lap_count:				X			-
+	position:				X			X
+	spline_pos:				X			X
+	lap_count:				X			X
 	laps:					X			-
-	current_lap:			X			-
+	current_lap:			X			X
 	best_lap:				X			-
-	performance_delta:		X			-
-	time_behind_leader:		X			-
-	in_pits:				X			-
-	gear:					X			-
-	speed:					X			-
+	performance_delta:		X			X
+	time_behind_leader:		X			X
+	in_pits:				X			X
+	gear:					X			X
+	speed:					X			X
 	connected:				X			X
 	stint_time:				X			X
 	distance_driven:		X			-
-	focused:				X			-
+	focused:				X			X
 	game_data:				X			X
 }
 
@@ -73,7 +73,7 @@ struct Driver {
 struct Lap {
 	time:					X
 	splits:					X
-	invalid:				X
+	invalid:				X			-
 	driver_id:				X
 	entry_id:				X
 }
