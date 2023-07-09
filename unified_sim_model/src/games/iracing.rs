@@ -18,7 +18,7 @@ use crate::{
 };
 
 use self::irsdk::{
-    live_data,
+    live_data::{self, TrkLoc},
     static_data::{self},
     Data, Irsdk,
 };
@@ -183,7 +183,6 @@ impl IRacingConnection {
         update_session_live(&mut current_session, &data.live_data);
 
         // Update entries
-        //println!("lap_dist_pct: {:?}", data.live_data.car_idx_lap_dist_pct);
         for (_entry_id, entry) in current_session.entries.iter_mut() {
             update_entry_live(entry, &data);
             distance_driven::calc_distance_driven(entry);
@@ -479,5 +478,15 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data) {
 
     if let Some(ref cam_car_idx) = data.live_data.cam_car_idx {
         entry.focused = *cam_car_idx as usize == car_idx;
+    }
+
+    if let Some(ref car_idx_track_surface) = data.live_data.car_idx_track_surface {
+        if let Some(track_location) = car_idx_track_surface.get(car_idx) {
+            if let TrkLoc::NotInWorld = track_location {
+                entry.connected.set(false);
+            } else {
+                entry.connected.set(true);
+            }
+        }
     }
 }
