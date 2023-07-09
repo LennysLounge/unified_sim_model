@@ -2,6 +2,16 @@
             -:      Value created correclty but not filled correctly.
                             
                             ACC			iRacing
+enum Event {
+    EntryConnected:			X
+    EntryReconnected:		X
+    EntryDisconnected:		X
+    SessionChanged:			X
+    SessionPhaseChanged:	X
+    LapCompleted:			X			X
+}
+
+
 struct Model {
 	connected:              X			X
 	sessions:               X			X
@@ -26,7 +36,7 @@ struct Session {
 	day:                    X			X
 	ambient_temp:           X			X
 	track_temp:             X			X
-	best_lap:               X			-
+	best_lap:               X			X
 	track_name:				X			X
 	track_length:			X			X
     game_data:              X			X
@@ -45,9 +55,9 @@ struct Entry {
 	position:				X			X
 	spline_pos:				X			X
 	lap_count:				X			X
-	laps:					X			-
+	laps:					X			X
 	current_lap:			X			X
-	best_lap:				X			-
+	best_lap:				X			X
 	performance_delta:		X			X
 	time_behind_leader:		X			X
 	in_pits:				X			X
@@ -67,7 +77,7 @@ struct Driver {
 	short_name:				X			X
 	nationality:			X			X
 	driving_time:			X			X
-	best_lap:				X			-
+	best_lap:				X			X
 }
 
 struct Lap {

@@ -185,6 +185,9 @@ fn display_entries_table(
                     ui.strong("Best lap");
                 });
                 row.cell(|ui| {
+                    ui.strong("Last lap");
+                });
+                row.cell(|ui| {
                     ui.strong("Lap");
                 });
                 row.cell(|ui| {
@@ -228,9 +231,7 @@ fn display_entries_table(
                             ui.add(egui::Label::new(entry.team_name.as_ref()).wrap(false));
                         });
                         row.cell(|ui| {
-                            let driver = entry
-                                .current_driver
-                                .and_then(|driver_id| entry.drivers.get(&driver_id));
+                            let driver = entry.drivers.get(&entry.current_driver);
                             let driver_name = match driver {
                                 Some(driver) => {
                                     format!("{} {}", driver.first_name, driver.last_name)
@@ -267,13 +268,18 @@ fn display_entries_table(
                         });
                         row.cell(|ui| {
                             let best_lap = entry
-                                .current_driver
-                                .and_then(|driver_id| entry.drivers.get(&driver_id))
-                                .and_then(|driver| *driver.best_lap)
-                                .and_then(|lap_index| entry.laps.get(lap_index))
+                                .best_lap
+                                .as_ref()
+                                .as_ref()
                                 .map_or("-".to_string(), |lap| lap.time.format());
-
                             ui.label(best_lap);
+                        });
+                        row.cell(|ui| {
+                            let last_lap = entry
+                                .laps
+                                .last()
+                                .map_or("-".to_string(), |lap| lap.time.format());
+                            ui.label(last_lap);
                         });
                         row.cell(|ui| {
                             let mut lap_time = RichText::new(entry.current_lap.time.format());

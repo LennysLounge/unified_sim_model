@@ -9,7 +9,7 @@ use std::{
 };
 
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     log_todo,
@@ -79,6 +79,7 @@ struct IRacingConnection {
     update_event: UpdateEvent,
     sdk: Irsdk,
     static_data_update_count: Option<i32>,
+    lap_processor: LapProcessor,
 }
 
 impl IRacingConnection {
@@ -94,6 +95,7 @@ impl IRacingConnection {
             update_event,
             sdk,
             static_data_update_count: None,
+            lap_processor: LapProcessor::new(),
         }
     }
 
@@ -187,6 +189,7 @@ impl IRacingConnection {
             update_entry_live(entry, &data);
             distance_driven::calc_distance_driven(entry);
         }
+        self.lap_processor.process(&mut model, data)?;
 
         Ok(())
     }
@@ -320,7 +323,7 @@ fn map_entry(driver_info: &static_data::Driver) -> Result<model::Entry> {
             drivers.insert(driver.id, driver.clone());
             drivers
         },
-        current_driver: Some(driver.id),
+        current_driver: driver.id,
         team_name,
         car,
         car_number,
@@ -457,7 +460,7 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data) {
                 time: time.clone().into(),
                 splits: Vec::new().into(),
                 invalid: model::Value::default(),
-                driver_id: entry.current_driver.unwrap(),
+                driver_id: entry.current_driver,
                 entry_id: entry.id,
             });
         }
@@ -493,5 +496,101 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data) {
                 entry.connected.set(true);
             }
         }
+    }
+}
+
+struct LapProcessor {
+    laps_before: HashMap<model::EntryId, i32>,
+}
+
+impl LapProcessor {
+    fn new() -> Self {
+        Self {
+            laps_before: HashMap::new(),
+        }
+    }
+
+    fn process(&mut self, model: &mut model::Model, data: &Data) -> Result<()> {
+        let session = model
+            .current_session_mut()
+            .expect("Current session should be valid");
+
+        let mut new_events = Vec::new();
+        for (entry_id, entry) in session.entries.iter_mut() {
+            let lap_completed = self
+                .laps_before
+                .get(&entry.id)
+                .is_some_and(|lap_count| lap_count != entry.lap_count.as_ref());
+            self.laps_before.insert(entry.id, entry.lap_count.as_copy());
+            if !lap_completed {
+                continue;
+            }
+
+            let Some(last_lap_time) = data.live_data
+                .car_idx_last_lap_time
+                .as_ref()
+                .and_then(|lap_times| lap_times.get(entry_id.0 as usize)) else {continue};
+
+            let Some(driver) = entry.drivers.get_mut(&entry.current_driver) else {continue};
+
+            let lap = model::Lap {
+                time: last_lap_time.clone().into(),
+                splits: Vec::new().into(),
+                invalid: model::Value::default(),
+                driver_id: driver.id,
+                entry_id: entry.id,
+            };
+            entry.laps.push(lap.clone());
+
+            let personal_best = driver
+                .best_lap
+                .as_ref()
+                .as_ref()
+                .map_or(true, |best_lap| lap.time < best_lap.time)
+                && !*lap.invalid;
+            if personal_best {
+                driver.best_lap.set(Some(lap.clone()));
+            }
+
+            let entry_best = entry
+                .best_lap
+                .as_ref()
+                .as_ref()
+                .map_or(true, |best_lap| lap.time < best_lap.time)
+                && !*lap.invalid;
+            if entry_best {
+                entry.best_lap.set(Some(lap.clone()));
+            }
+
+            let session_best = session
+                .best_lap
+                .as_ref()
+                .as_ref()
+                .map_or(true, |best_lap| lap.time < best_lap.time)
+                && !*lap.invalid;
+            if session_best {
+                session.best_lap.set(Some(lap.clone()));
+            }
+
+            info!(
+                "Car #{} completed lap: {} {}{}{}",
+                entry.car_number,
+                lap.time,
+                if personal_best { "P" } else { "" },
+                if entry_best { "E" } else { "" },
+                if session_best { "S" } else { "" },
+            );
+
+            new_events.push(model::Event::LapCompleted(model::LapCompleted {
+                lap,
+                is_session_best: session_best,
+                is_entry_best: entry_best,
+                is_driver_best: personal_best,
+            }));
+        }
+
+        model.events.extend(new_events);
+
+        Ok(())
     }
 }

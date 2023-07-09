@@ -38,9 +38,7 @@ impl Graph {
             .current_session()
             .and_then(|session| session.entries.get(&entry_id))
             .map_or("N/a".to_owned(), |entry| {
-                let driver = entry
-                    .current_driver
-                    .and_then(|driver_id| entry.drivers.get(&driver_id));
+                let driver = entry.drivers.get(&entry.current_driver);
                 match driver {
                     Some(driver) => format!(
                         "{} {} #{}",
