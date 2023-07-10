@@ -1,14 +1,16 @@
 use bitflags::bitflags;
 use core::slice;
-use std::fmt::Debug;
+use std::{ffi::c_void, fmt::Debug};
 use thiserror::Error;
 use tracing::{info, warn};
 use windows::{
     w,
     Win32::{
-        Foundation::{HANDLE, WAIT_ABANDONED, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT},
+        Foundation::{
+            CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+        },
         System::{
-            Memory::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
+            Memory::{MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_READ},
             Threading::{OpenEventW, WaitForSingleObject, SYNCHRONIZATION_SYNCHRONIZE},
         },
     },
@@ -54,7 +56,9 @@ pub enum WaitError {
 #[derive(Debug)]
 pub struct Irsdk {
     /// Handle to the memory mapped file.
-    _handle: HANDLE,
+    file_mapping: HANDLE,
+    /// Handle to wait for the data valid event.
+    data_valid_event: HANDLE,
     /// pointer into the memory mapped file.
     view: *const u8,
     /// Tick count of the last update.
@@ -67,8 +71,16 @@ pub struct Irsdk {
     session_data_last_udpate: i32,
     /// The current session data.
     session_data: StaticData,
-    /// Object handle to wait for the data valid event.
-    data_valid_event: HANDLE,
+}
+
+impl Drop for Irsdk {
+    fn drop(&mut self) {
+        unsafe {
+            UnmapViewOfFile(self.view as *const c_void);
+            CloseHandle(self.file_mapping);
+            CloseHandle(self.data_valid_event);
+        };
+    }
 }
 
 impl Irsdk {
@@ -102,7 +114,7 @@ impl Irsdk {
         }
 
         return Ok(Self {
-            _handle: handle,
+            file_mapping: handle,
             view,
             _last_tick_count: 0,
             var_handlers: Vec::new(),

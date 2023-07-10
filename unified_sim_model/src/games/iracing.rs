@@ -7,7 +7,7 @@ use std::{
 };
 
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 

@@ -10,6 +10,12 @@ enum Event {
     LapCompleted:			X			X
 }
 
+enum AdapterCommand {
+    Close:					X			X
+    FocusOnCar:				X
+    ChangeCamera:			X
+}
+
 
 struct Model {
 	connected:              X			X
