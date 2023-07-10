@@ -6,8 +6,11 @@ use tracing::{info, warn};
 use windows::{
     w,
     Win32::{
-        Foundation::HANDLE,
-        System::Memory::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
+        Foundation::{HANDLE, WAIT_ABANDONED, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT},
+        System::{
+            Memory::{MapViewOfFile, OpenFileMappingW, FILE_MAP_READ},
+            Threading::{OpenEventW, WaitForSingleObject, SYNCHRONIZATION_SYNCHRONIZE},
+        },
     },
 };
 
@@ -40,6 +43,14 @@ pub enum PollError {
     NotConnected,
 }
 
+#[derive(Debug, Error)]
+pub enum WaitError {
+    #[error("The timeout expired")]
+    Timeout,
+    #[error("The wait failed with the error {0}")]
+    Win32Error(windows::core::Error),
+}
+
 #[derive(Debug)]
 pub struct Irsdk {
     /// Handle to the memory mapped file.
@@ -56,6 +67,8 @@ pub struct Irsdk {
     session_data_last_udpate: i32,
     /// The current session data.
     session_data: StaticData,
+    /// Object handle to wait for the data valid event.
+    data_valid_event: HANDLE,
 }
 
 impl Irsdk {
@@ -76,6 +89,18 @@ impl Irsdk {
             return Err(windows::core::Error::from_win32());
         }
 
+        // SAFETY: The returned handle can be invalid and needs to be checked.
+        let data_valid_event = unsafe {
+            OpenEventW(
+                SYNCHRONIZATION_SYNCHRONIZE,
+                false,
+                w!("Local\\IRSDKDataValidEvent"),
+            )
+        }?;
+        if data_valid_event.is_invalid() {
+            return Err(windows::core::Error::from_win32());
+        }
+
         return Ok(Self {
             _handle: handle,
             view,
@@ -84,7 +109,26 @@ impl Irsdk {
             connected: false,
             session_data_last_udpate: 0,
             session_data: StaticData::default(),
+            data_valid_event,
         });
+    }
+
+    /// Wait for the data update signal with a maximum timeout.
+    pub fn wait_for_update(&self, timeout_ms: u32) -> Result<(), WaitError> {
+        // SAFETY: The data_valid_event must be a valid handle. This is
+        // check in the constructor.
+        let status = unsafe { WaitForSingleObject(self.data_valid_event, timeout_ms) };
+        match status {
+            WAIT_OBJECT_0 => Ok(()),
+            WAIT_TIMEOUT => Err(WaitError::Timeout),
+            // This error is related to when the object is a mutex.
+            // Since this is not the case this is unreachable.
+            WAIT_ABANDONED => unreachable!(),
+            WAIT_FAILED => Err(WaitError::Win32Error(windows::core::Error::from_win32())),
+            // The returned status is only a subset of all possible errors and is specified
+            // in the win32 docs.
+            _ => unreachable!(),
+        }
     }
 
     pub fn poll(&mut self) -> Result<Data, PollError> {

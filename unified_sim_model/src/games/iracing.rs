@@ -4,12 +4,10 @@ use std::{
         mpsc::{Receiver, TryRecvError},
         Arc, RwLock,
     },
-    thread,
-    time::Duration,
 };
 
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 
@@ -34,6 +32,8 @@ pub enum IRacingError {
     Disconnected,
     #[error("Missing required data: {0}")]
     MissingData(String),
+    #[error("Internal windows error: {0}")]
+    WindowsError(windows::core::Error),
     #[error("The adapter encountered an error: {0}")]
     Other(String),
 }
@@ -104,14 +104,19 @@ impl IRacingConnection {
                 break;
             }
 
+            if let Err(error) = self.sdk.wait_for_update(16) {
+                match error {
+                    irsdk::WaitError::Timeout => continue,
+                    irsdk::WaitError::Win32Error(code) => Err(IRacingError::WindowsError(code))?,
+                }
+            }
+
             let data = self.sdk.poll().map_err(|e| match e {
                 irsdk::PollError::NotConnected => IRacingError::Disconnected,
             })?;
 
             self.update_model(&data)?;
             self.update_event.trigger();
-
-            thread::sleep(Duration::from_millis(100));
         }
         Ok(())
     }
