@@ -7,7 +7,7 @@ use crate::{
         common::distance_driven,
         iracing::{
             irsdk::{
-                live_data::{self, TrkLoc},
+                defines::{SessionState, TrkLoc},
                 static_data, Data,
             },
             IRacingError, IRacingResult,
@@ -364,15 +364,15 @@ fn update_session_live(context: &mut IRacingProcessorContext) {
     }
 }
 
-fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionPhase {
+fn map_session_phase(session_state: &SessionState) -> model::SessionPhase {
     match session_state {
-        live_data::SessionState::StateInvalid => model::SessionPhase::Waiting,
-        live_data::SessionState::StateGetInCar => model::SessionPhase::Preparing,
-        live_data::SessionState::StateWarmup => model::SessionPhase::Preparing,
-        live_data::SessionState::StateParadeLaps => model::SessionPhase::Formation,
-        live_data::SessionState::StateRacing => model::SessionPhase::Active,
-        live_data::SessionState::StateCheckered => model::SessionPhase::Ending,
-        live_data::SessionState::StateCoolDown => model::SessionPhase::Finished,
+        SessionState::StateInvalid => model::SessionPhase::Waiting,
+        SessionState::StateGetInCar => model::SessionPhase::Preparing,
+        SessionState::StateWarmup => model::SessionPhase::Preparing,
+        SessionState::StateParadeLaps => model::SessionPhase::Formation,
+        SessionState::StateRacing => model::SessionPhase::Active,
+        SessionState::StateCheckered => model::SessionPhase::Ending,
+        SessionState::StateCoolDown => model::SessionPhase::Finished,
     }
 }
 

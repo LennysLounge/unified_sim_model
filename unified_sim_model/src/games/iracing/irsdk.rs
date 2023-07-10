@@ -1,4 +1,3 @@
-use bitflags::bitflags;
 use core::slice;
 use std::{ffi::c_void, fmt::Debug};
 use thiserror::Error;
@@ -13,25 +12,24 @@ use windows::{
             Memory::{MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_READ},
             Threading::{OpenEventW, WaitForSingleObject, SYNCHRONIZATION_SYNCHRONIZE},
         },
+        UI::WindowsAndMessaging::RegisterWindowMessageW,
     },
 };
 
-use crate::Time;
+use crate::{games::iracing::irsdk::defines::VarHeader, Time};
 
 use self::{
-    live_data::{
-        CameraState, EngineWarnings, Flags, LiveData, PaceFlags, PitSvFlags, TrkLoc, TrkSurf,
+    defines::{
+        CameraState, EngineWarnings, Flags, Header, PaceFlags, PitSvFlags, StatusField, TrkLoc,
+        TrkSurf,
     },
+    live_data::LiveData,
     static_data::StaticData,
 };
 
+pub mod defines;
 pub mod live_data;
 pub mod static_data;
-
-pub const MAX_BUFFERS: usize = 4;
-pub const _SUPPORTED_VERSION: i32 = 2;
-pub const MAX_STRING: usize = 32;
-pub const MAX_DESC: usize = 64;
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -59,6 +57,8 @@ pub struct Irsdk {
     file_mapping: HANDLE,
     /// Handle to wait for the data valid event.
     data_valid_event: HANDLE,
+    /// The message id used to send messages to the game.
+    message_id: u32,
     /// pointer into the memory mapped file.
     view: *const u8,
     /// Tick count of the last update.
@@ -113,6 +113,12 @@ impl Irsdk {
             return Err(windows::core::Error::from_win32());
         }
 
+        // SAFETY: If the function fails the returned id is 0.
+        let message_id = unsafe { RegisterWindowMessageW(w!("IRSDK_BROADCASTMSG")) };
+        if message_id == 0 {
+            return Err(windows::core::Error::from_win32());
+        }
+
         return Ok(Self {
             file_mapping: handle,
             view,
@@ -122,8 +128,11 @@ impl Irsdk {
             session_data_last_udpate: 0,
             session_data: StaticData::default(),
             data_valid_event,
+            message_id,
         });
     }
+
+    pub fn send_message(&self) {}
 
     /// Wait for the data update signal with a maximum timeout.
     pub fn wait_for_update(&self, timeout_ms: u32) -> Result<(), WaitError> {
@@ -264,100 +273,6 @@ impl Irsdk {
             handler.process(&var_buffer, &mut data.live_data);
         }
     }
-}
-
-/// The header of the shared memory.
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct Header {
-    /// Api version.
-    pub version: i32,
-    /// Bitfield using risdk_StatusField
-    pub status: StatusField,
-    /// Ticks per second (60 or 360 etc)
-    pub tick_rate: i32,
-
-    // Session information updates periodicaly
-    /// Increments when session data changes
-    pub session_data_update: i32,
-    /// Length in bytes of session data string
-    pub session_data_len: i32,
-    /// Session data, encoded in Yaml format
-    pub session_data_offset: i32,
-
-    // Variable headers, updated every tick
-    /// Amount of elements in the var header buffer.
-    pub var_header_element_count: i32,
-    /// Offset for the var header arrasy.
-    pub var_header_offset: i32,
-
-    // Variable buffers, updated every tick
-    /// Number of buffers
-    pub var_buffer_count: i32,
-    /// length in bytes for one buffer
-    pub var_buffer_len: i32,
-    // (16 byte align)
-    pad: [i32; 2],
-    /// Var buffers
-    pub var_buffers: [VarBuffer; MAX_BUFFERS],
-}
-
-bitflags! {
-    /// Shared memory status bifflags
-    #[derive(Debug, Clone)]
-    #[repr(C)]
-    pub struct StatusField: i32 {
-        const CONNECTED = 1;
-    }
-}
-
-/// Information about a variable in the shared memroy.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct VarHeader {
-    /// Type of the variable
-    pub var_type: VarType,
-    /// Offset from the header
-    pub offset: i32,
-    /// Number of entries for this variable in case of an array.
-    pub count: i32,
-
-    pub count_as_time: bool,
-    pad: [u8; 3],
-
-    /// Name of the variable
-    pub name: [u8; MAX_STRING],
-    /// Description of the variable
-    pub description: [u8; MAX_DESC],
-    /// Unit of the variable
-    pub unit: [u8; MAX_STRING],
-}
-
-/// Types of variables in the shared memory.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-#[repr(i32)]
-pub enum VarType {
-    Char,
-    Bool,
-    Int,
-    Bitfield,
-    Float,
-    Double,
-}
-
-/// A buffer that holds the variables in the shared memory.
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct VarBuffer {
-    // Tick count when this buffer was generated
-    pub tick_count: i32,
-    // Offset from the header
-    pub offset: i32,
-    // (16 byte align)
-    pad: [i32; 2],
 }
 
 /// A handler to read a variable from the var buffer and write its data into the model.
