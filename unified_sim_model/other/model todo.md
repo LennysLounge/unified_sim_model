@@ -6,8 +6,8 @@ enum Event {
     EntryConnected:			X
     EntryReconnected:		X
     EntryDisconnected:		X
-    SessionChanged:			X
-    SessionPhaseChanged:	X
+    SessionChanged:			X			X
+    SessionPhaseChanged:	X			X
     LapCompleted:			X			X
 }
 
