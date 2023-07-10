@@ -3,9 +3,8 @@
                             
                             ACC			iRacing
 enum Event {
-    EntryConnected:			X
-    EntryReconnected:		X
-    EntryDisconnected:		X
+    EntryConnected:			X			X
+    EntryDisconnected:		X			X
     SessionChanged:			X			X
     SessionPhaseChanged:	X			X
     LapCompleted:			X			X
@@ -16,7 +15,7 @@ struct Model {
 	connected:              X			X
 	sessions:               X			X
 	current_session:        X			X
-	events:                 X			
+	events:                 X			X
 	event_name:             X			X
 	active_camera:			X			
 	available_cameras:		X			

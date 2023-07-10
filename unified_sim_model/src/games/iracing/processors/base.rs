@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use tracing::{info, warn};
 
@@ -93,7 +93,7 @@ impl IRacingProcessor for BaseProcessor {
             .current_session_mut()
             .expect("The current session should be available");
         for (_entry_id, entry) in current_session.entries.iter_mut() {
-            update_entry_live(entry, &context.data);
+            update_entry_live(entry, &context.data, &mut context.events);
             distance_driven::calc_distance_driven(entry);
         }
         Ok(())
@@ -376,7 +376,7 @@ fn map_session_phase(session_state: &live_data::SessionState) -> model::SessionP
     }
 }
 
-fn update_entry_live(entry: &mut model::Entry, data: &Data) {
+fn update_entry_live(entry: &mut model::Entry, data: &Data, events: &mut VecDeque<model::Event>) {
     let car_idx = entry.id.0 as usize;
 
     // TODO: Update current driver for team races.
@@ -435,11 +435,24 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data) {
 
     if let Some(ref car_idx_track_surface) = data.live_data.car_idx_track_surface {
         if let Some(track_location) = car_idx_track_surface.get(car_idx) {
-            if let TrkLoc::NotInWorld = track_location {
-                entry.connected.set(false);
-            } else {
-                entry.connected.set(true);
+            let connected = !matches!(track_location, TrkLoc::NotInWorld);
+            let was_connected = entry.connected.as_copy();
+            entry.connected.set(connected);
+            match (connected, was_connected) {
+                (true, false) => {
+                    info!("Entry reconnected: #{}", *entry.car_number);
+                    events.push_back(model::Event::EntryConnected {
+                        id: entry.id,
+                        reconnect: true,
+                    });
+                }
+                (false, true) => {
+                    info!("Entry disconnected: #{}", *entry.car_number);
+                    events.push_back(model::Event::EntryDisconnected(entry.id));
+                }
+                _ => (),
             }
+            entry.connected.set(connected);
         }
     }
 }

@@ -603,8 +603,11 @@ pub enum Event {
     EntryConnected {
         /// Id of the entry that connected to the session.
         id: EntryId,
-        /// True if this entry was already registed to this session
-        /// and is simply reconnecting.
+        /// True if this entry was already registed to this session and is simply reconnecting.
+        ///
+        /// For games where every entry is already known when the session begins,
+        /// this flag is always true.
+        /// It is only false if the entry is not known to the session before connecting.
         reconnect: bool,
     },
     /// When an entry disconnects from the session.
