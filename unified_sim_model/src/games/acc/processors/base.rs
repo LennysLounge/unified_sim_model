@@ -257,9 +257,10 @@ impl AccProcessor for BaseProcessor {
         }
 
         info!("Entry connected: #{}", car.race_number);
-        context
-            .events
-            .push_back(model::Event::EntryConnected(entry.id));
+        context.events.push_back(model::Event::EntryConnected {
+            id: entry.id,
+            reconnect: false,
+        });
         session.entries.insert(entry.id, entry);
         Ok(())
     }

@@ -50,7 +50,10 @@ impl AccProcessor for ConnectionProcessor {
             match (&is_connected, *entry.connected) {
                 (true, false) => {
                     info!("Entry reconnected: #{}", *entry.car_number);
-                    context.events.push_back(Event::EntryReconnected(entry.id));
+                    context.events.push_back(Event::EntryConnected {
+                        id: entry.id,
+                        reconnect: true,
+                    });
                 }
                 (false, true) => {
                     info!("Entry disconnected: #{}", *entry.car_number);
@@ -77,8 +80,8 @@ impl AccProcessor for ConnectionProcessor {
     }
 
     fn event(&mut self, event: &Event, _context: &mut AccProcessorContext) -> Result<()> {
-        if let Event::EntryConnected(entry_id) = event {
-            self.entries.insert(*entry_id, true);
+        if let Event::EntryConnected { id, .. } = event {
+            self.entries.insert(*id, true);
         }
         Ok(())
     }

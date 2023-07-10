@@ -599,10 +599,14 @@ impl SessionPhase {
 
 #[derive(Debug)]
 pub enum Event {
-    /// When a new entry joines the session.
-    EntryConnected(EntryId),
-    /// When an entry rejoins a session it was previously registered in.
-    EntryReconnected(EntryId),
+    /// When an entry joins the session.
+    EntryConnected {
+        /// Id of the entry that connected to the session.
+        id: EntryId,
+        /// True if this entry was already registed to this session
+        /// and is simply reconnecting.
+        reconnect: bool,
+    },
     /// When an entry disconnects from the session.
     EntryDisconnected(EntryId),
     /// When the session changes
