@@ -12,7 +12,7 @@ use tracing::error;
 use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 
 use self::{
-    irsdk::{Data, Irsdk},
+    irsdk::{defines::Messages, Data, Irsdk},
     processors::{
         base::BaseProcessor, lap::LapProcessor, IRacingProcessor, IRacingProcessorContext,
     },
@@ -125,8 +125,19 @@ impl IRacingConnection {
         let should_close = match self.command_rx.try_recv() {
             Ok(command) => match command {
                 AdapterCommand::Close => true,
-                AdapterCommand::FocusOnCar(_) => {
-                    log_todo(false, "Focus on car command not implemented yet")
+                AdapterCommand::FocusOnCar(ref entry_id) => {
+                    let model = self.model.read().expect("Model should nto be poisoned");
+                    let entry = model
+                        .current_session()
+                        .and_then(|session| session.entries.get(entry_id));
+                    if let Some(entry) = entry {
+                        self.sdk.send_message(Messages::CamSwitchNum {
+                            driver_num: entry.car_number.as_copy() as u16,
+                            camera_group: 0,
+                            camera: 0,
+                        });
+                    }
+                    false
                 }
                 AdapterCommand::ChangeCamera(_) => {
                     log_todo(false, "Change camera command not implemented yet")

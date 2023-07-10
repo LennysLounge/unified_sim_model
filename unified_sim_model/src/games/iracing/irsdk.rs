@@ -6,13 +6,14 @@ use windows::{
     w,
     Win32::{
         Foundation::{
-            CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT,
+            CloseHandle, HANDLE, HWND, LPARAM, WAIT_ABANDONED, WAIT_FAILED, WAIT_OBJECT_0,
+            WAIT_TIMEOUT, WPARAM,
         },
         System::{
             Memory::{MapViewOfFile, OpenFileMappingW, UnmapViewOfFile, FILE_MAP_READ},
             Threading::{OpenEventW, WaitForSingleObject, SYNCHRONIZATION_SYNCHRONIZE},
         },
-        UI::WindowsAndMessaging::RegisterWindowMessageW,
+        UI::WindowsAndMessaging::{RegisterWindowMessageW, SendNotifyMessageW},
     },
 };
 
@@ -20,8 +21,8 @@ use crate::{games::iracing::irsdk::defines::VarHeader, Time};
 
 use self::{
     defines::{
-        CameraState, EngineWarnings, Flags, Header, PaceFlags, PitSvFlags, StatusField, TrkLoc,
-        TrkSurf,
+        CameraState, EngineWarnings, Flags, Header, Messages, PaceFlags, PitSvFlags, StatusField,
+        TrkLoc, TrkSurf,
     },
     live_data::LiveData,
     static_data::StaticData,
@@ -30,6 +31,9 @@ use self::{
 pub mod defines;
 pub mod live_data;
 pub mod static_data;
+
+/// Special handle used to SendMessage
+const BROADCAST_HANDLE: HWND = HWND(0xffff);
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -132,7 +136,17 @@ impl Irsdk {
         });
     }
 
-    pub fn send_message(&self) {}
+    pub fn send_message(&self, message: Messages) {
+        let (p1, p2) = message.map_to_paramters();
+        unsafe {
+            SendNotifyMessageW(
+                BROADCAST_HANDLE,
+                self.message_id,
+                WPARAM(p1 as usize),
+                LPARAM(p2 as isize),
+            )
+        };
+    }
 
     /// Wait for the data update signal with a maximum timeout.
     pub fn wait_for_update(&self, timeout_ms: u32) -> Result<(), WaitError> {
