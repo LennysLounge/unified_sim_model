@@ -12,8 +12,8 @@ enum Event {
 
 enum AdapterCommand {
     Close:					X			X
-    FocusOnCar:				X
-    ChangeCamera:			X
+    FocusOnCar:				X			X
+    ChangeCamera:			X			X
 }
 
 
@@ -24,7 +24,7 @@ struct Model {
 	events:                 X			X
 	event_name:             X			X
 	active_camera:			X			
-	available_cameras:		X			
+	available_cameras:		X			X
 	focused_entry:			X			X
 }
 

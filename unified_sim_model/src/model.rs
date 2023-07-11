@@ -22,7 +22,10 @@ use std::{
 use indexmap::IndexMap;
 
 use crate::{
-    games::acc::model::{AccCamera, AccEntry, AccSession},
+    games::{
+        acc::model::{AccCamera, AccEntry, AccSession},
+        iracing::IRacingCamera,
+    },
     time::Time,
     Distance, Temperature,
 };
@@ -968,4 +971,5 @@ pub enum GameCamera {
     #[default]
     None,
     Acc(AccCamera),
+    IRacing(IRacingCamera),
 }

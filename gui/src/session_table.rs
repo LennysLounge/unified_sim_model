@@ -39,11 +39,13 @@ pub fn show_session_tabs(ui: &mut Ui, model: &Model, windower: &mut Windower, ad
 }
 
 fn display_cameras(ui: &mut Ui, model: &Model, adapter: &Adapter) {
-    for camera in model.available_cameras.iter() {
-        if ui.button(format!("{:?}", camera)).clicked() {
-            adapter.send(AdapterCommand::ChangeCamera(camera.clone()));
+    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        for camera in model.available_cameras.iter() {
+            if ui.button(format!("{:?}", camera)).clicked() {
+                adapter.send(AdapterCommand::ChangeCamera(camera.clone()));
+            }
         }
-    }
+    });
 }
 
 fn display_session_info(ui: &mut Ui, session: &Session) {

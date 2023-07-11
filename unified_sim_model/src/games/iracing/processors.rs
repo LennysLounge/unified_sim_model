@@ -5,6 +5,7 @@ use crate::model::{Event, Model};
 use super::{irsdk::Data, IRacingResult};
 
 pub mod base;
+pub mod camera;
 pub mod lap;
 
 /// The context for a iracing processor.

@@ -7,14 +7,15 @@ use std::{
 };
 
 use thiserror::Error;
-use tracing::error;
+use tracing::{error, warn};
 
-use crate::{log_todo, model::Model, AdapterCommand, GameAdapter, UpdateEvent};
+use crate::{model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 
 use self::{
     irsdk::{defines::Messages, Data, Irsdk},
     processors::{
-        base::BaseProcessor, lap::LapProcessor, IRacingProcessor, IRacingProcessorContext,
+        base::BaseProcessor, camera::CameraProcessor, lap::LapProcessor, IRacingProcessor,
+        IRacingProcessorContext,
     },
 };
 
@@ -77,6 +78,7 @@ struct IRacingConnection {
     static_data_update_count: Option<i32>,
     lap_processor: LapProcessor,
     base_processor: BaseProcessor,
+    camera_processor: CameraProcessor,
 }
 
 impl IRacingConnection {
@@ -94,6 +96,7 @@ impl IRacingConnection {
             static_data_update_count: None,
             lap_processor: LapProcessor::new(),
             base_processor: BaseProcessor {},
+            camera_processor: CameraProcessor::new(),
         }
     }
 
@@ -126,7 +129,7 @@ impl IRacingConnection {
             Ok(command) => match command {
                 AdapterCommand::Close => true,
                 AdapterCommand::FocusOnCar(ref entry_id) => {
-                    let model = self.model.read().expect("Model should nto be poisoned");
+                    let model = self.model.read().expect("Model should not be poisoned");
                     let entry = model
                         .current_session()
                         .and_then(|session| session.entries.get(entry_id));
@@ -139,8 +142,29 @@ impl IRacingConnection {
                     }
                     false
                 }
-                AdapterCommand::ChangeCamera(_) => {
-                    log_todo(false, "Change camera command not implemented yet")
+                AdapterCommand::ChangeCamera(camera) => {
+                    let model = self.model.read().expect("Model should not be poisoned");
+                    let camera = self.camera_processor.get_camera_def(&camera);
+                    if let Some(camera) = camera {
+                        let focused_entry = model.focused_entry.and_then(|id| {
+                            model
+                                .current_session()
+                                .and_then(|session| session.entries.get(&id))
+                        });
+                        if let Some(entry) = focused_entry {
+                            self.sdk.send_message(Messages::CamSwitchNum {
+                                driver_num: entry.car_number.as_copy() as u16,
+                                camera_group: camera.group_num as u16,
+                                camera: camera.camera_num as u16,
+                            });
+                        }
+                    } else {
+                        warn!(
+                            "Unavailable camera definition issued to iRacing adapter: {:?}",
+                            camera
+                        );
+                    }
+                    false
                 }
             },
             Err(TryRecvError::Empty) => false,
@@ -172,19 +196,30 @@ impl IRacingConnection {
         {
             self.base_processor.static_data(&mut context)?;
             self.lap_processor.static_data(&mut context)?;
+            self.camera_processor.static_data(&mut context)?;
 
             self.static_data_update_count = Some(data.static_data.update_count);
         }
 
         self.base_processor.live_data(&mut context)?;
         self.lap_processor.live_data(&mut context)?;
+        self.camera_processor.live_data(&mut context)?;
 
         while !context.events.is_empty() {
             let event = context.events.pop_front().unwrap();
             self.base_processor.event(&mut context, &event)?;
             self.lap_processor.event(&mut context, &event)?;
+            self.camera_processor.event(&mut context, &event)?;
         }
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct IRacingCamera {
+    group_num: i32,
+    group_name: String,
+    camera_num: i32,
+    camera_name: String,
 }

@@ -112,6 +112,23 @@ impl IRacingProcessor for BaseProcessor {
                 model.sessions.insert(session.id, session);
             }
         }
+        // // Create cameras
+        // for group_def in context.data.static_data.camera_info.groups.iter() {
+        //     let Some(ref group_num) = group_def.group_num else {continue};
+        //     let Some(ref group_name) = group_def.group_name else {continue};
+        //     for camera_def in group_def.cameras.iter() {
+        //         let Some(ref camera_num) = camera_def.camera_num else {continue};
+        //         let Some(ref camera_name) = camera_def.camera_name else {continue};
+        //         // let camera =
+        //         //     model::Camera::Game(model::GameCamera::IRacing(IRacingCamera::Generic {
+        //         //         group_num: *group_num,
+        //         //         group_name: group_name.clone(),
+        //         //         camera_num: *camera_num,
+        //         //         camera_name: camera_name.clone(),
+        //         //     }));
+        //         //context.model.available_cameras.insert(camera);
+        //     }
+        // }
         Ok(())
     }
 

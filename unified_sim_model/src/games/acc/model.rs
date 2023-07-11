@@ -201,8 +201,8 @@ impl Camera {
             Camera::TV => Some(AccCamera::Tv1),
             Camera::Hellicopter => Some(AccCamera::Helicam),
             Camera::Game(game) => match game {
-                GameCamera::None => None,
                 GameCamera::Acc(camera) => Some(camera.clone()),
+                _ => None,
             },
         };
         camera.map(|camera| camera.camera_definition())
