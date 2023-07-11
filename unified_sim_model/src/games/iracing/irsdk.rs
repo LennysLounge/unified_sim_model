@@ -287,6 +287,9 @@ impl Irsdk {
             handler.process(&var_buffer, &mut data.live_data);
         }
     }
+    pub fn is_connected(&self) -> bool {
+        self.connected
+    }
 }
 
 /// A handler to read a variable from the var buffer and write its data into the model.

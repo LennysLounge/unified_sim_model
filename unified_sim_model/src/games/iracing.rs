@@ -102,7 +102,7 @@ impl IRacingConnection {
     }
 
     fn run_loop(&mut self) -> IRacingResult<()> {
-        loop {
+        while self.sdk.is_connected() {
             let should_close = self.handle_commands()?;
             if should_close {
                 break;
