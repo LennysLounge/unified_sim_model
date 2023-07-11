@@ -517,6 +517,10 @@ pub struct Driver {
 #[derive(Debug, Default, Clone)]
 pub struct Lap {
     /// The lap time of this lap.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// The lap time is only available for valid laps.
     pub time: Value<Time>,
     /// The splits of this lap.
     ///
@@ -531,7 +535,9 @@ pub struct Lap {
     ///
     /// ### Availability:
     /// - **iRacing:**
-    /// The validity of lap times is not available in iRacing.
+    /// The validity of a lap is only ever known after the lap was completed.
+    /// For the current lap this value is not know and all current laps are valid
+    /// as a default.
     pub invalid: Value<bool>,
     /// Id of the driver that drove this lap.
     pub driver_id: DriverId,
@@ -620,6 +626,12 @@ pub enum Event {
     /// When the session phase changes.
     SessionPhaseChanged(SessionId, SessionPhase),
     /// When a lap was completed.
+    ///
+    /// ### Availability:
+    /// - **iRacing:**
+    /// In iracing the lap data is delayed until the server can push the data to the clients.
+    /// This delay can cause multiple 'LapCompleted' events to be send out at the same time and in
+    /// the wrong order.
     LapCompleted(LapCompleted),
 }
 

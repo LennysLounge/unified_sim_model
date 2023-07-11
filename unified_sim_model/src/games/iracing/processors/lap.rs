@@ -43,17 +43,24 @@ impl IRacingProcessor for LapProcessor {
                 continue;
             }
 
-            let Some(last_lap_time) = context.data.live_data
-            .car_idx_last_lap_time
-            .as_ref()
-            .and_then(|lap_times| lap_times.get(entry_id.0 as usize)) else {continue};
+            let (last_lap_time, invalid) = {
+                let Some(last_lap_time) = context.data.live_data
+                    .car_idx_last_lap_time
+                    .as_ref()
+                    .and_then(|lap_times| lap_times.get(entry_id.0 as usize)) else {continue};
+                if last_lap_time.ms == -1000.0 {
+                    (last_lap_time.clone(), true)
+                } else {
+                    (last_lap_time.clone(), false)
+                }
+            };
 
             let Some(driver) = entry.drivers.get_mut(&entry.current_driver) else {continue};
 
             let lap = model::Lap {
-                time: last_lap_time.clone().into(),
+                time: last_lap_time.into(),
                 splits: Vec::new().into(),
-                invalid: model::Value::default(),
+                invalid: invalid.into(),
                 driver_id: driver.id,
                 entry_id: entry.id,
             };
