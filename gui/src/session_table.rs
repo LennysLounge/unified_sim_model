@@ -39,13 +39,15 @@ pub fn show_session_tabs(ui: &mut Ui, model: &Model, windower: &mut Windower, ad
 }
 
 fn display_cameras(ui: &mut Ui, model: &Model, adapter: &Adapter) {
-    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-        for camera in model.available_cameras.iter() {
-            if ui.button(format!("{:?}", camera)).clicked() {
-                adapter.send(AdapterCommand::ChangeCamera(camera.clone()));
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for camera in model.available_cameras.iter() {
+                if ui.button(format!("{}", camera)).clicked() {
+                    adapter.send(AdapterCommand::ChangeCamera(camera.clone()));
+                }
             }
-        }
-    });
+        });
 }
 
 fn display_session_info(ui: &mut Ui, session: &Session) {
@@ -66,6 +68,12 @@ fn display_session_info(ui: &mut Ui, session: &Session) {
         ui.label(session.session_time.format());
         ui.label("Remaining:");
         ui.label(session.time_remaining.format());
+        ui.end_row();
+
+        ui.label("Laps:");
+        ui.label(format!("{}", *session.laps));
+        ui.label("Remaining:");
+        ui.label(format!("{}", *session.laps_remaining));
         ui.end_row();
 
         ui.label("Day:");

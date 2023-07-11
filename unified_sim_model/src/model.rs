@@ -965,6 +965,19 @@ pub enum Camera {
     Game(GameCamera),
 }
 
+impl Display for Camera {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Camera::None => write!(f, "None"),
+            Camera::FirstPerson => write!(f, "FirstPerson"),
+            Camera::Chase => write!(f, "Chase"),
+            Camera::TV => write!(f, "TV"),
+            Camera::Hellicopter => write!(f, "Hellicopter"),
+            Camera::Game(game) => game.fmt(f),
+        }
+    }
+}
+
 /// Game specific camera options.
 #[derive(Debug, Default, Clone, Hash, PartialEq, Eq)]
 pub enum GameCamera {
@@ -972,4 +985,14 @@ pub enum GameCamera {
     None,
     Acc(AccCamera),
     IRacing(IRacingCamera),
+}
+
+impl Display for GameCamera {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GameCamera::None => write!(f, "None"),
+            GameCamera::Acc(game) => game.fmt(f),
+            GameCamera::IRacing(game) => game.fmt(f),
+        }
+    }
 }

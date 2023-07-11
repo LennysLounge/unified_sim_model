@@ -23,7 +23,7 @@ struct Model {
 	current_session:        X			X
 	events:                 X			X
 	event_name:             X			X
-	active_camera:			X			
+	active_camera:			X			X
 	available_cameras:		X			X
 	focused_entry:			X			X
 }

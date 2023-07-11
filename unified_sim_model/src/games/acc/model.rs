@@ -1,5 +1,7 @@
 //! This module includes the additional model data for this adapter.
 
+use std::fmt::Display;
+
 use crate::model::{Camera, EntryGameData, GameCamera, SessionGameData};
 
 use super::{data::CarLocation, AccConnectionError};
@@ -186,6 +188,28 @@ impl AccCamera {
             AccCamera::Onboard1 => ("Onboard", "Onboard1"),
             AccCamera::Onboard2 => ("Onboard", "Onboard2"),
             AccCamera::Onboard3 => ("Onboard", "Onboard3"),
+        }
+    }
+}
+
+impl Display for AccCamera {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccCamera::Helicam => write!(f, "ACC Helicam"),
+            AccCamera::Pitlane => write!(f, "ACC Pitlane"),
+            AccCamera::Tv1 => write!(f, "ACC Tv1"),
+            AccCamera::Tv2 => write!(f, "ACC Tv2"),
+            AccCamera::Chase => write!(f, "ACC Chase"),
+            AccCamera::FarChase => write!(f, "ACC FarChase"),
+            AccCamera::Bonnet => write!(f, "ACC Bonnet"),
+            AccCamera::DashPro => write!(f, "ACC DashPro"),
+            AccCamera::Cockpit => write!(f, "ACC Cockpit"),
+            AccCamera::Dash => write!(f, "ACC Dash"),
+            AccCamera::Helmet => write!(f, "ACC Helmet"),
+            AccCamera::Onboard0 => write!(f, "ACC Onboard0"),
+            AccCamera::Onboard1 => write!(f, "ACC Onboard1"),
+            AccCamera::Onboard2 => write!(f, "ACC Onboard2"),
+            AccCamera::Onboard3 => write!(f, "ACC Onboard3"),
         }
     }
 }

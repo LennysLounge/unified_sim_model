@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    fmt::Display,
     sync::{
         mpsc::{Receiver, TryRecvError},
         Arc, RwLock,
@@ -222,4 +223,10 @@ pub struct IRacingCamera {
     group_name: String,
     camera_num: i32,
     camera_name: String,
+}
+
+impl Display for IRacingCamera {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "iRacing {}", self.group_name)
+    }
 }

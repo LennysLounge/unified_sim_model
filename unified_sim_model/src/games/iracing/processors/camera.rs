@@ -52,7 +52,17 @@ impl IRacingProcessor for CameraProcessor {
         Ok(())
     }
 
-    fn live_data(&mut self, _context: &mut super::IRacingProcessorContext) -> IRacingResult<()> {
+    fn live_data(&mut self, context: &mut super::IRacingProcessorContext) -> IRacingResult<()> {
+        let Some(active_group_num) = context.data.live_data.cam_group_number else {return Ok(())};
+
+        for (model_camera, iracing_camera) in self.cameras.iter() {
+            if iracing_camera.group_num == active_group_num {
+                context.model.active_camera.set(model_camera.clone());
+                return Ok(());
+            }
+        }
+        context.model.active_camera.set(model::Camera::None);
+
         Ok(())
     }
 

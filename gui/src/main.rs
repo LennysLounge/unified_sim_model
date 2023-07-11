@@ -83,7 +83,7 @@ impl Dialog for App {
             let Ok(model) = adapter.model.read() else {return};
 
             ui.label(format!("Event name: {}", model.event_name));
-            ui.label(format!("Active Camera: {:?}", *model.active_camera));
+            ui.label(format!("Active Camera: {}", *model.active_camera));
             //self.session_table.show(ui, &model, windower, adapter);
             session_table::show_session_tabs(ui, &model, windower, adapter);
         });
