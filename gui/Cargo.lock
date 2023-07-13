@@ -1937,6 +1937,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "windows 0.46.0",
+ "yore",
 ]
 
 [[package]]
@@ -2543,3 +2544,12 @@ name = "xml-rs"
 version = "0.8.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a56c84a8ccd4258aed21c92f70c0f6dea75356b6892ae27c24139da456f9336"
+
+[[package]]
+name = "yore"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff169853774a037f580a6a3cdb68edea048fe46ea940426313d765dd68c18a25"
+dependencies = [
+ "thiserror",
+]

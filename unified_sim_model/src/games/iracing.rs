@@ -102,7 +102,7 @@ impl IRacingConnection {
     }
 
     fn run_loop(&mut self) -> IRacingResult<()> {
-        while self.sdk.is_connected() {
+        loop {
             let should_close = self.handle_commands()?;
             if should_close {
                 break;
@@ -121,6 +121,10 @@ impl IRacingConnection {
 
             self.update_model(&data)?;
             self.update_event.trigger();
+
+            if !self.sdk.is_connected() {
+                break;
+            }
         }
         Ok(())
     }

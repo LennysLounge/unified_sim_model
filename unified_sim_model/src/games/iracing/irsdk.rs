@@ -1,7 +1,7 @@
 use core::slice;
-use std::{ffi::c_void, fmt::Debug};
+use std::{ffi::c_void, fmt::Debug, fs::File, io::Write};
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use windows::{
     w,
     Win32::{
@@ -16,6 +16,7 @@ use windows::{
         UI::WindowsAndMessaging::{RegisterWindowMessageW, SendNotifyMessageW},
     },
 };
+use yore::code_pages::CP1252;
 
 use crate::{games::iracing::irsdk::defines::VarHeader, Time};
 
@@ -204,7 +205,7 @@ impl Irsdk {
     }
 
     fn parse_session_str(&mut self, header: &Header) {
-        info!("Process session data");
+        debug!("Process session data");
         self.session_data_last_udpate = header.session_data_update;
         let session_str_buffer = unsafe {
             slice::from_raw_parts(
@@ -213,7 +214,8 @@ impl Irsdk {
             )
             .to_vec()
         };
-        let session_str = String::from_utf8_lossy(&session_str_buffer)
+        let session_str = CP1252
+            .decode(&session_str_buffer)
             .trim_matches('\0')
             .to_string();
         let session_data = serde_yaml::from_str::<StaticData>(&session_str);
@@ -232,7 +234,7 @@ impl Irsdk {
     }
 
     fn parse_var_headers(&mut self, header: &Header) {
-        info!("Parsing variable headers");
+        debug!("Parsing variable headers");
         let var_headers = unsafe {
             slice::from_raw_parts(
                 self.view.offset(header.var_header_offset as isize) as *const VarHeader,
