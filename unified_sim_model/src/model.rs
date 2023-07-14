@@ -540,9 +540,9 @@ pub struct Lap {
     /// as a default.
     pub invalid: Value<bool>,
     /// Id of the driver that drove this lap.
-    pub driver_id: DriverId,
+    pub driver_id: Option<DriverId>,
     /// Id of the entry that drove this lap.
-    pub entry_id: EntryId,
+    pub entry_id: Option<EntryId>,
 }
 
 #[derive(Debug, Default, Clone)]

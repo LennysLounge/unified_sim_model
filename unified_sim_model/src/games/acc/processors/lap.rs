@@ -110,7 +110,7 @@ fn map_lap(lap_info: &LapInfo, driver_id: DriverId, entry_id: EntryId) -> Lap {
             .collect::<Vec<_>>()
             .into(),
         invalid: lap_info.is_invaliud.into(),
-        driver_id,
-        entry_id,
+        driver_id: Some(driver_id),
+        entry_id: Some(entry_id),
     }
 }

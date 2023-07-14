@@ -61,8 +61,8 @@ impl IRacingProcessor for LapProcessor {
                 time: last_lap_time.into(),
                 splits: Vec::new().into(),
                 invalid: invalid.into(),
-                driver_id: driver.id,
-                entry_id: entry.id,
+                driver_id: Some(driver.id),
+                entry_id: Some(entry.id),
             };
             entry.laps.push(lap.clone());
 

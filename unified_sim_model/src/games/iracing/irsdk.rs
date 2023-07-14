@@ -1,5 +1,5 @@
 use core::slice;
-use std::{ffi::c_void, fmt::Debug, fs::File, io::Write};
+use std::{ffi::c_void, fmt::Debug};
 use thiserror::Error;
 use tracing::{debug, info, warn};
 use windows::{

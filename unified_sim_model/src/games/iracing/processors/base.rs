@@ -8,12 +8,13 @@ use crate::{
         iracing::{
             irsdk::{
                 defines::{SessionState, TrkLoc},
-                static_data, Data,
+                static_data::{self, ResultFastedLap},
+                Data,
             },
             IRacingError, IRacingResult,
         },
     },
-    model, Temperature,
+    model, Temperature, Time,
 };
 
 use super::{IRacingProcessor, IRacingProcessorContext};
@@ -196,9 +197,34 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
         None => model::Value::default(),
     };
 
+    let entries = init_entries(session_info, data)?;
+
+    let best_lap: model::Value<Option<model::Lap>> = match session_info.results_fastest_lap.get(0) {
+        Some(ResultFastedLap {
+            car_idx: Some(ref car_idx),
+            fastest_time: Some(ref time),
+            ..
+        }) => {
+            let entry_id = model::EntryId(*car_idx);
+            if entries.contains_key(&entry_id) {
+                Some(model::Lap {
+                    time: Time::from_secs(*time).into(),
+                    splits: Vec::new().into(),
+                    invalid: false.into(),
+                    driver_id: None.into(),
+                    entry_id: Some(entry_id).into(),
+                })
+                .into()
+            } else {
+                None.into()
+            }
+        }
+        _ => model::Value::default(),
+    };
+
     Ok(model::Session {
         id,
-        entries: init_entries(data)?,
+        entries,
         session_type,
         phase: model::SessionPhase::Waiting.into(),
         session_time,
@@ -209,14 +235,17 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
         day: model::Value::default(),
         ambient_temp,
         track_temp,
-        best_lap: model::Value::default(),
+        best_lap,
         track_name,
         track_length,
         game_data: model::SessionGameData::None,
     })
 }
 
-fn init_entries(data: &Data) -> IRacingResult<HashMap<model::EntryId, model::Entry>> {
+fn init_entries(
+    session_info: &static_data::Session,
+    data: &Data,
+) -> IRacingResult<HashMap<model::EntryId, model::Entry>> {
     let mut entries = HashMap::new();
 
     let driver_infos = &data.static_data.driver_info;
@@ -235,6 +264,25 @@ fn init_entries(data: &Data) -> IRacingResult<HashMap<model::EntryId, model::Ent
             entries.insert(entry.id, entry);
         }
     }
+
+    for position in session_info.results_positions.iter() {
+        let Some(car_idx) = position.car_idx else {continue};
+        let entry_id = model::EntryId(car_idx);
+        if !entries.contains_key(&entry_id) {
+            continue;
+        }
+
+        let Some(fastest_lap_time) = position.fastest_time else {continue};
+        let Some(entry) = entries.get_mut(&entry_id) else {continue};
+        entry.best_lap.set(Some(model::Lap {
+            time: Time::from_secs(fastest_lap_time).into(),
+            splits: Vec::new().into(),
+            invalid: false.into(),
+            driver_id: None.into(),
+            entry_id: Some(entry_id).into(),
+        }));
+    }
+
     Ok(entries)
 }
 
@@ -422,8 +470,8 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data, events: &mut VecDequ
                 time: time.clone().into(),
                 splits: Vec::new().into(),
                 invalid: model::Value::default(),
-                driver_id: entry.current_driver,
-                entry_id: entry.id,
+                driver_id: Some(entry.current_driver),
+                entry_id: Some(entry.id),
             });
         }
     }

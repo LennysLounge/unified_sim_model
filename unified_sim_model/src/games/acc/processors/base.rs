@@ -204,8 +204,8 @@ impl AccProcessor for BaseProcessor {
             time: Time::from(update.current_lap.laptime_ms).into(),
             splits: Vec::new().into(),
             invalid: update.current_lap.is_invaliud.into(),
-            driver_id: current_driver_id,
-            entry_id,
+            driver_id: Some(current_driver_id),
+            entry_id: Some(entry_id),
         });
         entry.current_lap.set_available();
         entry.performance_delta.set(update.delta.into());
