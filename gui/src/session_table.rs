@@ -222,9 +222,14 @@ fn display_entries_table(
                         .sense(Sense::click()),
                     |row| {
                         row.cell(|ui| {
+                            let mut s = String::new();
                             if *entry.in_pits {
-                                ui.label("P");
+                                s.push_str("P");
                             }
+                            if *entry.is_finished {
+                                s.push_str("F");
+                            }
+                            ui.label(s);
                         });
                         row.cell(|ui| {
                             let s = if *entry.connected {

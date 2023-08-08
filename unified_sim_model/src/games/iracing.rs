@@ -20,6 +20,8 @@ use self::{
     },
 };
 
+use super::common::entry_finished;
+
 pub mod irsdk;
 mod processors;
 
@@ -215,6 +217,9 @@ impl IRacingConnection {
             self.base_processor.event(&mut context, &event)?;
             self.lap_processor.event(&mut context, &event)?;
             self.camera_processor.event(&mut context, &event)?;
+
+            entry_finished::calc_entry_finished(&event, context.model);
+            context.model.events.push(event);
         }
 
         Ok(())

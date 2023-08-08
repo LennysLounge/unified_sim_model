@@ -1,7 +1,6 @@
+//! This processor calculates the distance an entry has driven
+//! and solves some inconsistencies that may be present in the data.
 use crate::model::Entry;
-
-/// This processor calculates the distance an entry has driven
-/// and solves some inconsistencies that may be present in the data.
 
 /// Calculate the distance driven for an entry.
 pub fn calc_distance_driven(entry: &mut Entry) {

@@ -25,7 +25,7 @@ use self::{
     },
 };
 
-use super::common::distance_driven;
+use super::common::{distance_driven, entry_finished};
 
 mod data;
 pub mod model;
@@ -190,6 +190,8 @@ impl AccConnection {
             self.base_proc.event(&event, &mut context)?;
             self.connection_proc.event(&event, &mut context)?;
             self.lap_proc.event(&event, &mut context)?;
+
+            entry_finished::calc_entry_finished(&event, context.model);
             context.model.events.push(event);
         }
 

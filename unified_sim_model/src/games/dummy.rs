@@ -124,6 +124,7 @@ impl GameAdapter for DummyAdapter {
                     distance_driven: Value::new(i as f32 * 0.345),
                     focused: false,
                     game_data: EntryGameData::None,
+                    is_finished: Value::new(false),
                 },
             );
         }

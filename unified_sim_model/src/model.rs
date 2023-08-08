@@ -463,6 +463,8 @@ pub struct Entry {
     pub distance_driven: Value<f32>,
     /// True if this car is the focus of the camera right now.
     pub focused: bool,
+    /// True if this entry has finished the current session.
+    pub is_finished: Value<bool>,
     /// Contains additional data that is game specific.
     pub game_data: EntryGameData,
 }

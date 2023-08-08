@@ -343,6 +343,7 @@ fn map_entry(driver_info: &static_data::Driver) -> IRacingResult<model::Entry> {
         distance_driven: model::Value::default(),
         focused: false,
         game_data: model::EntryGameData::None,
+        is_finished: model::Value::default(),
     })
 }
 
