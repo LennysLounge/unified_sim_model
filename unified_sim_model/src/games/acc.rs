@@ -11,7 +11,7 @@ use std::{
     net::UdpSocket,
     result,
     sync::{
-        mpsc::{self, TryRecvError},
+        mpsc::{self, Receiver, TryRecvError},
         Arc, RwLock,
     },
     time::{Duration, Instant},
@@ -60,7 +60,7 @@ impl From<AccConnectionError> for crate::AdapterError {
     }
 }
 
-pub struct AccAdapter {}
+pub struct AccAdapter;
 impl GameAdapter for AccAdapter {
     fn run(
         &mut self,
@@ -68,7 +68,7 @@ impl GameAdapter for AccAdapter {
         command_rx: mpsc::Receiver<AdapterCommand>,
         update_event: UpdateEvent,
     ) -> result::Result<(), crate::AdapterError> {
-        let connection = AccConnection::new()?;
+        let mut connection = AccConnection::new(model.clone(), command_rx, update_event)?;
 
         // Setup the model state for this game.
         if let Ok(mut model) = model.write() {
@@ -76,7 +76,7 @@ impl GameAdapter for AccAdapter {
             model.connected = true;
         }
 
-        let result = self.run_loop(connection, command_rx, &model, update_event);
+        let result = connection.run_loop();
 
         if let Ok(mut model) = model.write() {
             model.connected = false;
@@ -86,15 +86,47 @@ impl GameAdapter for AccAdapter {
     }
 }
 
-impl AccAdapter {
-    fn run_loop(
-        &self,
-        mut connection: AccConnection,
+pub struct AccConnection {
+    model: Arc<RwLock<Model>>,
+    command_rx: Receiver<AdapterCommand>,
+    update_event: UpdateEvent,
+    socket: AccSocket,
+    base_proc: BaseProcessor,
+    connection_proc: ConnectionProcessor,
+    lap_proc: LapProcessor,
+}
+
+impl AccConnection {
+    pub fn new(
+        model: Arc<RwLock<Model>>,
         command_rx: mpsc::Receiver<AdapterCommand>,
-        model: &Arc<RwLock<Model>>,
         update_event: UpdateEvent,
-    ) -> Result<()> {
-        connection.socket.send_registration_request(100, "", "")?;
+    ) -> Result<Self> {
+        let socket = UdpSocket::bind("0.0.0.0:0").map_err(AccConnectionError::IoError)?;
+        socket
+            .connect("127.0.0.1:9000")
+            .map_err(AccConnectionError::IoError)?;
+        socket
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .expect("Read timeout duration should be larger than 0");
+        Ok(Self {
+            model,
+            command_rx,
+            update_event,
+            socket: AccSocket {
+                socket,
+                connected: false,
+                connection_id: 0,
+                read_only: false,
+            },
+            base_proc: BaseProcessor::default(),
+            connection_proc: ConnectionProcessor::default(),
+            lap_proc: LapProcessor::default(),
+        })
+    }
+
+    fn run_loop(&mut self) -> Result<()> {
+        self.socket.send_registration_request(100, "", "")?;
 
         let mut last_update = Instant::now();
         loop {
@@ -103,8 +135,8 @@ impl AccAdapter {
                 return Err(AccConnectionError::TimedOut.into());
             }
 
-            let should_close = match command_rx.try_recv() {
-                Ok(action) => self.handle_command(&connection, action)?,
+            let should_close = match self.command_rx.try_recv() {
+                Ok(action) => self.handle_command(action)?,
                 Err(TryRecvError::Empty) => false,
                 Err(TryRecvError::Disconnected) => {
                     // This should only happen if all adapters have been dropped.
@@ -118,82 +150,53 @@ impl AccAdapter {
                 break;
             }
 
-            let message = match connection.socket.read_message() {
+            let message = match self.socket.read_message() {
                 Ok(message) => message,
                 Err(e) => match e {
                     AccConnectionError::TimedOut => continue,
                     e => return Err(e.into()),
                 },
             };
-            connection.process_message(&message, &model)?;
+            self.process_message(&message)?;
 
             // Technically the order of messages put the realtime updates with car information
             // after the session update however we dont have a way to know when all
             // realtime updates have been received to trigger the event.
             // Instead we trigger the event and accept a delay of one update for car data.
             if let Message::SessionUpdate(_) = message {
-                update_event.trigger();
+                self.update_event.trigger();
             }
 
             last_update = now;
         }
 
-        connection.socket.send_unregister_request()?;
+        self.socket.send_unregister_request()?;
         Ok(())
     }
 
-    fn handle_command(&self, connection: &AccConnection, command: AdapterCommand) -> Result<bool> {
+    fn handle_command(&self, command: AdapterCommand) -> Result<bool> {
         match command {
             AdapterCommand::Close => {
                 return Ok(true);
             }
-            AdapterCommand::FocusOnCar(entry_id) => connection
+            AdapterCommand::FocusOnCar(entry_id) => self
                 .socket
                 .send_change_camera_request(Some(entry_id.0 as i16), None)?,
             AdapterCommand::ChangeCamera(camera) => {
                 let camera = camera.as_acc_camera_definition();
                 if camera.is_some() {
-                    connection.socket.send_change_camera_request(None, camera)?;
+                    self.socket.send_change_camera_request(None, camera)?;
                 }
             }
         };
         Ok(false)
     }
-}
 
-pub struct AccConnection {
-    socket: AccSocket,
-    base_proc: BaseProcessor,
-    connection_proc: ConnectionProcessor,
-    lap_proc: LapProcessor,
-}
-
-impl AccConnection {
-    pub fn new() -> Result<Self> {
-        let socket = UdpSocket::bind("0.0.0.0:0").map_err(AccConnectionError::IoError)?;
-        socket
-            .connect("127.0.0.1:9000")
-            .map_err(AccConnectionError::IoError)?;
-        socket
-            .set_read_timeout(Some(Duration::from_millis(500)))
-            .expect("Read timeout duration should be larger than 0");
-        Ok(Self {
-            socket: AccSocket {
-                socket,
-                connected: false,
-                connection_id: 0,
-                read_only: false,
-            },
-            base_proc: BaseProcessor::default(),
-            connection_proc: ConnectionProcessor::default(),
-            lap_proc: LapProcessor::default(),
-        })
-    }
-
-    fn process_message(&mut self, message: &Message, model: &Arc<RwLock<Model>>) -> Result<()> {
+    fn process_message(&mut self, message: &Message) -> Result<()> {
         let mut context = AccProcessorContext {
             socket: &mut self.socket,
-            model: &mut *model
+            model: &mut *self
+                .model
                 .write()
                 .map_err(|_| AccConnectionError::Other("Model was poisoned".into()))?,
             events: VecDeque::new(),
