@@ -134,9 +134,9 @@ fn display_entries_table(
     let mut entries: Vec<&Entry> = entries.values().collect();
     entries.sort_by(|e1, e2| {
         let is_connected = e2.connected.cmp(&e1.connected);
-        let position = e2
-            .distance_driven
-            .partial_cmp(&e1.distance_driven)
+        let position = e1
+            .position
+            .partial_cmp(&e1.position)
             .unwrap_or(std::cmp::Ordering::Equal);
         is_connected.then(position)
     });
