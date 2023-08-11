@@ -14,7 +14,7 @@ use std::{
         mpsc::{self, TryRecvError},
         Arc, RwLock,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use self::{
@@ -68,16 +68,41 @@ impl GameAdapter for AccAdapter {
         command_rx: mpsc::Receiver<AdapterCommand>,
         update_event: UpdateEvent,
     ) -> result::Result<(), crate::AdapterError> {
+        let connection = AccConnection::new()?;
+
         // Setup the model state for this game.
         if let Ok(mut model) = model.write() {
             model.event_name = Value::new("Assetto Corsa Competizione".to_string()).with_editable();
             model.connected = true;
         }
 
-        let mut connection = AccConnection::new()?;
+        let result = self.run_loop(connection, command_rx, &model, update_event);
+
+        if let Ok(mut model) = model.write() {
+            model.connected = false;
+        }
+
+        return result;
+    }
+}
+
+impl AccAdapter {
+    fn run_loop(
+        &self,
+        mut connection: AccConnection,
+        command_rx: mpsc::Receiver<AdapterCommand>,
+        model: &Arc<RwLock<Model>>,
+        update_event: UpdateEvent,
+    ) -> Result<()> {
         connection.socket.send_registration_request(100, "", "")?;
 
+        let mut last_update = Instant::now();
         loop {
+            let now = Instant::now();
+            if now.duration_since(last_update).as_secs() > 10 {
+                return Err(AccConnectionError::TimedOut.into());
+            }
+
             let should_close = match command_rx.try_recv() {
                 Ok(action) => self.handle_command(&connection, action)?,
                 Err(TryRecvError::Empty) => false,
@@ -93,7 +118,13 @@ impl GameAdapter for AccAdapter {
                 break;
             }
 
-            let message = connection.socket.read_message()?;
+            let message = match connection.socket.read_message() {
+                Ok(message) => message,
+                Err(e) => match e {
+                    AccConnectionError::TimedOut => continue,
+                    e => return Err(e.into()),
+                },
+            };
             connection.process_message(&message, &model)?;
 
             // Technically the order of messages put the realtime updates with car information
@@ -103,17 +134,14 @@ impl GameAdapter for AccAdapter {
             if let Message::SessionUpdate(_) = message {
                 update_event.trigger();
             }
+
+            last_update = now;
         }
 
         connection.socket.send_unregister_request()?;
-        if let Ok(mut model) = model.write() {
-            model.connected = false;
-        }
         Ok(())
     }
-}
 
-impl AccAdapter {
     fn handle_command(&self, connection: &AccConnection, command: AdapterCommand) -> Result<bool> {
         match command {
             AdapterCommand::Close => {
@@ -255,7 +283,7 @@ impl AccSocket {
         self.send(&data::focus_request(self.connection_id, car_id, camera))
     }
 
-    fn read_message(&mut self) -> Result<Message> {
+    fn read_message(&mut self) -> std::result::Result<Message, AccConnectionError> {
         let mut buf = [0u8; 2048];
         self.socket.recv(&mut buf).map_err(|e| match e.kind() {
             ErrorKind::TimedOut => AccConnectionError::TimedOut,
