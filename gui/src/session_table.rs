@@ -136,7 +136,7 @@ fn display_entries_table(
         let is_connected = e2.connected.cmp(&e1.connected);
         let position = e1
             .position
-            .partial_cmp(&e1.position)
+            .partial_cmp(&e2.position)
             .unwrap_or(std::cmp::Ordering::Equal);
         is_connected.then(position)
     });
