@@ -82,7 +82,7 @@ impl GameAdapter for AccAdapter {
             model.connected = false;
         }
 
-        return result;
+        result
     }
 }
 
@@ -294,6 +294,6 @@ impl AccSocket {
             _ => AccConnectionError::CannotReceive(e),
         })?;
 
-        data::read_response(&buf).map_err(|e| AccConnectionError::CannotParse(e).into())
+        data::read_response(&buf).map_err(AccConnectionError::CannotParse)
     }
 }

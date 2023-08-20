@@ -49,9 +49,9 @@ impl IRacingProcessor for LapProcessor {
                     .as_ref()
                     .and_then(|lap_times| lap_times.get(entry_id.0 as usize)) else {continue};
                 if last_lap_time.ms == -1000.0 {
-                    (last_lap_time.clone(), true)
+                    (*last_lap_time, true)
                 } else {
-                    (last_lap_time.clone(), false)
+                    (*last_lap_time, false)
                 }
             };
 
@@ -122,13 +122,10 @@ impl IRacingProcessor for LapProcessor {
         context: &mut super::IRacingProcessorContext,
         event: &model::Event,
     ) -> IRacingResult<()> {
-        match event {
-            model::Event::SessionChanged(_) => {
-                // clear data and initialise it again.
-                self.laps_before.clear();
-                self.static_data(context)?;
-            }
-            _ => (),
+        if let model::Event::SessionChanged(_) = event {
+            // clear data and initialise it again.
+            self.laps_before.clear();
+            self.static_data(context)?;
         }
         Ok(())
     }

@@ -88,7 +88,7 @@ impl AccProcessor for BaseProcessor {
                 session_type: session_type.into(),
                 session_time: Time::from(update.session_time + update.session_end_time).into(),
                 phase: model::SessionPhase::Waiting.into(),
-                day: Value::with_default(Day::Sunday).with_editable(),
+                day: Value::default_with_value(Day::Sunday).with_editable(),
                 game_data: SessionGameData::Acc(AccSession::default()),
                 best_lap: Value::new(None),
                 ..Default::default()
@@ -207,7 +207,6 @@ impl AccProcessor for BaseProcessor {
             driver_id: Some(current_driver_id),
             entry_id: Some(entry_id),
         });
-        entry.current_lap.set_available();
         entry.performance_delta.set(update.delta.into());
         entry
             .in_pits

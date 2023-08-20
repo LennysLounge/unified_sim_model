@@ -38,9 +38,9 @@ impl StaticData {
         map.extend(self.radio_info.get_unmapped(&prefix));
         map.extend(self.driver_info.get_unmapped(&prefix));
         map.extend(self.split_time_info.get_unmapped(&prefix));
-        self.qualify_results_info
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
+        if let Some(v) = self.qualify_results_info.as_ref() {
+            map.extend(v.get_unmapped(&prefix));
+        }
         map.extend(self.car_setup.get_unmapped(&prefix));
         map
     }
@@ -148,12 +148,12 @@ impl WeekendInfo {
             .iter()
             .map(|(key, value)| (Value::String(format!("{prefix}{key}")), value.clone()))
             .collect();
-        self.weekend_options
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.telemetry_options
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
+        if let Some(v) = self.weekend_options.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.telemetry_options.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
         map
     }
 }
@@ -762,12 +762,12 @@ impl CarSetup {
             .iter()
             .map(|(key, value)| (Value::String(format!("{prefix}{key}")), value.clone()))
             .collect();
-        self.tires
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.chassis
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
+        if let Some(v) = self.tires.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.chassis.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
         map
     }
 }
@@ -791,18 +791,18 @@ impl Tires {
             .iter()
             .map(|(key, value)| (Value::String(format!("{prefix}{key}")), value.clone()))
             .collect();
-        self.left_front
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.left_rear
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.right_front
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.right_rear
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
+        if let Some(v) = self.left_front.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.left_rear.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.right_front.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.right_rear.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
         map
     }
 }
@@ -899,24 +899,24 @@ impl Chassis {
             .iter()
             .map(|(key, value)| (Value::String(format!("{prefix}{key}")), value.clone()))
             .collect();
-        self.front
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.left_front
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.right_front
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.left_rear
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.right_rear
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
-        self.rear
-            .as_ref()
-            .map(|v| map.extend(v.get_unmapped(&prefix)));
+        if let Some(v) = self.front.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.left_front.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.right_front.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.left_rear.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.right_rear.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
+        if let Some(v) = self.rear.as_ref() {
+            map.extend(v.get_unmapped(&prefix))
+        }
         map
     }
 }
@@ -1070,7 +1070,7 @@ impl<'de> Visitor<'de> for UnitVisitor {
             ));
         }
         let value_str = v.trim_end_matches(self.unit).trim_end();
-        Ok(str::parse(value_str.trim()).map_err(|e| serde::de::Error::custom(e))?)
+        str::parse(value_str.trim()).map_err(|e| serde::de::Error::custom(e))
     }
 }
 
@@ -1189,7 +1189,7 @@ where
 {
     deserializer
         .deserialize_str(UnitVisitor { unit: "Hg" })
-        .map(|v| Some(v))
+        .map(Some)
 }
 
 fn kpa_deserializer<'de, D>(deserializer: D) -> Result<Option<Pressure>, D::Error>
@@ -1207,7 +1207,7 @@ where
 {
     deserializer
         .deserialize_str(UnitVisitor { unit: "Turns" })
-        .map(|v| Some(v))
+        .map(Some)
 }
 
 fn clicks_deserializer<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
@@ -1216,7 +1216,7 @@ where
 {
     deserializer
         .deserialize_str(UnitVisitor { unit: "clicks" })
-        .map(|v| Some(v))
+        .map(Some)
 }
 
 fn n_deserializer<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
@@ -1225,7 +1225,7 @@ where
 {
     deserializer
         .deserialize_str(UnitVisitor { unit: "N" })
-        .map(|v| Some(v))
+        .map(Some)
 }
 
 fn n_per_mm_deserializer<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
@@ -1234,7 +1234,7 @@ where
 {
     deserializer
         .deserialize_str(UnitVisitor { unit: "N/mm" })
-        .map(|v| Some(v))
+        .map(Some)
 }
 
 fn l_deserializer<'de, D>(deserializer: D) -> Result<Option<f32>, D::Error>
@@ -1243,7 +1243,7 @@ where
 {
     deserializer
         .deserialize_str(UnitVisitor { unit: "L" })
-        .map(|v| Some(v))
+        .map(Some)
 }
 
 struct TrippleUnitVisitor {
@@ -1266,7 +1266,7 @@ impl<'de> Visitor<'de> for TrippleUnitVisitor {
         E: serde::de::Error,
     {
         let values: Vec<f32> = v
-            .split(",")
+            .split(',')
             .map(|v| {
                 if !v.ends_with(self.unit) {
                     return Err(serde::de::Error::invalid_value(
@@ -1457,7 +1457,5 @@ fn time_of_day_deserializer<'de, D>(deserializer: D) -> Result<Option<Time>, D::
 where
     D: serde::de::Deserializer<'de>,
 {
-    deserializer
-        .deserialize_str(TimeOfDayVisitor)
-        .map(|t| Some(t))
+    deserializer.deserialize_str(TimeOfDayVisitor).map(Some)
 }

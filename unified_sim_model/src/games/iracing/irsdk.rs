@@ -124,7 +124,7 @@ impl Irsdk {
             return Err(windows::core::Error::from_win32());
         }
 
-        return Ok(Self {
+        Ok(Self {
             file_mapping: handle,
             view,
             _last_tick_count: 0,
@@ -134,7 +134,7 @@ impl Irsdk {
             session_data: StaticData::default(),
             data_valid_event,
             message_id,
-        });
+        })
     }
 
     pub fn send_message(&self, message: Messages) {
@@ -195,8 +195,10 @@ impl Irsdk {
             self.parse_var_headers(header);
         }
 
-        let mut data = Data::default();
-        data.static_data = self.session_data.clone();
+        let mut data = Data {
+            static_data: self.session_data.clone(),
+            ..Default::default()
+        };
 
         // Read var buffer
         self.parse_var_buffer(header, &mut data);
@@ -378,6 +380,7 @@ impl VarHandler {
 }
 
 /// Types of processors to process differnt types of variables.
+#[allow(clippy::type_complexity)]
 pub enum Processor {
     U8(Box<dyn Fn(&mut LiveData, u8)>),
     VecU8(Box<dyn Fn(&mut LiveData, Vec<u8>)>),
@@ -511,9 +514,9 @@ fn map_processors(name: &str) -> Processor {
         "PlayerCarPosition" => Processor::i32(|d, v| d.player_car_position = Some(v)),
         "PlayerCarClassPosition" => Processor::i32(|d, v| d.player_car_class_position = Some(v)),
         "PlayerCarClass" => Processor::i32(|d, v| d.player_car_class = Some(v)),
-        "PlayerTrackSurface" => Processor::i32(|d, v| d.player_track_surface = Some(v.into())),
+        "PlayerTrackSurface" => Processor::i32(|d, v| d.player_track_surface = Some(v)),
         "PlayerTrackSurfaceMaterial" => {
-            Processor::i32(|d, v| d.player_track_surface_material = Some(v.into()))
+            Processor::i32(|d, v| d.player_track_surface_material = Some(v))
         }
         "PlayerCarIdx" => Processor::i32(|d, v| d.player_car_idx = Some(v)),
         "PlayerCarTeamIncidentCount" => {
@@ -535,7 +538,7 @@ fn map_processors(name: &str) -> Processor {
         } //s
         "PlayerCarInPitStall" => Processor::bool(|d, v| d.player_car_in_pit_stall = Some(v)),
         "PlayerCarPitSvStatus" => {
-            Processor::i32(|d, v| d.player_car_pit_sv_status = Some(v.into()))
+            Processor::i32(|d, v| d.player_car_pit_sv_status = Some(v))
         }
         "PlayerTireCompound" => Processor::i32(|d, v| d.player_tire_compound = Some(v)),
         "PlayerFastRepairsUsed" => Processor::i32(|d, v| d.player_fast_repairs_used = Some(v)),
@@ -580,7 +583,7 @@ fn map_processors(name: &str) -> Processor {
                     .collect(),
             )
         }),
-        "PaceMode" => Processor::i32(|d, v| d.pace_mode = Some(v.into())), //irsdk_PaceMode
+        "PaceMode" => Processor::i32(|d, v| d.pace_mode = Some(v)), //irsdk_PaceMode
         "CarIdxPaceLine" => Processor::vec_i32(|d, v| d.car_idx_pace_line = Some(v)),
         "CarIdxPaceRow" => Processor::vec_i32(|d, v| d.car_idx_pace_row = Some(v)),
         "CarIdxPaceFlags" => Processor::vec_i32(|d, v| {
@@ -681,7 +684,7 @@ fn map_processors(name: &str) -> Processor {
         "DCDriversSoFar" => Processor::i32(|d, v| d.dc_drivers_so_far = Some(v)),
         "OkToReloadTextures" => Processor::bool(|d, v| d.ok_to_reload_textures = Some(v)),
         "LoadNumTextures" => Processor::bool(|d, v| d.load_num_textures = Some(v)),
-        "CarLeftRight" => Processor::i32(|d, v| d.car_left_right = Some(v.into())),
+        "CarLeftRight" => Processor::i32(|d, v| d.car_left_right = Some(v)),
         "PitsOpen" => Processor::bool(|d, v| d.pits_open = Some(v)),
         "VidCapEnabled" => Processor::bool(|d, v| d.vid_cap_enabled = Some(v)),
         "VidCapActive" => Processor::bool(|d, v| d.vid_cap_active = Some(v)),

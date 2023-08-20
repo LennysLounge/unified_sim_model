@@ -94,7 +94,7 @@ impl IRacingProcessor for BaseProcessor {
             .current_session_mut()
             .expect("The current session should be available");
         for (_entry_id, entry) in current_session.entries.iter_mut() {
-            update_entry_live(entry, &context.data, &mut context.events);
+            update_entry_live(entry, context.data, &mut context.events);
             distance_driven::calc_distance_driven(entry);
         }
         Ok(())
@@ -156,7 +156,7 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
     let session_time = match session_info.session_time {
         Some(ref time) => match time {
             static_data::MaybeUnlimited::Unlimited => model::Value::default(),
-            static_data::MaybeUnlimited::Value(t) => t.clone().into(),
+            static_data::MaybeUnlimited::Value(t) => (*t).into(),
         },
         None => Err(IRacingError::MissingData("session_time".into()))?,
     };
@@ -164,7 +164,7 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
     let laps = match session_info.session_laps {
         Some(ref laps) => match laps {
             static_data::MaybeUnlimited::Unlimited => model::Value::default(),
-            static_data::MaybeUnlimited::Value(laps) => laps.clone().into(),
+            static_data::MaybeUnlimited::Value(laps) => (*laps).into(),
         },
         None => Err(IRacingError::MissingData("session_laps".into()))?,
     };
@@ -173,17 +173,17 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
         Some(static_data::WeekendOptions {
             time_of_day: Some(ref time_of_day),
             ..
-        }) => time_of_day.clone().into(),
+        }) => (*time_of_day).into(),
         _ => model::Value::default(),
     };
 
     let ambient_temp = match data.static_data.weekend_info.track_air_temp {
-        Some(temp) => temp.clone().into(),
+        Some(temp) => temp.into(),
         None => model::Value::default(),
     };
 
     let track_temp = match data.static_data.weekend_info.track_surface_temp {
-        Some(temp) => temp.clone().into(),
+        Some(temp) => temp.into(),
         None => model::Value::default(),
     };
 
@@ -193,7 +193,7 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
     };
 
     let track_length = match data.static_data.weekend_info.track_length {
-        Some(ref track_length) => track_length.clone().into(),
+        Some(track_length) => track_length.into(),
         None => model::Value::default(),
     };
 
@@ -211,8 +211,8 @@ fn init_session(session_info: &static_data::Session, data: &Data) -> IRacingResu
                     time: Time::from_secs(*time).into(),
                     splits: Vec::new().into(),
                     invalid: false.into(),
-                    driver_id: None.into(),
-                    entry_id: Some(entry_id).into(),
+                    driver_id: None,
+                    entry_id: Some(entry_id),
                 })
                 .into()
             } else {
@@ -278,8 +278,8 @@ fn init_entries(
             time: Time::from_secs(fastest_lap_time).into(),
             splits: Vec::new().into(),
             invalid: false.into(),
-            driver_id: None.into(),
-            entry_id: Some(entry_id).into(),
+            driver_id: None,
+            entry_id: Some(entry_id),
         }));
     }
 
@@ -350,7 +350,7 @@ fn map_entry(driver_info: &static_data::Driver) -> IRacingResult<model::Entry> {
 fn map_driver(driver_info: &static_data::Driver) -> IRacingResult<model::Driver> {
     let (first_name, last_name) = {
         let split: Option<(String, String)> = driver_info.user_name.clone().and_then(|name| {
-            name.split_once(" ")
+            name.split_once(' ')
                 .map(|(l, r)| (l.to_owned(), r.to_owned()))
         });
         if let Some((first_name, last_name)) = split {
@@ -405,12 +405,12 @@ fn update_session_live(context: &mut IRacingProcessorContext) {
         }
     }
 
-    if let Some(ref time_remaining) = context.data.live_data.session_time_remain {
-        session.time_remaining.set(time_remaining.clone());
+    if let Some(time_remaining) = context.data.live_data.session_time_remain {
+        session.time_remaining.set(time_remaining);
     }
 
-    if let Some(ref laps_remaining) = context.data.live_data.session_laps_remain {
-        session.laps_remaining.set(laps_remaining.clone());
+    if let Some(laps_remaining) = context.data.live_data.session_laps_remain {
+        session.laps_remaining.set(laps_remaining);
     }
 
     if let Some(ambient_temp) = context.data.live_data.air_temp {
@@ -426,7 +426,7 @@ fn update_session_live(context: &mut IRacingProcessorContext) {
     }
 
     if let Some(time_of_day) = context.data.live_data.session_time_of_day {
-        session.time_of_day.set(time_of_day.clone());
+        session.time_of_day.set(time_of_day);
     }
 }
 
@@ -468,7 +468,7 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data, events: &mut VecDequ
     if let Some(ref lap_time_est) = data.live_data.car_idx_est_time {
         if let Some(time) = lap_time_est.get(car_idx) {
             entry.current_lap.set(model::Lap {
-                time: time.clone().into(),
+                time: (*time).into(),
                 splits: Vec::new().into(),
                 invalid: model::Value::default(),
                 driver_id: Some(entry.current_driver),
@@ -479,7 +479,7 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data, events: &mut VecDequ
 
     if let Some(ref car_idx_f2_time) = data.live_data.car_idx_f2_time {
         if let Some(time) = car_idx_f2_time.get(car_idx) {
-            entry.time_behind_leader.set(time.clone());
+            entry.time_behind_leader.set(*time);
         }
     }
 

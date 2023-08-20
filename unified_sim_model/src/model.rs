@@ -45,19 +45,22 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Value<T> {
     value: T,
-    editable: bool,
     available: bool,
+    estimate: bool,
+    editable: bool,
 }
 
 impl<T: Default> Default for Value<T> {
     /// Create a value with the default for the type.
     /// `editable` is false.
     /// `available` is false.
+    /// `estimate` is false.
     fn default() -> Self {
         Self {
             value: Default::default(),
-            editable: false,
             available: false,
+            estimate: false,
+            editable: false,
         }
     }
 }
@@ -70,21 +73,42 @@ impl<T> AsRef<T> for Value<T> {
 }
 
 impl<T> Value<T> {
-    /// Create a value with a given inner value and the `available` flag set to true.
-    pub fn new(value: T) -> Self {
+    /// Create a value with a specific default value.
+    /// `available` is false.
+    /// `estimate` is false.
+    /// `editable` is false.
+    pub fn default_with_value(value: T) -> Self {
         Self {
             value,
+            available: false,
+            estimate: false,
             editable: false,
-            available: true,
         }
     }
 
-    /// Create a value with a specific default value.
-    pub fn with_default(value: T) -> Self {
+    /// Create a value with a precise inner value.
+    /// `available` is true.
+    /// `estimate` is false.
+    /// `editable` is false.
+    pub fn new(value: T) -> Self {
         Self {
             value,
+            available: true,
+            estimate: false,
             editable: false,
-            available: false,
+        }
+    }
+
+    /// Create a value with an estimated inner value.
+    /// `available` is true.
+    /// `estimate` is true.
+    /// `editable` is false.
+    pub fn new_estimate(value: T) -> Self {
+        Self {
+            value,
+            available: true,
+            estimate: true,
+            editable: false,
         }
     }
 
@@ -94,45 +118,63 @@ impl<T> Value<T> {
         self
     }
 
-    /// Set the editable flag for this value.
-    pub fn set_editable(&mut self) {
-        self.editable = true;
-    }
-
-    /// Set the value to be available.
-    pub fn set_available(&mut self) {
-        self.available = true;
-    }
-
-    /// Set the value to be unavailable.
-    pub fn set_unavailable(&mut self) {
-        self.available = false;
-    }
-
     /// Set the inner value to a value provided by the game.
-    /// This sets the `available` flag to true and the `editable` flag to false.
-    ///
-    /// Generally once a value is available from the game it should not be editable anymore.
-    /// For some values it may be desireable to take the game provided value as a suggestion and allow
-    /// the user to overwrite it. In that case use the `edit` method to set the value and continue
-    /// to allow editing.
-    pub fn set(&mut self, new_value: T) {
+    /// This sets:
+    /// `available` to true
+    /// `estimate` to false
+    /// `editable` to false
+    pub fn set(&mut self, new_value: T) -> &mut Self {
         self.value = new_value;
         self.available = true;
+        self.estimate = false;
+        self.editable = false;
+        self
+    }
+
+    /// Sets the inner value to an estimated value.
+    /// This sets:
+    /// `available` to true
+    /// `estimate` to true
+    /// `editable` to false
+    pub fn estimate(&mut self, new_value: T) -> &mut Self {
+        self.value = new_value;
+        self.available = true;
+        self.estimate = true;
+        self.editable = false;
+        self
     }
 
     /// Set the inner value to a custom value.
-    /// This sets the `available` flag since the value is no longer represented by its default.
-    ///
-    /// This does not change the editability of the value.
-    pub fn edit(&mut self, new_value: T) {
+    /// This sets:
+    /// `available` to true
+    /// `estimate` to true
+    /// `editable` to true
+    pub fn edit(&mut self, new_value: T) -> &mut Self {
         self.value = new_value;
         self.available = true;
+        self.estimate = true;
+        self.editable = true;
+        self
+    }
+
+    /// Sets the editable flag for this value.
+    ///
+    /// Generally once a value is available from the game it should not be editable anymore.
+    /// For some values or estimates it may be desireable to take the game provided value as a suggestion and allow
+    /// the user to overwrite it. In that case chain this method onto the back of the previous call.
+    pub fn editable(&mut self) -> &mut Self {
+        self.editable = true;
+        self
     }
 
     /// Return if this value is available.
     pub fn is_avaliable(&self) -> bool {
         self.available
+    }
+
+    /// Return if this value is an estimate.
+    pub fn is_estimate(&self) -> bool {
+        self.estimate
     }
 
     /// Return if this value is editable.
@@ -684,7 +726,7 @@ pub enum Car {
 
 impl Default for Car {
     fn default() -> Self {
-        Car::CAR_DEFAULT.clone()
+        Car::CAR_DEFAULT
     }
 }
 
@@ -718,7 +760,7 @@ impl Car {
     pub fn name(&self) -> &str {
         match self {
             Car::Static { name, .. } => name,
-            Car::Owned { name, .. } => &name,
+            Car::Owned { name, .. } => name,
         }
     }
 
@@ -726,7 +768,7 @@ impl Car {
     pub fn manufacturer(&self) -> &str {
         match self {
             Car::Static { manufacturer, .. } => manufacturer,
-            Car::Owned { manufacturer, .. } => &manufacturer,
+            Car::Owned { manufacturer, .. } => manufacturer,
         }
     }
 
@@ -734,7 +776,7 @@ impl Car {
     pub fn category(&self) -> &CarCategory {
         match self {
             Car::Static { category, .. } => category,
-            Car::Owned { category, .. } => &category,
+            Car::Owned { category, .. } => category,
         }
     }
 }

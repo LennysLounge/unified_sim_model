@@ -32,7 +32,7 @@ impl IRacingProcessor for CameraProcessor {
             let Some(ref group_name) = group_def.group_name else {continue};
 
             let iracing_camera = IRacingCamera {
-                group_num: group_num,
+                group_num,
                 group_name: group_name.clone(),
                 camera_num: 0,
                 camera_name: "".to_string(),
