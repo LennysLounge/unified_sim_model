@@ -5,6 +5,7 @@ use std::{
         mpsc::{Receiver, TryRecvError},
         Arc, RwLock,
     },
+    time::Instant,
 };
 
 use thiserror::Error;
@@ -34,6 +35,8 @@ pub enum IRacingError {
     GameNotRunning,
     #[error("The game disconnected")]
     Disconnected,
+    #[error("The game connection timed out")]
+    TimedOut,
     #[error("Missing required data: {0}")]
     MissingData(String),
     #[error("Internal windows error: {0}")]
@@ -104,7 +107,13 @@ impl IRacingConnection {
     }
 
     fn run_loop(&mut self) -> IRacingResult<()> {
+        let mut last_update = Instant::now();
         loop {
+            let now = Instant::now();
+            if now.duration_since(last_update).as_secs() > 10 {
+                return Err(IRacingError::TimedOut.into());
+            }
+
             let should_close = self.handle_commands()?;
             if should_close {
                 break;
@@ -127,6 +136,8 @@ impl IRacingConnection {
             if !self.sdk.is_connected() {
                 break;
             }
+
+            last_update = now;
         }
         Ok(())
     }
