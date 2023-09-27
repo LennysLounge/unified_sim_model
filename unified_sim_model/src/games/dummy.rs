@@ -3,6 +3,8 @@ use std::{
     sync::{mpsc, Arc, RwLock},
 };
 
+use rand::Rng;
+
 use crate::{
     model::{
         Camera, Car, CarCategory, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap,
@@ -11,6 +13,52 @@ use crate::{
     time::Time,
     AdapterError, Distance, GameAdapter, Temperature, UpdateEvent,
 };
+
+const FIRST_NAMES: [&str; 20] = [
+    "Liam",
+    "Noah",
+    "Oliver",
+    "James",
+    "Elijah",
+    "William",
+    "Henry",
+    "Lucas",
+    "Benjamin",
+    "Theodore",
+    "Mateo",
+    "Levi",
+    "Sebastian",
+    "Daniel",
+    "Jack",
+    "Michael",
+    "Alexander",
+    "Owen",
+    "Asher",
+    "Samuel",
+];
+
+const LAST_NAMES: [&str; 20] = [
+    "Smith",
+    "Johnson",
+    "Williams",
+    "Brown",
+    "Jones",
+    "Garcia",
+    "Miller",
+    "Davis",
+    "Rodriguez",
+    "Martinez",
+    "Hernandez",
+    "Lopez",
+    "Gonzalez",
+    "Wilson",
+    "Anderson",
+    "Thomas",
+    "Taylor",
+    "Moore",
+    "Jackson",
+    "Martin",
+];
 
 #[derive(Default)]
 pub struct DummyAdapter {}
@@ -65,6 +113,7 @@ impl GameAdapter for DummyAdapter {
         model.current_session = Some(id);
         model.events.push(Event::SessionChanged(SessionId(0)));
 
+        let mut rand = rand::thread_rng();
         for i in 0..10 {
             let session = model.current_session_mut().unwrap();
             let entry_id = EntryId(i);
@@ -74,20 +123,9 @@ impl GameAdapter for DummyAdapter {
                     id: entry_id,
                     drivers: {
                         let mut drivers = HashMap::new();
-                        for i in 0..3 {
-                            let driver_id = DriverId(i);
-                            drivers.insert(
-                                driver_id,
-                                Driver {
-                                    id: driver_id,
-                                    first_name: Value::new("John".to_string()),
-                                    last_name: Value::new(format!("Wayne {}", i)),
-                                    short_name: Value::new(format!("JW{}", i)),
-                                    nationality: Value::new(Nationality::NONE),
-                                    driving_time: Value::new(Time::from(0)),
-                                    best_lap: Value::new(None),
-                                },
-                            );
+                        for j in 0..3 {
+                            let driver_id = DriverId(j);
+                            drivers.insert(driver_id, random_driver(driver_id));
                         }
                         drivers
                     },
@@ -98,11 +136,11 @@ impl GameAdapter for DummyAdapter {
                         "Manufacturer",
                         CarCategory { name: "Car Cat" },
                     )),
-                    car_number: Value::new(i),
+                    car_number: Value::new(rand.gen::<i32>() % 1000),
                     nationality: Value::new(Nationality::NONE),
                     world_pos: Value::new([0.0, 0.0, 0.0]),
                     orientation: Value::new([0.0, 0.0, 0.0]),
-                    position: Value::new(i),
+                    position: Value::new(i + 1),
                     spline_pos: Value::new(0.1234),
                     lap_count: Value::new(0),
                     laps: Vec::new(),
@@ -122,7 +160,7 @@ impl GameAdapter for DummyAdapter {
                     connected: Value::new(true),
                     stint_time: Value::new(Time::from(56_789)),
                     distance_driven: Value::new(i as f32 * 0.345),
-                    focused: false,
+                    focused: i % 3 == 0,
                     game_data: EntryGameData::None,
                     is_finished: Value::new(false),
                 },
@@ -130,5 +168,21 @@ impl GameAdapter for DummyAdapter {
         }
 
         Ok(())
+    }
+}
+
+fn random_driver(id: DriverId) -> Driver {
+    let mut rand = rand::thread_rng();
+    let first_name = FIRST_NAMES[rand.gen::<usize>() % FIRST_NAMES.len()];
+    let last_name = LAST_NAMES[rand.gen::<usize>() % LAST_NAMES.len()];
+
+    Driver {
+        id,
+        first_name: Value::new(first_name.to_string()),
+        last_name: Value::new(last_name.to_string()),
+        short_name: Value::new(format!("{}{}", &first_name[0..1], &last_name[0..1])),
+        nationality: Value::new(Nationality::NONE),
+        driving_time: Value::new(Time::from(0)),
+        best_lap: Value::new(None),
     }
 }
