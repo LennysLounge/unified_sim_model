@@ -1,6 +1,6 @@
 use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::model::{Car, Nationality};
 
@@ -396,6 +396,7 @@ fn read_car(buf: &mut &[u8]) -> Result<Car, IncompleteTypeError> {
         32 => Ok(cars::FERRARI_296_GT3),
         33 => Ok(cars::LAMBORGHINI_HURACAN_EVO2),
         34 => Ok(cars::PORSCHE_992_GT3_R),
+        35 => Ok(cars::MCLAREN_720S_GT3_EVO),
         50 => Ok(cars::ALPINE_A110_GT4),
         51 => Ok(cars::ASTON_MARTIN_VANTAGE_GT4),
         52 => Ok(cars::AUDI_R8_LMS_GT4),

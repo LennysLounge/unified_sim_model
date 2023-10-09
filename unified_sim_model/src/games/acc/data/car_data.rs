@@ -79,5 +79,6 @@ pub mod cars {
     pub const MERCEDES_AMG_GT4: Car = Car::new_static("Mercedes AMG GT4", "Mercedes-AMG", GT4);
     pub const PORSCHE_718_CAYMAN_GT4_CLUBSPORT: Car =
         Car::new_static("Porsche 718 Cayman GT4 Clubsport", "Porsche", GT4);
+    pub const MCLAREN_720S_GT3_EVO: Car = Car::new_static("McLaren 720S GT3 Evo", "McLaren", GT3);
     pub const ERROR: Car = Car::new_static("ERROR", "Error", NONE);
 }
