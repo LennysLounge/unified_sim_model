@@ -1,5 +1,7 @@
 use std::{backtrace::Backtrace, collections::HashMap, error::Error, fmt::Display};
 
+use tracing::{info, warn};
+
 use crate::model::{Car, Nationality};
 
 use super::cars;
@@ -405,7 +407,10 @@ fn read_car(buf: &mut &[u8]) -> Result<Car, IncompleteTypeError> {
         59 => Ok(cars::MCLAREN_570S_GT4),
         60 => Ok(cars::MERCEDES_AMG_GT4),
         61 => Ok(cars::PORSCHE_718_CAYMAN_GT4_CLUBSPORT),
-        _ => Ok(cars::ERROR),
+        id => {
+            warn!("Unknown car id: {}", id);
+            Ok(cars::ERROR)
+        }
     }
 }
 
