@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/gui",
+    "crates/dear_egui",
+    "crates/egui_ltable",
+    "crates/egui-custom",
+]
