@@ -16,8 +16,8 @@ use crate::{model::Model, AdapterCommand, GameAdapter, UpdateEvent};
 use self::{
     irsdk::{defines::Messages, Data, Irsdk},
     processors::{
-        base::BaseProcessor, camera::CameraProcessor, lap::LapProcessor, IRacingProcessor,
-        IRacingProcessorContext,
+        base::BaseProcessor, camera::CameraProcessor, lap::LapProcessor, speed::SpeedProcessor,
+        IRacingProcessor, IRacingProcessorContext,
     },
 };
 
@@ -85,6 +85,7 @@ struct IRacingConnection {
     lap_processor: LapProcessor,
     base_processor: BaseProcessor,
     camera_processor: CameraProcessor,
+    speed_processor: SpeedProcessor,
 }
 
 impl IRacingConnection {
@@ -103,6 +104,7 @@ impl IRacingConnection {
             lap_processor: LapProcessor::new(),
             base_processor: BaseProcessor {},
             camera_processor: CameraProcessor::new(),
+            speed_processor: SpeedProcessor::new(),
         }
     }
 
@@ -215,6 +217,7 @@ impl IRacingConnection {
             self.base_processor.static_data(&mut context)?;
             self.lap_processor.static_data(&mut context)?;
             self.camera_processor.static_data(&mut context)?;
+            self.speed_processor.static_data(&mut context)?;
 
             self.static_data_update_count = Some(data.static_data.update_count);
         }
@@ -222,12 +225,14 @@ impl IRacingConnection {
         self.base_processor.live_data(&mut context)?;
         self.lap_processor.live_data(&mut context)?;
         self.camera_processor.live_data(&mut context)?;
+        self.speed_processor.live_data(&mut context)?;
 
         while !context.events.is_empty() {
             let event = context.events.pop_front().unwrap();
             self.base_processor.event(&mut context, &event)?;
             self.lap_processor.event(&mut context, &event)?;
             self.camera_processor.event(&mut context, &event)?;
+            self.speed_processor.event(&mut context, &event)?;
 
             entry_finished::calc_entry_finished(&event, context.model);
             context.model.events.push(event);

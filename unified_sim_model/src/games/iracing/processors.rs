@@ -7,6 +7,7 @@ use super::{irsdk::Data, IRacingResult};
 pub mod base;
 pub mod camera;
 pub mod lap;
+pub mod speed;
 
 /// The context for a iracing processor.
 pub struct IRacingProcessorContext<'a> {
