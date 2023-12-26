@@ -23,6 +23,8 @@ use crate::{
 
 /// Commands for the dummy adapter.
 pub enum DummyCommands {
+    /// Set the amount of entries in the current session.
+    SetEntryAmount(usize),
 }
 
 #[derive(Default)]
@@ -80,6 +82,26 @@ impl DummyAdapter {
                         .for_each(|entry| entry.focused = entry.id == entry_id);
                 }
             }
+            AdapterCommand::Game(GameAdapterCommand::Dummy(command)) => match command {
+                DummyCommands::SetEntryAmount(amount) => {
+                    if let Some(session) = model.current_session_mut() {
+                        if session.entries.len() > amount {
+                            session.entries = session
+                                .entries
+                                .iter()
+                                .take(amount)
+                                .map(|(entry_id, entry)| (*entry_id, entry.clone()))
+                                .collect();
+                        }
+                        if session.entries.len() < amount {
+                            for i in session.entries.len()..amount {
+                                let entry = random_entry(i as i32);
+                                session.entries.insert(entry.id, entry);
+                            }
+                        }
+                    }
+                }
+            },
             _ => (),
         }
         ControlFlow::Continue(())
@@ -130,54 +152,55 @@ fn setup_model(model: &Arc<RwLock<Model>>) {
     model.current_session = Some(id);
     model.events.push(Event::SessionChanged(SessionId(0)));
 
-    let mut rand = rand::thread_rng();
     for i in 0..10 {
         let session = model.current_session_mut().unwrap();
-        let entry_id = EntryId(i);
-        session.entries.insert(
-            entry_id,
-            Entry {
-                id: entry_id,
-                drivers: {
-                    let mut drivers = HashMap::new();
-                    for j in 0..3 {
-                        let driver_id = DriverId(j);
-                        drivers.insert(driver_id, random_driver(driver_id));
-                    }
-                    drivers
-                },
-                current_driver: DriverId(0),
-                team_name: Value::new(format!("Team nr.{}", i)),
-                car: Value::new(random_car()),
-                car_number: Value::new(rand.gen::<i32>().abs() % 100),
-                nationality: Value::new(Nationality::NONE),
-                world_pos: Value::new([0.0, 0.0, 0.0]),
-                orientation: Value::new([0.0, 0.0, 0.0]),
-                position: Value::new(i + 1),
-                spline_pos: Value::new(0.1234),
-                lap_count: Value::new(0),
-                laps: Vec::new(),
-                current_lap: Value::new(Lap {
-                    time: Value::new(Time::from(12_345)),
-                    splits: Value::new(Vec::new()),
-                    driver_id: Some(DriverId(0)),
-                    entry_id: Some(EntryId(i)),
-                    invalid: Value::new(i % 2 == 0),
-                }),
-                best_lap: Value::new(None),
-                performance_delta: Value::new(Time::from(-1_234)),
-                time_behind_leader: Value::new(Time::from(12_345)),
-                in_pits: Value::new(i % 3 == 0),
-                gear: Value::new(4),
-                speed: Value::new(128.0),
-                connected: Value::new(true),
-                stint_time: Value::new(Time::from(56_789)),
-                distance_driven: Value::new(i as f32 * 0.345),
-                focused: i == 0,
-                game_data: EntryGameData::None,
-                is_finished: Value::new(false),
-            },
-        );
+        let entry = random_entry(i);
+        session.entries.insert(entry.id, entry);
+    }
+}
+
+fn random_entry(number: i32) -> Entry {
+    let mut rand = rand::thread_rng();
+    Entry {
+        id: EntryId(number),
+        drivers: {
+            let mut drivers = HashMap::new();
+            for j in 0..3 {
+                let driver_id = DriverId(j);
+                drivers.insert(driver_id, random_driver(driver_id));
+            }
+            drivers
+        },
+        current_driver: DriverId(0),
+        team_name: Value::new(format!("Team nr.{}", number)),
+        car: Value::new(random_car()),
+        car_number: Value::new(rand.gen::<i32>().abs() % 100),
+        nationality: Value::new(Nationality::NONE),
+        world_pos: Value::new([0.0, 0.0, 0.0]),
+        orientation: Value::new([0.0, 0.0, 0.0]),
+        position: Value::new(number + 1),
+        spline_pos: Value::new(0.1234),
+        lap_count: Value::new(0),
+        laps: Vec::new(),
+        current_lap: Value::new(Lap {
+            time: Value::new(Time::from(12_345)),
+            splits: Value::new(Vec::new()),
+            driver_id: Some(DriverId(0)),
+            entry_id: Some(EntryId(number)),
+            invalid: Value::new(number % 2 == 0),
+        }),
+        best_lap: Value::new(None),
+        performance_delta: Value::new(Time::from(-1_234)),
+        time_behind_leader: Value::new(Time::from(12_345)),
+        in_pits: Value::new(number % 3 == 0),
+        gear: Value::new(4),
+        speed: Value::new(128.0),
+        connected: Value::new(true),
+        stint_time: Value::new(Time::from(56_789)),
+        distance_driven: Value::new(number as f32 * 0.345),
+        focused: number == 0,
+        game_data: EntryGameData::None,
+        is_finished: Value::new(false),
     }
 }
 

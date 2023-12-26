@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use egui::{RichText, Sense, Ui};
+use egui::{DragValue, RichText, Sense, Ui};
 use egui_custom::dialog::Windower;
 use egui_ltable::{Column, Row, Table};
 use unified_sim_model::{
+    games::dummy::DummyCommands,
     model::{Entry, EntryId, Model, Session},
-    Adapter, AdapterCommand,
+    Adapter, AdapterCommand, GameAdapterCommand,
 };
 
 use crate::{graph::Graph, tab_panel::TabPanel};
@@ -16,24 +17,29 @@ pub fn show_session_tabs(ui: &mut Ui, model: &Model, windower: &mut Windower, ad
         session_tabs.add_tab(*session_id, format!("{:?}", *session.session_type));
     }
     session_tabs.show(|session_id, ui| {
-        let Some(session) = model.sessions.get(session_id) else {return;};
+        let Some(session) = model.sessions.get(session_id) else {
+            return;
+        };
 
         #[derive(Clone, PartialEq, Eq)]
         enum SessionTabs {
             Livetiming,
             SessionInfo,
             Camera,
+            Actions,
         }
         TabPanel::new(ui)
             .with_tab(SessionTabs::Livetiming, "Livetiming")
             .with_tab(SessionTabs::SessionInfo, "Session info")
             .with_tab(SessionTabs::Camera, "Camera")
+            .with_tab(SessionTabs::Actions, "Actions")
             .show(|id, ui| match id {
                 SessionTabs::Livetiming => {
                     display_entries_table(ui, &session.entries, windower, adapter)
                 }
                 SessionTabs::SessionInfo => display_session_info(ui, session),
                 SessionTabs::Camera => display_cameras(ui, model, adapter),
+                SessionTabs::Actions => display_actions(ui, model, adapter),
             });
     });
 }
@@ -333,4 +339,23 @@ fn display_entries_table(
                 });
             }
         });
+}
+
+fn display_actions(ui: &mut Ui, _model: &Model, adapter: &Adapter) {
+    ui.label("Dummy command:");
+    ui.horizontal(|ui| {
+        ui.label("Set entry amount:");
+
+        let amount_id = ui.make_persistent_id("entry_amount");
+        let mut amount = ui
+            .data_mut(|d| d.get_persisted(amount_id))
+            .unwrap_or(10usize);
+        ui.add(DragValue::new(&mut amount).clamp_range(1..=usize::MAX));
+        ui.data_mut(|d| d.insert_persisted(amount_id, amount));
+        if ui.button("set").clicked() {
+            adapter.send(AdapterCommand::Game(GameAdapterCommand::Dummy(
+                DummyCommands::SetEntryAmount(amount),
+            )));
+        }
+    });
 }
