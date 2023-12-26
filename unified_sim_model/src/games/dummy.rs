@@ -23,8 +23,6 @@ use crate::{
 
 /// Commands for the dummy adapter.
 pub enum DummyCommands {
-    /// Set the focus to a specific entry.
-    SetFocus(EntryId),
 }
 
 #[derive(Default)]
@@ -73,17 +71,15 @@ impl DummyAdapter {
         let mut model = model.write().expect("Should be able to lock for writing");
         match command {
             AdapterCommand::Close => return ControlFlow::Break(()),
-            AdapterCommand::Game(GameAdapterCommand::Dummy(command)) => match command {
-                DummyCommands::SetFocus(entry_id) => {
-                    model.focused_entry = Some(entry_id);
-                    if let Some(session) = model.current_session_mut() {
-                        session
-                            .entries
-                            .values_mut()
-                            .for_each(|entry| entry.focused = entry.id == entry_id);
-                    }
+            AdapterCommand::FocusOnCar(entry_id) => {
+                model.focused_entry = Some(entry_id);
+                if let Some(session) = model.current_session_mut() {
+                    session
+                        .entries
+                        .values_mut()
+                        .for_each(|entry| entry.focused = entry.id == entry_id);
                 }
-            },
+            }
             _ => (),
         }
         ControlFlow::Continue(())
