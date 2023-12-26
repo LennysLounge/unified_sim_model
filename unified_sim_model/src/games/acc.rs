@@ -188,6 +188,7 @@ impl AccConnection {
                     self.socket.send_change_camera_request(None, camera)?;
                 }
             }
+            AdapterCommand::Game(_) => (),
         };
         Ok(false)
     }

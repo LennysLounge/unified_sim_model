@@ -14,6 +14,9 @@ use crate::{
     AdapterError, Distance, GameAdapter, Temperature, UpdateEvent,
 };
 
+/// Commands for the dummy adapter.
+pub enum DummyCommands {}
+
 #[derive(Default)]
 pub struct DummyAdapter {}
 

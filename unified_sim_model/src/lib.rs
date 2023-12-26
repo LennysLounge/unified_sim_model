@@ -212,6 +212,14 @@ pub enum AdapterCommand {
     FocusOnCar(EntryId),
     /// Change the camera.
     ChangeCamera(Camera),
+    /// Game specific adapter commands.
+    Game(GameAdapterCommand),
+}
+
+/// Game specific adapter commands.
+pub enum GameAdapterCommand {
+    /// Commands for the dummy adapter.
+    Dummy(games::dummy::DummyCommands),
 }
 
 /// An event that is triggered when the model receives an update.

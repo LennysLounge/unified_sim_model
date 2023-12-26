@@ -186,6 +186,7 @@ impl IRacingConnection {
                     }
                     false
                 }
+                AdapterCommand::Game(_) => false,
             },
             Err(TryRecvError::Empty) => false,
             Err(TryRecvError::Disconnected) => {
