@@ -1,7 +1,26 @@
+//! This processor tries to solve for the time behind leader and time behind position ahead
+//! properties in the model.
+//!
+//! There are multiple different ways to achieve this, all with their own set of advantages
+//! and disadvantages.
+//!
+//! This implementation uses a checkpoint pased approach to measure the time between the leader
+//! reaching a checkpoing and any other entry reaching that checkpoint.
+//! the `time_behind_position_ahead` property can be easily calculated using the `time_behind_leader`.
+//!
+//! The checkpoint update is run in the session update for all entries all at once. Doing it this way
+//! technically introduces a one update delay to the value but i have not found a way to do it in
+//! `RealtimeCarUpdate` without creating a bigger delay in a different position.
+//! Doing the update for each car directly in `RealtimeCarUpdate` does not work very well since we dont
+//! know who is leading the race at that point. Only after the `distance_driven` value is full updated for
+//! all entries can we find the leader of the race. We cannot reliably use the position reported by the game
+//! since that only updates every sector.
+//!
+
 use std::{collections::HashMap, time::Instant};
 
 use crate::{
-    games::acc::data::{RealtimeCarUpdate, SessionUpdate, TrackData},
+    games::acc::data::{SessionUpdate, TrackData},
     model::{Entry, EntryId, Event, Session, SessionType, Value},
     Time,
 };
@@ -14,20 +33,6 @@ pub struct GapToLeaderProcessor {
     prev_marker_idx: HashMap<EntryId, usize>,
 }
 impl AccProcessor for GapToLeaderProcessor {
-    fn realtime_car_update(
-        &mut self,
-        update: &RealtimeCarUpdate,
-        context: &mut AccProcessorContext,
-    ) -> crate::games::acc::Result<()> {
-        let Some(session) = context.model.current_session_mut() else {
-            return Ok(());
-        };
-        match session.session_type.as_ref() {
-            SessionType::Practice | SessionType::Qualifying => self.qualifying(update, session),
-            SessionType::Race => self.race(update, session),
-            SessionType::None => Ok(()),
-        }
-    }
     fn session_update(
         &mut self,
         _update: &SessionUpdate,
@@ -46,21 +51,31 @@ impl AccProcessor for GapToLeaderProcessor {
                 .unwrap_or(std::cmp::Ordering::Equal);
             is_connected.then(position)
         });
-        let entries: Vec<_> = entries.iter().map(|e| e.id).collect();
+        let entries = entries.iter().map(|e| e.id).collect::<Vec<_>>();
 
-        let mut prev_gap = 0.0;
-        for entry_id in entries {
-            if let Some(entry) = session.entries.get_mut(&entry_id) {
-                if entry.time_behind_leader.is_avaliable() {
-                    entry
-                        .time_behind_position_ahead
-                        .set((entry.time_behind_leader.ms - prev_gap).into());
-                    prev_gap = entry.time_behind_leader.ms;
-                } else {
-                    entry.time_behind_position_ahead = Value::default();
+        for (index, entry_id) in entries.into_iter().enumerate() {
+            match session.session_type.as_ref() {
+                SessionType::Practice | SessionType::Qualifying => {
+                    self.qualifying(entry_id, session)
                 }
+                SessionType::Race => self.race(entry_id, session, index == 0),
+                SessionType::None => (),
             }
         }
+
+        // let mut prev_gap = 0.0;
+        // for entry_id in entries {
+        //     if let Some(entry) = session.entries.get_mut(&entry_id) {
+        //         if entry.time_behind_leader.is_avaliable() {
+        //             entry
+        //                 .time_behind_position_ahead
+        //                 .set((entry.time_behind_leader.ms - prev_gap).into());
+        //             prev_gap = entry.time_behind_leader.ms;
+        //         } else {
+        //             entry.time_behind_position_ahead = Value::default();
+        //         }
+        //     }
+        // }
 
         Ok(())
     }
@@ -90,20 +105,16 @@ impl AccProcessor for GapToLeaderProcessor {
     }
 }
 impl GapToLeaderProcessor {
-    fn race(
-        &mut self,
-        update: &RealtimeCarUpdate,
-        session: &mut Session,
-    ) -> crate::games::acc::Result<()> {
+    fn race(&mut self, entry_id: EntryId, session: &mut Session, is_leader: bool) {
         if self.markers.is_empty() {
             // We dont have any track data yet so we dont know how many markers we have either.
-            return Ok(());
+            return;
         }
-        let Some(entry) = session.entries.get_mut(&EntryId(update.car_id as i32)) else {
+        let Some(entry) = session.entries.get_mut(&entry_id) else {
             // A realtime update for a car that does not exsists is not an error directly.
             // The base processor should request a new entry list and then add it to the session.
             // We cannot continue though.
-            return Ok(());
+            return;
         };
 
         let lap = entry.distance_driven.floor() as u32;
@@ -121,7 +132,7 @@ impl GapToLeaderProcessor {
         {
             // This entry is still at the same marker as last update so there is no need to
             // update again.
-            return Ok(());
+            return;
         }
         self.prev_marker_idx.insert(entry.id, marker_idx);
 
@@ -130,32 +141,25 @@ impl GapToLeaderProcessor {
             entry.time_behind_leader.set(Time {
                 ms: (Instant::now() - marker.time).as_millis() as f64,
             });
-        } else {
-            entry.time_behind_leader.set(Time { ms: 0.0 });
+        } else if is_leader {
             // a marker for this lap does not exisist; create one.
+            entry.time_behind_leader.set(Time { ms: 0.0 });
             self.markers[marker_idx].push(Marker {
                 lap,
                 time: Instant::now(),
             });
         }
-        Ok(())
     }
 
-    fn qualifying(
-        &mut self,
-        update: &RealtimeCarUpdate,
-        session: &mut Session,
-    ) -> crate::games::acc::Result<()> {
-        let gap_to_leader = Self::get_lap_time_diff(session, EntryId(update.car_id as i32));
-        if let Some(entry) = session.entries.get_mut(&EntryId(update.car_id as i32)) {
+    fn qualifying(&mut self, entry_id: EntryId, session: &mut Session) {
+        let gap_to_leader = Self::get_lap_time_diff(session, entry_id);
+        if let Some(entry) = session.entries.get_mut(&entry_id) {
             if let Some(gap_to_leader) = gap_to_leader {
                 entry.time_behind_leader.set(gap_to_leader);
             } else {
                 entry.time_behind_leader = Value::default();
             }
         }
-
-        Ok(())
     }
 
     fn get_lap_time_diff(session: &Session, entry_id: EntryId) -> Option<Time> {

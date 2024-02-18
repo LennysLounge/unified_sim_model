@@ -488,8 +488,18 @@ pub struct Entry {
     /// Perforamce delta is not available in iRacing.
     pub performance_delta: Value<Time>,
     /// The time difference from the leader of the session to this entry.
-    /// In a best lap time session, this is the difference in lap time. Otherwise it is the difference
-    /// in time between the leader reaching a checkpoint and this entry reaching the same checkpoint.
+    ///
+    /// For lap time session:  
+    /// * This is the difference in lap time.  
+    /// * For the leader of the session this value is 0
+    ///
+    /// For distance/timed session:
+    /// * This is the time difference between the leader reaching an arbitrary checkpoing and this entry
+    /// reaching the same checkpoing.
+    /// * For the leader of the session this value is 0
+    ///
+    /// This value is unavailable as long as the time behind the leader is unknown or is in the process of
+    /// beeing calculated.
     pub time_behind_leader: Value<Time>,
     /// The time difference from the position ahead to this entry.
     /// In a best lap time session, this is the difference in lap time. Otherwise it is the difference
@@ -528,7 +538,7 @@ pub struct Entry {
     pub stint_time: Value<Time>,
     /// The logical distance driven by this entry in laps.
     /// This is simply the lap count + the current lap progress from the spline position and
-    /// can be used to sort entries into a realtime position. 
+    /// can be used to sort entries into a realtime position.
     ///
     /// This value **does not** count the physical distance driven by the car in meters.
     /// The consequence of this is, that the distance driven can move backwards if the entries
