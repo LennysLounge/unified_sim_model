@@ -526,8 +526,20 @@ pub struct Entry {
     /// - **iRacing:**
     /// Stint time is not implemented for iRacing yet.
     pub stint_time: Value<Time>,
-    /// The distance driven by this entry in laps.
-    /// This is simply the lap count + the current lap progress from the spline position.
+    /// The logical distance driven by this entry in laps.
+    /// This is simply the lap count + the current lap progress from the spline position and
+    /// can be used to sort entries into a realtime position. 
+    ///
+    /// This value **does not** count the physical distance driven by the car in meters.
+    /// The consequence of this is, that the distance driven can move backwards if the entries
+    /// moves backwards along the track. This may happen by either physically driving backwards
+    /// or teleporting to the pits for example.
+    ///
+    /// In race session this values always starts a 0 and begins counting once the entry crosses the start
+    /// line to start their first lap.
+    /// After the entries finishes the race, its distance will stop counting an remain at the last value it was set.
+    /// This is not guaranteed to happen at an whole number and may include some rounding errors.
+    /// Therefore this value should not be used to sort entries after they have finished the race.
     pub distance_driven: Value<f32>,
     /// True if this car is the focus of the camera right now.
     pub focused: bool,
