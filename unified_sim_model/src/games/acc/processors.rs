@@ -15,9 +15,10 @@ use super::{
 
 pub mod base;
 pub mod connection;
-pub mod lap;
 pub mod distance_driven;
 pub mod entry_finished;
+pub mod gap_to_leader;
+pub mod lap;
 
 /// A context for a processor to work in.
 pub struct AccProcessorContext<'a> {
@@ -29,55 +30,63 @@ pub struct AccProcessorContext<'a> {
 /// This trait descibes a processor that can process the
 /// data events from the game and modify the model.
 pub trait AccProcessor {
+    #[allow(unused)]
     fn registration_result(
         &mut self,
-        _result: &RegistrationResult,
-        _context: &mut AccProcessorContext,
+        result: &RegistrationResult,
+        context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
+    #[allow(unused)]
     fn session_update(
         &mut self,
-        _update: &SessionUpdate,
-        _context: &mut AccProcessorContext,
+        update: &SessionUpdate,
+        context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
+    #[allow(unused)]
     fn realtime_car_update(
         &mut self,
-        _update: &RealtimeCarUpdate,
-        _context: &mut AccProcessorContext,
+        update: &RealtimeCarUpdate,
+        context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn entry_list(&mut self, _list: &EntryList, _context: &mut AccProcessorContext) -> Result<()> {
+    #[allow(unused)]
+    fn entry_list(&mut self, list: &EntryList, context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
 
-    fn track_data(&mut self, _track: &TrackData, _context: &mut AccProcessorContext) -> Result<()> {
+    #[allow(unused)]
+    fn track_data(&mut self, track: &TrackData, context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
 
+    #[allow(unused)]
     fn entry_list_car(
         &mut self,
-        _car: &EntryListCar,
-        _context: &mut AccProcessorContext,
+        car: &EntryListCar,
+        context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
+    #[allow(unused)]
     fn broadcast_event(
         &mut self,
-        _event: &BroadcastingEvent,
-        _context: &mut AccProcessorContext,
+        event: &BroadcastingEvent,
+        context: &mut AccProcessorContext,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn event(&mut self, _event: &Event, _context: &mut AccProcessorContext) -> Result<()> {
+    #[allow(unused)]
+    fn event(&mut self, event: &Event, context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
 

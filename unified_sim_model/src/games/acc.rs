@@ -22,7 +22,7 @@ use self::{
     processors::{
         base::BaseProcessor, connection::ConnectionProcessor,
         distance_driven::DistanceDrivenProcessor, entry_finished::EntryFinishedProcessor,
-        lap::LapProcessor, AccProcessor, AccProcessorContext,
+        gap_to_leader::GapToLeaderProcessor, lap::LapProcessor, AccProcessor, AccProcessorContext,
     },
 };
 
@@ -122,6 +122,7 @@ impl AccConnection {
                 Box::new(LapProcessor::default()),
                 Box::new(DistanceDrivenProcessor),
                 Box::new(EntryFinishedProcessor),
+                Box::new(GapToLeaderProcessor::default()),
             ],
         })
     }
