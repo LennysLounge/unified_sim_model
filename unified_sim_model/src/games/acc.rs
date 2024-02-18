@@ -120,7 +120,7 @@ impl AccConnection {
                 Box::new(BaseProcessor::default()),
                 Box::new(ConnectionProcessor::default()),
                 Box::new(LapProcessor::default()),
-                Box::new(DistanceDrivenProcessor),
+                Box::new(DistanceDrivenProcessor::default()),
                 Box::new(EntryFinishedProcessor),
                 Box::new(GapToLeaderProcessor::default()),
             ],
