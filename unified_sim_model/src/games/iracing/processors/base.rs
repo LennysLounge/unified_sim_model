@@ -14,7 +14,8 @@ use crate::{
             IRacingError, IRacingResult,
         },
     },
-    model, Temperature, Time,
+    model::{self, Value},
+    Temperature, Time,
 };
 
 use super::{IRacingProcessor, IRacingProcessorContext};
@@ -266,14 +267,20 @@ fn init_entries(
     }
 
     for position in session_info.results_positions.iter() {
-        let Some(car_idx) = position.car_idx else {continue};
+        let Some(car_idx) = position.car_idx else {
+            continue;
+        };
         let entry_id = model::EntryId(car_idx);
         if !entries.contains_key(&entry_id) {
             continue;
         }
 
-        let Some(fastest_lap_time) = position.fastest_time else {continue};
-        let Some(entry) = entries.get_mut(&entry_id) else {continue};
+        let Some(fastest_lap_time) = position.fastest_time else {
+            continue;
+        };
+        let Some(entry) = entries.get_mut(&entry_id) else {
+            continue;
+        };
         entry.best_lap.set(Some(model::Lap {
             time: Time::from_secs(fastest_lap_time).into(),
             splits: Vec::new().into(),
@@ -335,6 +342,7 @@ fn map_entry(driver_info: &static_data::Driver) -> IRacingResult<model::Entry> {
         best_lap: model::Value::new(None),
         performance_delta: model::Value::default(),
         time_behind_leader: model::Value::default(),
+        time_behind_position_ahead: Value::default(),
         in_pits: model::Value::default(),
         gear: model::Value::default(),
         speed: model::Value::default(),

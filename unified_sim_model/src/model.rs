@@ -488,13 +488,19 @@ pub struct Entry {
     /// Perforamce delta is not available in iRacing.
     pub performance_delta: Value<Time>,
     /// The time difference from the leader of the session to this entry.
-    /// In a timed session, this is the difference in lap time. Otherwise it is the difference
+    /// In a best lap time session, this is the difference in lap time. Otherwise it is the difference
     /// in time between the leader reaching a checkpoint and this entry reaching the same checkpoint.
+    pub time_behind_leader: Value<Time>,
+    /// The time difference from the position ahead to this entry.
+    /// In a best lap time session, this is the difference in lap time. Otherwise it is the difference
+    /// in time between the position ahead reaching a checkpoint and this entry reaching the same checkpoint.
     ///
     /// ### Availability:
     /// - **Assetto Corsa Competizione:**
-    /// This value is currently not implemented for ACC.
-    pub time_behind_leader: Value<Time>,
+    /// Not yet implemented.
+    /// - **iRacing:**
+    /// Not yet implemented.
+    pub time_behind_position_ahead: Value<Time>,
     /// If the entry is currently in the pitlane or not.
     pub in_pits: Value<bool>,
     /// The gear of the entry.

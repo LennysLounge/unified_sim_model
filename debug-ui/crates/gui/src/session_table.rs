@@ -213,6 +213,9 @@ fn display_entries_table(
                     ui.strong("To leader");
                 });
                 row.cell(|ui| {
+                    ui.strong("Interval");
+                });
+                row.cell(|ui| {
                     ui.strong("Stint");
                 });
                 row.cell(|_| {});
@@ -323,6 +326,15 @@ fn display_entries_table(
                             ui.label(
                                 entry
                                     .time_behind_leader
+                                    .get_available()
+                                    .map(|t| t.format())
+                                    .unwrap_or(String::from("-")),
+                            );
+                        });
+                        row.cell(|ui| {
+                            ui.label(
+                                entry
+                                    .time_behind_position_ahead
                                     .get_available()
                                     .map(|t| t.format())
                                     .unwrap_or(String::from("-")),

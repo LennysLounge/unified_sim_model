@@ -192,6 +192,7 @@ fn random_entry(number: i32) -> Entry {
         best_lap: Value::new(None),
         performance_delta: Value::new(Time::from(-1_234)),
         time_behind_leader: Value::new(Time::from(12_345)),
+        time_behind_position_ahead: Value::new(Time::from(567)),
         in_pits: Value::new(number % 3 == 0),
         gear: Value::new(4),
         speed: Value::new(128.0),

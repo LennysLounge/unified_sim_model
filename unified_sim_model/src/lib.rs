@@ -202,6 +202,14 @@ impl ReadOnlyModel {
     ) -> Result<RwLockReadGuard<'_, Model>, PoisonError<RwLockReadGuard<'_, Model>>> {
         self.model.read()
     }
+
+    /// Locks the underlying `RwLock` and returns a read only view to the model.
+    /// Panics if the `RwLock` cannot be read.
+    pub fn read_raw(&self) -> RwLockReadGuard<'_, Model> {
+        self.model
+            .read()
+            .expect("The model should not be poisoned.")
+    }
 }
 
 /// Commands for the adapter to execute.
