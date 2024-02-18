@@ -13,7 +13,7 @@ use crate::{
         self, Camera, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, GameCamera, Lap,
         Nationality, Session, SessionGameData, Value,
     },
-    time::Time,
+    types::Time,
     Distance, Temperature,
 };
 
@@ -248,7 +248,9 @@ impl AccProcessor for BaseProcessor {
     ) -> Result<()> {
         debug!("Entry List Car");
 
-        let Some(session) = context.model.current_session_mut() else {return Ok(())};
+        let Some(session) = context.model.current_session_mut() else {
+            return Ok(());
+        };
 
         let entry = map_entry(car);
         if session.entries.contains_key(&entry.id) {

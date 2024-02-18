@@ -8,7 +8,7 @@ use crate::{
         AccConnectionError, AccProcessorContext, Result,
     },
     model::{DriverId, EntryId, Event, Lap, LapCompleted},
-    time::Time,
+    types::Time,
 };
 
 use super::AccProcessor;

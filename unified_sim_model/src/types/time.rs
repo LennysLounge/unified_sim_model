@@ -69,19 +69,19 @@ impl Time {
 mod tests {
     #[test]
     fn format_correctly() {
-        let time = crate::time::Time::from(45_296_789);
+        let time = crate::types::Time::from(45_296_789);
         assert_eq!(time.format(), "12:34:56.789");
     }
 
     #[test]
     fn format_leading_zeros() {
-        let time = crate::time::Time::from(3_661_001);
+        let time = crate::types::Time::from(3_661_001);
         assert_eq!(time.format(), "1:01:01.001");
     }
 
     #[test]
     fn format_negative() {
-        let time = crate::time::Time::from(-3_661_001);
+        let time = crate::types::Time::from(-3_661_001);
         assert_eq!(time.format(), "-1:01:01.001");
     }
 }

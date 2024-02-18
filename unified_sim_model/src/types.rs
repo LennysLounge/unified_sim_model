@@ -1,10 +1,10 @@
-pub mod angle;
-pub mod distance;
-pub mod pressure;
-pub mod speed;
-pub mod temperature;
-pub mod time;
-pub mod weight;
+mod angle;
+mod distance;
+mod pressure;
+mod speed;
+mod temperature;
+mod time;
+mod weight;
 
 pub use angle::Angle;
 pub use distance::Distance;

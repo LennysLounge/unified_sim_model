@@ -16,7 +16,7 @@ use crate::{
         Camera, Car, CarCategory, Day, Driver, DriverId, Entry, EntryGameData, EntryId, Event, Lap,
         Model, Nationality, Session, SessionGameData, SessionId, SessionPhase, SessionType, Value,
     },
-    time::Time,
+    types::Time,
     AdapterCommand, AdapterError, Distance, GameAdapter, GameAdapterCommand, Temperature,
     UpdateEvent,
 };

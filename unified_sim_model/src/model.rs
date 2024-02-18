@@ -26,7 +26,7 @@ use crate::{
         acc::model::{AccCamera, AccEntry, AccSession},
         iracing::IRacingCamera,
     },
-    time::Time,
+    types::Time,
     Distance, Temperature,
 };
 
