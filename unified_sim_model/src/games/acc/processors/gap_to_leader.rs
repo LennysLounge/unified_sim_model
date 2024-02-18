@@ -1,8 +1,8 @@
 use std::{collections::HashMap, time::Instant};
 
 use crate::{
-    games::acc::data::{RealtimeCarUpdate, TrackData},
-    model::{EntryId, Event, Session, SessionType, Value},
+    games::acc::data::{RealtimeCarUpdate, SessionUpdate, TrackData},
+    model::{Entry, EntryId, Event, Session, SessionType, Value},
     Time,
 };
 
@@ -27,6 +27,42 @@ impl AccProcessor for GapToLeaderProcessor {
             SessionType::Race => self.race(update, session),
             SessionType::None => Ok(()),
         }
+    }
+    fn session_update(
+        &mut self,
+        _update: &SessionUpdate,
+        context: &mut AccProcessorContext,
+    ) -> crate::games::acc::Result<()> {
+        let Some(session) = context.model.current_session_mut() else {
+            return Ok(());
+        };
+
+        let mut entries: Vec<&Entry> = session.entries.values().collect();
+        entries.sort_by(|e1, e2| {
+            let is_connected = e2.connected.cmp(&e1.connected);
+            let position = e1
+                .position
+                .partial_cmp(&e2.position)
+                .unwrap_or(std::cmp::Ordering::Equal);
+            is_connected.then(position)
+        });
+        let entries: Vec<_> = entries.iter().map(|e| e.id).collect();
+
+        let mut prev_gap = 0.0;
+        for entry_id in entries {
+            if let Some(entry) = session.entries.get_mut(&entry_id) {
+                if entry.time_behind_leader.is_avaliable() {
+                    entry
+                        .time_behind_position_ahead
+                        .set((entry.time_behind_leader.ms - prev_gap).into());
+                    prev_gap = entry.time_behind_leader.ms;
+                } else {
+                    entry.time_behind_position_ahead = Value::default();
+                }
+            }
+        }
+
+        Ok(())
     }
     fn track_data(
         &mut self,
