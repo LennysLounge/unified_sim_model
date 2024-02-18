@@ -2,7 +2,7 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::{
-    model::{EntryId, Model, Value},
+    model::{Model, Value},
     AdapterCommand, GameAdapter, UpdateEvent,
 };
 use std::{
@@ -20,12 +20,11 @@ use std::{
 use self::{
     data::{IncompleteTypeError, Message},
     processors::{
-        base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor, process_message,
-        AccProcessor, AccProcessorContext,
+        base::BaseProcessor, connection::ConnectionProcessor,
+        distance_driven::DistanceDrivenProcessor, entry_finished::EntryFinishedProcessor,
+        lap::LapProcessor, AccProcessor, AccProcessorContext,
     },
 };
-
-use super::common::{distance_driven, entry_finished};
 
 mod data;
 pub mod model;
@@ -91,9 +90,7 @@ pub struct AccConnection {
     command_rx: Receiver<AdapterCommand>,
     update_event: UpdateEvent,
     socket: AccSocket,
-    base_proc: BaseProcessor,
-    connection_proc: ConnectionProcessor,
-    lap_proc: LapProcessor,
+    processors: Vec<Box<dyn AccProcessor>>,
 }
 
 impl AccConnection {
@@ -119,9 +116,13 @@ impl AccConnection {
                 connection_id: 0,
                 read_only: false,
             },
-            base_proc: BaseProcessor::default(),
-            connection_proc: ConnectionProcessor::default(),
-            lap_proc: LapProcessor::default(),
+            processors: vec![
+                Box::new(BaseProcessor::default()),
+                Box::new(ConnectionProcessor::default()),
+                Box::new(LapProcessor::default()),
+                Box::new(DistanceDrivenProcessor),
+                Box::new(EntryFinishedProcessor),
+            ],
         })
     }
 
@@ -203,27 +204,16 @@ impl AccConnection {
             events: VecDeque::new(),
         };
 
-        process_message(&mut self.base_proc, message, &mut context)?;
-        process_message(&mut self.connection_proc, message, &mut context)?;
-        process_message(&mut self.lap_proc, message, &mut context)?;
-
-        if let Message::RealtimeCarUpdate(update) = message {
-            let entry = context
-                .model
-                .current_session_mut()
-                .and_then(|session| session.entries.get_mut(&EntryId(update.car_id as i32)));
-            if let Some(entry) = entry {
-                distance_driven::calc_distance_driven(entry);
-            }
+        // Process the message with each processor.
+        for processor in &mut self.processors {
+            processor.process_message(message, &mut context)?;
         }
 
-        while !context.events.is_empty() {
-            let event = context.events.pop_front().unwrap();
-            self.base_proc.event(&event, &mut context)?;
-            self.connection_proc.event(&event, &mut context)?;
-            self.lap_proc.event(&event, &mut context)?;
-
-            entry_finished::calc_entry_finished(&event, context.model);
+        // Propegate events to the processors as well.
+        while let Some(event) = context.events.pop_front() {
+            for processor in &mut self.processors {
+                processor.event(&event, &mut context)?;
+            }
             context.model.events.push(event);
         }
 

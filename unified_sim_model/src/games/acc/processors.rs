@@ -16,6 +16,8 @@ use super::{
 pub mod base;
 pub mod connection;
 pub mod lap;
+pub mod distance_driven;
+pub mod entry_finished;
 
 /// A context for a processor to work in.
 pub struct AccProcessorContext<'a> {
@@ -78,22 +80,23 @@ pub trait AccProcessor {
     fn event(&mut self, _event: &Event, _context: &mut AccProcessorContext) -> Result<()> {
         Ok(())
     }
-}
 
-pub fn process_message(
-    me: &mut impl AccProcessor,
-    message: &Message,
-    context: &mut AccProcessorContext,
-) -> Result<()> {
-    use Message::*;
-    match message {
-        Unknown(t) => Err(AccConnectionError::Other(format!("Unknown message type: {}", t)).into()),
-        RegistrationResult(ref result) => me.registration_result(result, context),
-        SessionUpdate(ref update) => me.session_update(update, context),
-        RealtimeCarUpdate(ref update) => me.realtime_car_update(update, context),
-        EntryList(ref list) => me.entry_list(list, context),
-        TrackData(ref track) => me.track_data(track, context),
-        EntryListCar(ref car) => me.entry_list_car(car, context),
-        BroadcastingEvent(ref event) => me.broadcast_event(event, context),
+    fn process_message(
+        &mut self,
+        message: &Message,
+        context: &mut AccProcessorContext,
+    ) -> Result<()> {
+        match message {
+            Message::Unknown(t) => {
+                Err(AccConnectionError::Other(format!("Unknown message type: {}", t)).into())
+            }
+            Message::RegistrationResult(result) => self.registration_result(result, context),
+            Message::SessionUpdate(update) => self.session_update(update, context),
+            Message::RealtimeCarUpdate(update) => self.realtime_car_update(update, context),
+            Message::EntryList(list) => self.entry_list(list, context),
+            Message::TrackData(track) => self.track_data(track, context),
+            Message::EntryListCar(car) => self.entry_list_car(car, context),
+            Message::BroadcastingEvent(event) => self.broadcast_event(event, context),
+        }
     }
 }
