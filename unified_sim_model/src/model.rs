@@ -181,6 +181,26 @@ impl<T> Value<T> {
     pub fn is_editable(&self) -> bool {
         self.editable
     }
+
+    /// Returns the value if it is available.  
+    /// `None` otherwise.
+    pub fn get_available(&self) -> Option<&T> {
+        if self.available {
+            Some(&self.value)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the value if it is available or estimated.  
+    /// `None` otherwise.
+    pub fn get_estimate(&self) -> Option<&T> {
+        if self.available || self.estimate {
+            Some(&self.value)
+        } else {
+            None
+        }
+    }
 }
 
 impl<T: Copy> Value<T> {

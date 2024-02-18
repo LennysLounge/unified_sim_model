@@ -320,7 +320,13 @@ fn display_entries_table(
                             ui.label(delta);
                         });
                         row.cell(|ui| {
-                            ui.label(entry.time_behind_leader.format());
+                            ui.label(
+                                entry
+                                    .time_behind_leader
+                                    .get_available()
+                                    .map(|t| t.format())
+                                    .unwrap_or(String::from("-")),
+                            );
                         });
                         row.cell(|ui| {
                             ui.label(entry.stint_time.format());
