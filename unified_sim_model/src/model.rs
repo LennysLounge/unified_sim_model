@@ -465,7 +465,7 @@ impl Session {
                 e1.realtime_position
             } else {
                 e1.position
-            }; 
+            };
             let p2 = if e1.finished {
                 e2.position
             } else if session_is_active && use_realtime_pos {
@@ -743,6 +743,38 @@ pub enum SessionType {
     /// Session type is unknown or unavailable.
     #[default]
     None,
+}
+impl SessionType {
+    // Get the scoring type for the session type.
+    pub fn scoring_type(&self) -> ScoringType {
+        match self {
+            SessionType::Practice => ScoringType::BestLapTime,
+            SessionType::Qualifying => ScoringType::BestLapTime,
+            SessionType::Race => ScoringType::DistanceThenTime,
+            SessionType::None => ScoringType::BestLapTime,
+        }
+    }
+    /// Return `true` if this session type is scored by the best lap time.
+    pub fn is_scored_by_best_lap_time(&self) -> bool {
+        self.scoring_type() == ScoringType::BestLapTime
+    }
+    // Return `true` if this session type is scored by distance and then time.
+    pub fn is_scored_by_distance_then_time(&self) -> bool {
+        self.scoring_type() == ScoringType::DistanceThenTime
+    }
+}
+
+/// How a session is scored.
+#[derive(PartialEq, Eq)]
+pub enum ScoringType {
+    /// Entries are scored by their best lap time during the session
+    /// from lowest to highest.  
+    /// Usually for practice session and qualifying.
+    BestLapTime,
+    /// Entries are scored by who traveld the furthest distance in the session
+    /// and as a tie breaker who got to that distance first.  
+    /// Usually used for race session theier limited by a timer or lap count.
+    DistanceThenTime,
 }
 
 /// The phase of the current session.
