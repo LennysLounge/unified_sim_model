@@ -13,6 +13,8 @@ use crate::{
 
 use super::AccProcessor;
 
+/// This processors observes lap changes and publishes `LapCompleted` events.
+///
 #[derive(Debug, Default)]
 pub struct LapProcessor {
     laps_before: HashMap<EntryId, i16>,
@@ -40,7 +42,9 @@ impl AccProcessor for LapProcessor {
                 "No current session on a realtime car update".to_owned(),
             ))?;
 
-        let Some(entry) = session.entries.get_mut(&entry_id) else {return Ok(())};
+        let Some(entry) = session.entries.get_mut(&entry_id) else {
+            return Ok(());
+        };
         let current_driver = entry.current_driver;
 
         let lap = map_lap(&update.last_lap, current_driver, entry.id);
