@@ -20,7 +20,9 @@ use std::{
 use self::{
     data::{IncompleteTypeError, Message},
     processors::{
-        base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor, session_progress::SessionProgressProcessor, AccProcessor, AccProcessorContext
+        base::BaseProcessor, connection::ConnectionProcessor, lap::LapProcessor,
+        position::PositionProcessor, session_progress::SessionProgressProcessor, AccProcessor,
+        AccProcessorContext,
     },
 };
 
@@ -119,8 +121,7 @@ impl AccConnection {
                 Box::new(ConnectionProcessor::default()),
                 Box::new(SessionProgressProcessor::default()),
                 Box::new(LapProcessor::default()),
-                // Box::new(DistanceDrivenProcessor::default()),
-                // Box::new(EntryFinishedProcessor),
+                Box::new(PositionProcessor::default()),
                 // Box::new(GapToLeaderProcessor::default()),
             ],
         })

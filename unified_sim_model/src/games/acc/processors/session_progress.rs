@@ -51,20 +51,6 @@ impl AccProcessor for SessionProgressProcessor {
                 SessionPhase::Finished => EntryState::Finished,
             });
 
-        // For debugging
-        if let Some(entry) = session.entries.get_mut(&entry_id) {
-            entry.team_name.set(match entry_state {
-                EntryState::PreSession => String::from("PreSession"),
-                EntryState::ActiveButNotCrossedTheLine => {
-                    String::from("ActiveButNotCrossedTheLine")
-                }
-                EntryState::Active => String::from("Active"),
-                EntryState::Ending => String::from("Ending"),
-                EntryState::Finished => String::from("Finished"),
-                EntryState::PotentialyFinished => String::from("PotentialyFinished"),
-            });
-        }
-
         match session.session_type.scoring_type() {
             ScoringType::BestLapTime => entry_state.best_lap(entry_id, session),
             ScoringType::DistanceThenTime => entry_state.distance_then_time(entry_id, session),

@@ -138,14 +138,7 @@ fn display_entries_table(
     adapter: &Adapter,
 ) {
     let mut entries: Vec<&Entry> = entries.values().collect();
-    entries.sort_by(|e1, e2| {
-        let is_connected = e2.connected.cmp(&e1.connected);
-        let position = e1
-            .position
-            .partial_cmp(&e2.position)
-            .unwrap_or(std::cmp::Ordering::Equal);
-        is_connected.then(position)
-    });
+    entries.sort_by_key(|e| *e.position);
 
     let focus_on_car = |entry_id| {
         adapter.send(AdapterCommand::FocusOnCar(entry_id));
@@ -244,7 +237,7 @@ fn display_entries_table(
                             let s = if *entry.connected {
                                 format!("{}", entry.position)
                             } else {
-                                "-".to_string()
+                                format!("-{}", entry.position)
                             };
                             ui.add(egui::Label::new(s).wrap(false));
                         });

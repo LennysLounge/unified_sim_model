@@ -197,7 +197,8 @@ impl AccProcessor for BaseProcessor {
         entry
             .orientation
             .set([update.pitch, update.yaw, update.roll]);
-        entry.position.set(update.position as i32);
+        // Processed in the position processor.
+        //entry.position.set(update.position as i32);
         entry.spline_pos.set(update.spline_position);
         entry.lap_count.set(update.laps as i32);
         entry.current_lap.set(Lap {
@@ -302,6 +303,8 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
             cup_category: car.cup_category,
             ..Default::default()
         }),
+        // Set position to max to make sure this entry doesnt appear at the top of the list.
+        position: i32::MAX.into(),
         ..Default::default()
     }
 }

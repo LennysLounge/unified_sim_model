@@ -21,6 +21,7 @@ pub mod gap_to_leader;
 pub mod lap;
 
 pub mod session_progress;
+pub mod position;
 /// A context for a processor to work in.
 pub struct AccProcessorContext<'a> {
     pub(crate) socket: &'a mut AccSocket,
