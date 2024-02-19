@@ -21,7 +21,7 @@ use std::{collections::HashMap, time::Instant};
 
 use crate::{
     games::acc::data::{SessionUpdate, TrackData},
-    model::{Entry, EntryId, Event, Session, SessionType, Value},
+    model::{Entry, EntryId, Event, ScoringType, Session, Value},
     Time,
 };
 
@@ -43,39 +43,32 @@ impl AccProcessor for GapToLeaderProcessor {
         };
 
         let mut entries: Vec<&Entry> = session.entries.values().collect();
-        entries.sort_by(|e1, e2| {
-            let is_connected = e2.connected.cmp(&e1.connected);
-            let position = e1
-                .position
-                .partial_cmp(&e2.position)
-                .unwrap_or(std::cmp::Ordering::Equal);
-            is_connected.then(position)
-        });
+        entries.sort_by_key(|e| *e.position);
         let entries = entries.iter().map(|e| e.id).collect::<Vec<_>>();
 
-        for (index, entry_id) in entries.into_iter().enumerate() {
-            match session.session_type.as_ref() {
-                SessionType::Practice | SessionType::Qualifying => {
-                    self.qualifying(entry_id, session)
-                }
-                SessionType::Race => self.race(entry_id, session, index == 0),
-                SessionType::None => (),
+        for (index, entry_id) in entries.iter().enumerate() {
+            match session.session_type.scoring_type() {
+                ScoringType::BestLapTime => self.qualifying(*entry_id, session),
+                ScoringType::DistanceThenTime => self.race(*entry_id, session, index == 0),
             }
         }
 
-        // let mut prev_gap = 0.0;
-        // for entry_id in entries {
-        //     if let Some(entry) = session.entries.get_mut(&entry_id) {
-        //         if entry.time_behind_leader.is_avaliable() {
-        //             entry
-        //                 .time_behind_position_ahead
-        //                 .set((entry.time_behind_leader.ms - prev_gap).into());
-        //             prev_gap = entry.time_behind_leader.ms;
-        //         } else {
-        //             entry.time_behind_position_ahead = Value::default();
-        //         }
-        //     }
-        // }
+        let mut prev_gap = 0.0;
+        for entry_id in entries.iter() {
+            if let Some(entry) = session.entries.get_mut(&entry_id) {
+                if entry.time_behind_leader.is_avaliable() {
+                    let time = entry.time_behind_leader.ms - prev_gap;
+                    if time < 0.0 {
+                        entry.time_behind_position_ahead = Value::default();
+                    } else {
+                        entry.time_behind_position_ahead.set(time.into());
+                    }
+                    prev_gap = entry.time_behind_leader.ms;
+                } else {
+                    entry.time_behind_position_ahead = Value::default();
+                }
+            }
+        }
 
         Ok(())
     }
