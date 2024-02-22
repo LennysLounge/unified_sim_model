@@ -82,9 +82,53 @@ impl Time {
         let m = remaining % 60;
         let h = (remaining - m) / 60;
         match (h, m, s) {
-            (0, 0, s) => format!("{}{}.{:03}", sign, s, ms),
-            (0, m, s) => format!("{}{}:{:02}.{:03}", sign, m, s, ms),
-            (h, m, s) => format!("{}{}:{:02}:{:02}.{:03}", sign, h, m, s, ms),
+            (0, 0, s) => format!("{}{}", sign, s),
+            (0, m, s) => format!("{}{}:{:02}", sign, m, s),
+            (h, m, s) => format!("{}{}:{:02}:{:02}", sign, h, m, s),
+        }
+    }
+
+    /// Format a time as hh:mm
+    /// Removes leading zero and does not display milliseconds.
+    /// Milliseconds are truncated.
+    /// Seconds are truncated.
+    /// ```
+    /// let time: unified_sim_model::Time = 45_296_789.into();
+    /// assert_eq!(time.format(), "12:34:56");
+    /// ```
+    pub fn fmt_no_s_ms(&self) -> String {
+        let sign = if self.ms < 0.0 { "-" } else { "" };
+        let mut remaining = self.ms.abs().round() as i64;
+        let ms = remaining % 1000;
+        remaining = (remaining - ms) / 1000;
+        let s = remaining % 60;
+        remaining = (remaining - s) / 60;
+        let m = remaining % 60;
+        let h = (remaining - m) / 60;
+        match (h, m) {
+            (0, m) => format!("{}{}", sign, m),
+            (h, m) => format!("{}{}:{:02}", sign, h, m),
+        }
+    }
+
+    /// Format the time as either hh:mm or mm::ss
+    /// and pad with zero to a width of two
+    /// ```
+    /// let time: unified_sim_model::Time = 45_296_789.into();
+    /// assert_eq!(time.format(), "12:34");
+    /// ```
+    pub fn fmt_h_m_s_at_most_two_fill_with_zero(&self) -> String {
+        let sign = if self.ms < 0.0 { "-" } else { "" };
+        let mut remaining = self.ms.abs().round() as i64;
+        let ms = remaining % 1000;
+        remaining = (remaining - ms) / 1000;
+        let s = remaining % 60;
+        remaining = (remaining - s) / 60;
+        let m = remaining % 60;
+        let h = (remaining - m) / 60;
+        match (h, m, s) {
+            (0, m, s) => format!("{sign}{m:02}:{s:02}"),
+            (h, m, _) => format!("{sign}{h:02}:{m:02}"),
         }
     }
 }
