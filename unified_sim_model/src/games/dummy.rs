@@ -25,6 +25,7 @@ use crate::{
 pub enum DummyCommands {
     /// Set the amount of entries in the current session.
     SetEntryAmount(usize),
+    SetSessionType(SessionType),
 }
 
 #[derive(Default)]
@@ -99,6 +100,11 @@ impl DummyAdapter {
                                 session.entries.insert(entry.id, entry);
                             }
                         }
+                    }
+                }
+                DummyCommands::SetSessionType(session_type) => {
+                    if let Some(session) = model.current_session_mut() {
+                        session.session_type.set(session_type);
                     }
                 }
             },
