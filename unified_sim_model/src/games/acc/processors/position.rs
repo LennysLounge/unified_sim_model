@@ -1,5 +1,7 @@
 use std::{cmp::Ordering, collections::HashMap, time::Instant};
 
+use tracing::debug;
+
 use crate::{
     games::acc::data::{RealtimeCarUpdate, SessionUpdate},
     model::{EntryId, Event, ScoringType, Session},
@@ -26,23 +28,22 @@ impl AccProcessor for PositionProcessor {
             return Ok(());
         };
 
-        if let Some(position_state) = self.entries.get_mut(&entry_id) {
-            position_state.distance = *entry.distance_driven;
-            if position_state.finish_time.is_none() && *entry.is_finished {
-                position_state.finish_time = Some(Instant::now());
+        let position_state = self.entries.entry(entry_id).or_insert_with(|| {
+            debug!(
+                "Init position state for {entry_id:?} at position: {}",
+                update.position
+            );
+            PositionState {
+                last_pos: update.position as i32,
+                distance: 0.0,
+                finish_time: None,
             }
-        } else {
-            if update.position != 0 {
-                self.entries.insert(
-                    entry_id,
-                    PositionState {
-                        last_pos: update.position as i32,
-                        distance: 0.0,
-                        finish_time: None,
-                    },
-                );
-            }
-            entry.position.set(i32::MAX);
+        });
+
+        //entry.team_name.set(format!("{:?}", position_state));
+        position_state.distance = *entry.distance_driven;
+        if position_state.finish_time.is_none() && *entry.is_finished {
+            position_state.finish_time = Some(Instant::now());
         }
 
         Ok(())
@@ -137,6 +138,7 @@ impl PositionProcessor {
     }
 }
 
+#[derive(Debug)]
 struct PositionState {
     last_pos: i32,
     distance: f32,

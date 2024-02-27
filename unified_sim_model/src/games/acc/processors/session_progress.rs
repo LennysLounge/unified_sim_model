@@ -28,6 +28,12 @@ use super::{AccProcessor, AccProcessorContext};
 #[derive(Default)]
 pub struct SessionProgressProcessor {
     entries: HashMap<EntryId, EntryState>,
+    /// If the user joins a session that is already in the ending state, it is
+    /// impossible to know if the leader has already finished the race or not.
+    /// In that case, all entries should immediately be considers finished even
+    /// if that might finish some entries that have not actually finished.
+    /// A regular session is one where this error does not happen.
+    is_regular_session: bool,
 }
 impl AccProcessor for SessionProgressProcessor {
     fn realtime_car_update(
@@ -46,8 +52,7 @@ impl AccProcessor for SessionProgressProcessor {
         }
 
         let entry_state = self.entries.entry(entry_id).or_insert_with(|| {
-            debug!("Insert entry state");
-            match *session.phase {
+            let state = match *session.phase {
                 SessionPhase::None
                 | SessionPhase::Waiting
                 | SessionPhase::Preparing
@@ -55,7 +60,9 @@ impl AccProcessor for SessionProgressProcessor {
                 SessionPhase::Active => EntryState::Active,
                 SessionPhase::Ending => EntryState::Ending,
                 SessionPhase::Finished => EntryState::Finished,
-            }
+            };
+            debug!("Insert entry state for entry {entry_id:?} with state: {state:?}");
+            state
         });
 
         match session.session_type.scoring_type() {
@@ -77,6 +84,21 @@ impl AccProcessor for SessionProgressProcessor {
         let Some(session) = context.model.current_session_mut() else {
             return Ok(());
         };
+
+        // If this processor is new and the user joins a session that is already in the ending state
+        // we are not in a regular session.
+        if session.phase != SessionPhase::Ending {
+            self.is_regular_session = true;
+        }
+        // Irregular sessions end all entries instantly in the ending phase.
+        if !self.is_regular_session && session.phase == SessionPhase::Ending {
+            for entry_id in session.entries.keys() {
+                if let Some(entry_state) = self.entries.get_mut(entry_id) {
+                    *entry_state = EntryState::Finished;
+                }
+            }
+        }
+
         let mut entries = session.entries.values().collect::<Vec<_>>();
         entries.sort_by(|e1, e2| {
             e2.distance_driven
@@ -136,6 +158,7 @@ impl AccProcessor for SessionProgressProcessor {
     ) -> crate::games::acc::Result<()> {
         if let Event::SessionChanged(_) = event {
             self.entries.clear();
+            self.is_regular_session = true;
         }
 
         Ok(())
@@ -143,6 +166,7 @@ impl AccProcessor for SessionProgressProcessor {
 }
 
 /// The state of an entry in the session.
+#[derive(Debug)]
 enum EntryState {
     /// The entry is waiting for the session to start.
     PreSession,

@@ -13,7 +13,10 @@ mod tab_panel;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
-    env::set_var("RUST_LOG", "debug,gui::testing=trace");
+    env::set_var(
+        "RUST_LOG",
+        "info,gui::testing=trace,unified_sim_model::games::acc::processors::session_progress=debug",
+    );
     debug!("Testing");
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()

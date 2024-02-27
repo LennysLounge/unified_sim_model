@@ -237,7 +237,7 @@ fn display_entries_table(
                             let s = if *entry.connected {
                                 format!("{}", entry.position)
                             } else {
-                                format!("-{}", entry.position)
+                                format!("[{}]", entry.position)
                             };
                             ui.add(egui::Label::new(s).wrap(false));
                         });
