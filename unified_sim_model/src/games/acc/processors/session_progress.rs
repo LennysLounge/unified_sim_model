@@ -11,6 +11,8 @@
 
 use std::{cmp::Ordering, collections::HashMap};
 
+use tracing::debug;
+
 use crate::{
     games::acc::data::{RealtimeCarUpdate, SessionUpdate},
     model::{Entry, EntryId, Event, ScoringType, Session, SessionPhase},
@@ -38,10 +40,14 @@ impl AccProcessor for SessionProgressProcessor {
         };
 
         let entry_id = EntryId(update.car_id as i32);
-        let entry_state = self
-            .entries
-            .entry(entry_id)
-            .or_insert(match *session.phase {
+        if !session.entries.contains_key(&entry_id) {
+            debug!("Got entry update for car that doesnt exists in session yet");
+            return Ok(());
+        }
+
+        let entry_state = self.entries.entry(entry_id).or_insert_with(|| {
+            debug!("Insert entry state");
+            match *session.phase {
                 SessionPhase::None
                 | SessionPhase::Waiting
                 | SessionPhase::Preparing
@@ -49,7 +55,8 @@ impl AccProcessor for SessionProgressProcessor {
                 SessionPhase::Active => EntryState::Active,
                 SessionPhase::Ending => EntryState::Ending,
                 SessionPhase::Finished => EntryState::Finished,
-            });
+            }
+        });
 
         match session.session_type.scoring_type() {
             ScoringType::BestLapTime => entry_state.best_lap(entry_id, session),

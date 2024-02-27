@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tracing::{debug, info};
 
 use crate::{
@@ -25,6 +27,9 @@ use super::AccProcessor;
 pub struct BaseProcessor {
     /// True if a new entry list should be requested.
     requested_entry_list: bool,
+    /// Entries that we received an entry list entry for but are not yet added to
+    /// the session. They are added with the next realtime update for that entry.
+    prepared_entries: HashMap<EntryId, Entry>,
 }
 
 impl AccProcessor for BaseProcessor {
@@ -33,7 +38,6 @@ impl AccProcessor for BaseProcessor {
         result: &RegistrationResult,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
-        debug!("Registration result");
         if !result.success {
             return Err(AccConnectionError::ConnectionRefused {
                 message: result.message.clone(),
@@ -54,8 +58,6 @@ impl AccProcessor for BaseProcessor {
         update: &SessionUpdate,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
-        debug!("Session Update");
-
         let current_session_index = context
             .model
             .current_session()
@@ -169,8 +171,6 @@ impl AccProcessor for BaseProcessor {
         update: &RealtimeCarUpdate,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
-        debug!("Realtime Car Update");
-
         let entry_id = EntryId(update.car_id as i32);
 
         let session = context
@@ -180,19 +180,34 @@ impl AccProcessor for BaseProcessor {
                 "No current session on a realtime car update".to_owned(),
             ))?;
 
-        let entry = session.entries.get_mut(&entry_id);
-        if entry.is_none() {
-            debug!("Realtime update for unknown car id:{}", update.car_id);
-            if !self.requested_entry_list {
-                debug!("Requesting new entry list");
-                context.socket.send_entry_list_request()?;
-                self.requested_entry_list = true;
+        if !session.entries.contains_key(&entry_id) {
+            if let Some(entry) = self.prepared_entries.remove(&entry_id) {
+                debug!(
+                    "Remove entry {entry_id:?} from prepare entries and add them to the session"
+                );
+                info!("Entry connected: #{}", entry.car_number);
+                context.events.push_back(model::Event::EntryConnected {
+                    id: entry.id,
+                    reconnect: false,
+                });
+                session.entries.insert(entry.id, entry);
+            } else {
+                // The car is unwknown.
+                debug!("Realtime update for unknown car id:{}", update.car_id);
+                if !self.requested_entry_list {
+                    debug!("Requesting new entry list");
+                    context.socket.send_entry_list_request()?;
+                    self.requested_entry_list = true;
+                }
+                return Ok(());
             }
-            return Ok(());
         }
+        let entry = session
+            .entries
+            .get_mut(&entry_id)
+            .expect("Entry must exists at this point");
 
         let current_driver_id = DriverId(update.driver_id as i32);
-        let entry = entry.unwrap();
         entry.current_driver = current_driver_id;
         entry
             .orientation
@@ -224,7 +239,6 @@ impl AccProcessor for BaseProcessor {
     }
 
     fn track_data(&mut self, track: &TrackData, context: &mut AccProcessorContext) -> Result<()> {
-        debug!("Track data");
         if let Some(session) = context.model.current_session_mut() {
             session.track_name.set(track.track_name.clone());
             session
@@ -247,8 +261,6 @@ impl AccProcessor for BaseProcessor {
         car: &EntryListCar,
         context: &mut AccProcessorContext,
     ) -> Result<()> {
-        debug!("Entry List Car");
-
         let Some(session) = context.model.current_session_mut() else {
             return Ok(());
         };
@@ -257,13 +269,8 @@ impl AccProcessor for BaseProcessor {
         if session.entries.contains_key(&entry.id) {
             return Ok(());
         }
-
-        info!("Entry connected: #{}", car.race_number);
-        context.events.push_back(model::Event::EntryConnected {
-            id: entry.id,
-            reconnect: false,
-        });
-        session.entries.insert(entry.id, entry);
+        debug!("Add entry {:?} to prepared entries", entry.id);
+        self.prepared_entries.insert(entry.id, entry);
         Ok(())
     }
 }
@@ -296,7 +303,6 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
         car: car.car_model_type.clone().into(),
         car_number: car.race_number.into(),
         nationality: Value::<Nationality>::default().with_editable(),
-        connected: true.into(),
         best_lap: None.into(),
         game_data: EntryGameData::Acc(AccEntry {
             car_id: car.car_id,
@@ -305,6 +311,9 @@ fn map_entry(car: &EntryListCar) -> model::Entry {
         }),
         // Set position to max to make sure this entry doesnt appear at the top of the list.
         position: i32::MAX.into(),
+        // Set the connection to false initially, the connection processor will take car of it.
+        // This just signals that the data is still incomplete at this point
+        connected: false.into(),
         ..Default::default()
     }
 }

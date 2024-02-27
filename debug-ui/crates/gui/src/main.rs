@@ -3,7 +3,7 @@ use std::env;
 use egui::Context;
 use egui_custom::dialog::{Dialog, Size, Windower};
 
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use unified_sim_model::{Adapter, AdapterCommand};
 
@@ -13,7 +13,8 @@ mod tab_panel;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
-    env::set_var("RUST_LOG", "info,gui::testing=trace");
+    env::set_var("RUST_LOG", "debug,gui::testing=trace");
+    debug!("Testing");
     tracing::subscriber::set_global_default(
         tracing_subscriber::fmt()
             .with_thread_names(true)
@@ -79,8 +80,12 @@ impl Dialog for App {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let Some(adapter) = self.adapter.as_ref() else {return};
-            let Ok(model) = adapter.model.read() else {return};
+            let Some(adapter) = self.adapter.as_ref() else {
+                return;
+            };
+            let Ok(model) = adapter.model.read() else {
+                return;
+            };
 
             ui.label(format!("Event name: {}", model.event_name));
             ui.label(format!("Active Camera: {}", *model.active_camera));
