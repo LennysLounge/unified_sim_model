@@ -15,7 +15,7 @@ fn main() {
     env::set_var("RUST_BACKTRACE", "1");
     env::set_var(
         "RUST_LOG",
-        "info,gui::testing=trace,unified_sim_model::games::acc::processors::session_progress=debug",
+        "info,gui::testing=trace,unified_sim_model::games::acc::processors::lap=debug",
     );
     debug!("Testing");
     tracing::subscriber::set_global_default(

@@ -49,14 +49,14 @@ impl AccProcessor for ConnectionProcessor {
                 .expect("An entry in the session should also have a connection entry.");
             match (&is_connected, *entry.connected) {
                 (true, false) => {
-                    info!("Entry reconnected: #{}", *entry.car_number);
+                    info!("Entry reconnected: {:?} #{}", entry.id, *entry.car_number);
                     context.events.push_back(Event::EntryConnected {
                         id: entry.id,
                         reconnect: true,
                     });
                 }
                 (false, true) => {
-                    info!("Entry disconnected: #{}", *entry.car_number);
+                    info!("Entry disconnected: {:?} #{}", entry.id, *entry.car_number);
                     context.events.push_back(Event::EntryDisconnected(entry.id));
                 }
                 _ => (),
