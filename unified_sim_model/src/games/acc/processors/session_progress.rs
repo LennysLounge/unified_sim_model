@@ -51,6 +51,19 @@ impl AccProcessor for SessionProgressProcessor {
             return Ok(());
         }
 
+        // if the entry is unknown to this processor we want to initialize its
+        // distance driven value. If we dont do this, the value will jump from
+        // zero to its current value and will be wrongly corrected.
+        // There is still the chance that the entry is right in the area where
+        // the distance is not correct but that is a very small change.
+        if !self.entries.contains_key(&entry_id) {
+            if let Some(entry) = session.entries.get_mut(&entry_id) {
+                entry
+                    .distance_driven
+                    .set(*entry.lap_count as f32 + *entry.spline_pos);
+            }
+        }
+
         let entry_state = self.entries.entry(entry_id).or_insert_with(|| {
             let state = match *session.phase {
                 SessionPhase::None
