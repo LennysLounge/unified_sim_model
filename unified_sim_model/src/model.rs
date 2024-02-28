@@ -203,7 +203,6 @@ impl<T> Value<T> {
     }
 }
 
-
 impl<T: PartialEq> PartialEq<T> for Value<T> {
     fn eq(&self, other: &T) -> bool {
         &self.value == other
@@ -385,95 +384,6 @@ pub struct Session {
     pub track_length: Value<Distance>,
     /// Contains additional data that is game specific.
     pub game_data: SessionGameData,
-}
-impl Session {
-    /// Return a list of entries in realtime order.
-    ///
-    /// Before the session is active and during the first 20 seconds of an active
-    /// session the entries are ordered by their reported positions. This is to avoid
-    /// chaotic position change during the formation lap or in the first part of the lap.
-    /// During an active session entries are ordered based on their distance driven to get a realtime
-    /// ordering where position changes are visible instantly.
-    /// After a entry has finished the session it is again sorted based on its reported position.
-    /// This again avoid chaos during post race shenanigans and reflects the actual position
-    /// the game things the entry is on.
-    ///
-    /// Entries that are disconnected from the session are sorted at the bottom of the list regardless
-    /// of their realtime position. Only if they have finished the session are they sorted at the repored
-    /// position regardless if they are still connected or not.
-    pub fn entries_realtime_order(&self) -> Vec<EntryId> {
-        struct SortingEntry {
-            id: EntryId,
-            distance_driven: f32,
-            realtime_position: i32,
-            position: i32,
-            connected: bool,
-            finished: bool,
-        }
-        let mut entries = self
-            .entries
-            .values()
-            .map(|e| SortingEntry {
-                id: e.id,
-                distance_driven: *e.distance_driven,
-                realtime_position: 0,
-                position: *e.position,
-                connected: *e.connected,
-                finished: *e.is_finished,
-            })
-            .collect::<Vec<_>>();
-        // sort once by distance driven to get the realtime position.
-        // Use the reported position as backup to solve ties.
-        entries.sort_by(|e1, e2| {
-            e2.distance_driven
-                .partial_cmp(&e1.distance_driven)
-                .unwrap_or(e1.position.cmp(&e2.position))
-        });
-        for (index, entry) in entries.iter_mut().enumerate() {
-            entry.realtime_position = index as i32 + 1;
-        }
-
-        // Sort again using the full sorting rules
-        let session_is_active = match *self.phase {
-            SessionPhase::None => false,
-            SessionPhase::Waiting => false,
-            SessionPhase::Preparing => false,
-            SessionPhase::Formation => false,
-            SessionPhase::Active => (self.session_time.ms - self.time_remaining.ms) > 20000.0,
-            SessionPhase::Ending => true,
-            SessionPhase::Finished => false,
-        };
-        let use_realtime_pos = match *self.session_type {
-            SessionType::Practice => false,
-            SessionType::Qualifying => false,
-            SessionType::Race => true,
-            SessionType::None => false,
-        };
-        entries.sort_by(|e1, e2| {
-            let connected_or_finished =
-                (e2.connected || e2.finished).cmp(&(e1.connected || e1.finished));
-
-            let p1 = if e1.finished {
-                e1.position
-            } else if session_is_active && use_realtime_pos {
-                e1.realtime_position
-            } else {
-                e1.position
-            };
-            let p2 = if e1.finished {
-                e2.position
-            } else if session_is_active && use_realtime_pos {
-                e2.realtime_position
-            } else {
-                e2.position
-            };
-
-            let position = p1.cmp(&p2);
-            connected_or_finished.then(position)
-        });
-
-        entries.iter().map(|e| e.id).collect::<Vec<_>>()
-    }
 }
 
 /// Game specific session data.
