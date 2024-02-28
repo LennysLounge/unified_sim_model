@@ -38,7 +38,7 @@ impl IRacingProcessor for LapProcessor {
                 .laps_before
                 .get(&entry.id)
                 .is_some_and(|lap_count| lap_count != entry.lap_count.as_ref());
-            self.laps_before.insert(entry.id, entry.lap_count.as_copy());
+            self.laps_before.insert(entry.id, *entry.lap_count);
             if !lap_completed {
                 continue;
             }

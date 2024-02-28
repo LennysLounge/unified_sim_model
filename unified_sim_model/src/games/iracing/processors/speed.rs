@@ -64,7 +64,7 @@ impl IRacingProcessor for SpeedProcessor {
                 self.entries.insert(
                     *entry_id,
                     LastData {
-                        lap_dist: entry.spline_pos.as_copy(),
+                        lap_dist: *entry.spline_pos,
                         speed,
                     },
                 );

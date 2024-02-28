@@ -155,7 +155,7 @@ impl IRacingConnection {
                         .and_then(|session| session.entries.get(entry_id));
                     if let Some(entry) = entry {
                         self.sdk.send_message(Messages::CamSwitchNum {
-                            driver_num: entry.car_number.as_copy() as u16,
+                            driver_num: *entry.car_number as u16,
                             camera_group: 0,
                             camera: 0,
                         });
@@ -173,7 +173,7 @@ impl IRacingConnection {
                         });
                         if let Some(entry) = focused_entry {
                             self.sdk.send_message(Messages::CamSwitchNum {
-                                driver_num: entry.car_number.as_copy() as u16,
+                                driver_num: *entry.car_number as u16,
                                 camera_group: camera.group_num as u16,
                                 camera: camera.camera_num as u16,
                             });

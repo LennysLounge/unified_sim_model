@@ -57,7 +57,7 @@ impl IRacingProcessor for BaseProcessor {
                     session.phase.set(session.phase.next());
                     context.events.push_back(model::Event::SessionPhaseChanged(
                         session.id,
-                        session.phase.as_copy(),
+                        *session.phase,
                     ));
                 }
             }
@@ -408,7 +408,7 @@ fn update_session_live(context: &mut IRacingProcessorContext) {
             session.phase.set(new_phase);
             context.events.push_back(model::Event::SessionPhaseChanged(
                 session.id,
-                session.phase.as_copy(),
+                *session.phase,
             ));
         }
     }
@@ -510,7 +510,7 @@ fn update_entry_live(entry: &mut model::Entry, data: &Data, events: &mut VecDequ
     if let Some(ref car_idx_track_surface) = data.live_data.car_idx_track_surface {
         if let Some(track_location) = car_idx_track_surface.get(car_idx) {
             let connected = !matches!(track_location, TrkLoc::NotInWorld);
-            let was_connected = entry.connected.as_copy();
+            let was_connected = *entry.connected;
             entry.connected.set(connected);
             match (connected, was_connected) {
                 (true, false) => {

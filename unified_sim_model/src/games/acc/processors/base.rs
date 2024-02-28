@@ -77,10 +77,9 @@ impl AccProcessor for BaseProcessor {
                 while session.phase != model::SessionPhase::Finished {
                     info!("Session phase fast forwarded to {:?}", session.phase);
                     session.phase.set(session.phase.next());
-                    context.events.push_back(Event::SessionPhaseChanged(
-                        session.id,
-                        session.phase.as_copy(),
-                    ));
+                    context
+                        .events
+                        .push_back(Event::SessionPhaseChanged(session.id, *session.phase));
                 }
             }
 
@@ -132,10 +131,9 @@ impl AccProcessor for BaseProcessor {
         while current_phase > *session.phase {
             session.phase.set(session.phase.next());
             info!("Session phase changed to {:?}", session.phase);
-            context.events.push_back(Event::SessionPhaseChanged(
-                session.id,
-                session.phase.as_copy(),
-            ));
+            context
+                .events
+                .push_back(Event::SessionPhaseChanged(session.id, *session.phase));
         }
         session.time_remaining.set(update.session_end_time.into());
         session

@@ -42,7 +42,7 @@ use crate::{
 /// to overwrite the value set by the user or set the `editable` flag to false at any time.
 ///
 /// The specific behavior of the game adapter is documented in the documentation for the value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Value<T> {
     value: T,
     available: bool,
@@ -203,12 +203,6 @@ impl<T> Value<T> {
     }
 }
 
-impl<T: Copy> Value<T> {
-    /// Get the inner value as a copy.
-    pub fn as_copy(&self) -> T {
-        self.value
-    }
-}
 
 impl<T: PartialEq> PartialEq<T> for Value<T> {
     fn eq(&self, other: &T) -> bool {
